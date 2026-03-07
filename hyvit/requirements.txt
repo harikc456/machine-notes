@@ -1,0 +1,4 @@
+geoopt>=0.5.1
+torchvision>=0.24.0
+numpy>=2.2.3
+einops>=0.8.1

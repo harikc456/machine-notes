@@ -50,8 +50,5 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Claude worktrees
-.worktrees/
-
 # Git worktrees
 .worktrees/

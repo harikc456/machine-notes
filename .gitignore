@@ -25,6 +25,7 @@ checkpoints/
 
 # Datasets
 data/cifar10/
+data/cifar10/cifar-10-batches-py
 *.tar
 *.tar.gz
 *.zip

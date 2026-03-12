@@ -11,7 +11,7 @@ class G0Gate(nn.Module):
         out  = gate ⊙ x
 
     w initialised to ones, b to zeros — near-linear pass-through at init
-    (RBF outputs are in [0,1], so gate ≈ sigmoid(rbf) * rbf).
+    (RBF outputs in [0,1]: gate output ranges from 0 to ~0.73, a soft squash not a linear pass-through)
 
     Input/output: (B, N, d_model * K)
     """

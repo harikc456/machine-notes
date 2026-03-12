@@ -91,13 +91,19 @@ def test_g1b_has_linear():
 
 
 def test_g1b_gate_independent_of_rbf():
-    """Gate signal from x should not change when rbf_out changes."""
+    """Changing rbf_out must not change the gate signal (gate depends only on x)."""
     gate = G1BGate(d_model=D, K=K)
     x = torch.randn(B, N, D)
+    rbf1 = torch.rand(B, N, DK)
+    rbf2 = torch.rand(B, N, DK)  # different rbf_out
     with torch.no_grad():
-        g1 = torch.sigmoid(gate.proj(x))
-        g2 = torch.sigmoid(gate.proj(x))
-    assert torch.allclose(g1, g2)
+        out1 = gate(rbf1, x)
+        out2 = gate(rbf2, x)
+    # Gate values are sigmoid(proj(x)), independent of rbf_out,
+    # so out1/rbf1 == out2/rbf2 element-wise
+    gate_vals1 = out1 / rbf1.clamp(min=1e-8)
+    gate_vals2 = out2 / rbf2.clamp(min=1e-8)
+    assert torch.allclose(gate_vals1, gate_vals2, atol=1e-5)
 
 
 # ── G2 Sinkhorn ─────────────────────────────────────────────────────────────

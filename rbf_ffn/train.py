@@ -39,7 +39,23 @@ def build_toy_dataset(cfg: RBFFFNConfig, n_samples: int = 1024):
     return TensorDataset(x, y)
 
 
+class _Model(nn.Module):
+    def __init__(self, cfg: RBFFFNConfig):
+        super().__init__()
+        self.blocks = nn.ModuleList([RBFTransformerBlock(cfg) for _ in range(cfg.n_layers)])
+        self.head = nn.Linear(cfg.d_model, cfg.num_classes)
+        self.norm = nn.LayerNorm(cfg.d_model)
+
+    def forward(self, x):
+        for block in self.blocks:
+            x = block(x)
+        return self.head(self.norm(x[:, 0]))  # cls-token pool
+
+
 def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int = 5, batch_size: int = 32):
+    if not config_path.is_file():
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+
     exp_dir = get_experiment_dir(cfg)
 
     # Copy the source config file into the experiment directory for full reproducibility
@@ -47,22 +63,7 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int = 5, batch_size: i
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    blocks = nn.ModuleList([RBFTransformerBlock(cfg) for _ in range(cfg.n_layers)])
-    head = nn.Linear(cfg.d_model, cfg.num_classes)
-
-    class Model(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.blocks = blocks
-            self.head = head
-            self.norm = nn.LayerNorm(cfg.d_model)
-
-        def forward(self, x):
-            for block in self.blocks:
-                x = block(x)
-            return self.head(self.norm(x[:, 0]))  # cls-token pool
-
-    model = Model().to(device)
+    model = _Model(cfg).to(device)
     optimiser = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-2)
     criterion = nn.CrossEntropyLoss()
 

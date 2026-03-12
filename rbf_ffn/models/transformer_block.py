@@ -1,39 +1,54 @@
+# rbf_ffn/models/transformer_block.py
 import torch
 import torch.nn as nn
 from rbf_ffn.config import RBFFFNConfig
+from rbf_ffn.models.attention import CausalSelfAttention
+from rbf_ffn.models.llama_ffn import SwiGLUFFN
 from rbf_ffn.models.rbf_ffn import RBFFFN
 
 
-class RBFTransformerBlock(nn.Module):
+class LlamaBlock(nn.Module):
     """
-    Standard pre-norm transformer block with RBF-FFN replacing the MLP.
+    Llama-style transformer block with SwiGLU FFN.
 
         x = x + attn(norm1(x))
-        x = x + ffn(norm2(x))        ← ffn is RBFFFN
+        x = x + ffn(norm2(x))
 
-    Double LayerNorm is intentional (see spec): norm2 is the standard pre-block
-    norm; RBFFFN applies a second internal LayerNorm with its own learnable (γ, β)
-    to decouple the RBF input distribution from the attention sublayer output.
-    Do NOT remove either norm.
+    Pre-norm with RMSNorm. No bias anywhere.
     """
 
     def __init__(self, cfg: RBFFFNConfig):
         super().__init__()
-        D, H = cfg.d_model, cfg.n_heads
-        self.norm1 = nn.LayerNorm(D)
-        self.attn = nn.MultiheadAttention(
-            embed_dim=D,
-            num_heads=H,
-            dropout=cfg.dropout,
-            batch_first=True,
-        )
-        self.norm2 = nn.LayerNorm(D)
-        self.ffn = RBFFFN(cfg)
+        self.norm1 = nn.RMSNorm(cfg.d_model)
+        self.attn  = CausalSelfAttention(cfg)
+        self.norm2 = nn.RMSNorm(cfg.d_model)
+        self.ffn   = SwiGLUFFN(cfg)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """x: (B, N, d_model)"""
-        x_norm = self.norm1(x)
-        attn_out, _ = self.attn(x_norm, x_norm, x_norm)
-        x = x + attn_out
+        x = x + self.attn(self.norm1(x))
+        x = x + self.ffn(self.norm2(x))
+        return x
+
+
+class RBFBlock(nn.Module):
+    """
+    Transformer block with RBF-FFN replacing the MLP.
+
+        x = x + attn(norm1(x))
+        x = x + ffn(norm2(x))    ← ffn is RBFFFN
+
+    Double normalisation: norm2 (outer, this block) + RBFFFN.norm (inner).
+    Both are intentional — see spec. Do NOT remove either.
+    """
+
+    def __init__(self, cfg: RBFFFNConfig):
+        super().__init__()
+        self.norm1 = nn.RMSNorm(cfg.d_model)
+        self.attn  = CausalSelfAttention(cfg)
+        self.norm2 = nn.RMSNorm(cfg.d_model)
+        self.ffn   = RBFFFN(cfg)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x + self.attn(self.norm1(x))
         x = x + self.ffn(self.norm2(x))
         return x

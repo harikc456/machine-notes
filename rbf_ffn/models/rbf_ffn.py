@@ -37,7 +37,7 @@ class RBFFFN(nn.Module):
         self.gate_variant = cfg.gate_variant
         D, K = cfg.d_model, cfg.K
 
-        self.norm = nn.LayerNorm(D)
+        self.norm = nn.RMSNorm(D)
         self.rbf = RBFLayer(D, cfg.centers, cfg.sigma_init, cfg.sigma_variant)
 
         if cfg.gate_variant == "G0":
@@ -50,9 +50,8 @@ class RBFFFN(nn.Module):
             self.gate = G2SinkhornGate(D, K, cfg.sinkhorn_iters)
 
         down_in = D * K if cfg.gate_variant != "G2" else D
-        self.down_proj = nn.Linear(down_in, D)
+        self.down_proj = nn.Linear(down_in, D, bias=False)
         nn.init.kaiming_uniform_(self.down_proj.weight, a=math.sqrt(5))
-        nn.init.zeros_(self.down_proj.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """

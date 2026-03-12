@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import pytest
 from rbf_ffn.config import RBFFFNConfig
 from rbf_ffn.models.rbf_ffn import RBFFFN
@@ -54,3 +55,16 @@ def test_down_proj_input_dim(variant):
     expected_in = D * K if variant != "G2" else D
     assert ffn.down_proj.in_features == expected_in
     assert ffn.down_proj.out_features == D
+
+
+def test_internal_norm_is_rmsnorm():
+    """RBFFFN must use nn.RMSNorm internally, not LayerNorm."""
+    ffn = make_ffn("G0")
+    assert isinstance(ffn.norm, nn.RMSNorm), f"Expected RMSNorm, got {type(ffn.norm)}"
+
+
+def test_down_proj_has_no_bias():
+    """down_proj must have bias=False to match Llama no-bias convention."""
+    for variant in ["G0", "G1A", "G1B", "G2"]:
+        ffn = make_ffn(variant)
+        assert ffn.down_proj.bias is None, f"{variant}: down_proj still has bias"

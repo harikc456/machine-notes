@@ -50,3 +50,39 @@ def test_load_config_empty_yaml_uses_defaults(tmp_path):
     empty.write_text("")
     cfg = load_config(empty)
     assert cfg == RBFFFNConfig()
+
+
+# ── New training field defaults ───────────────────────────────────────────────
+
+def test_new_fields_have_correct_defaults():
+    cfg = RBFFFNConfig()
+    assert cfg.model_type == "rbf"
+    assert cfg.ffn_hidden == 688
+    assert cfg.seed == 42
+    assert cfg.n_epochs == 10
+    assert cfg.batch_size == 32
+    assert abs(cfg.muon_lr - 0.02) < 1e-9
+    assert abs(cfg.adamw_lr - 3e-4) < 1e-9
+    assert abs(cfg.adamw_wd - 0.1) < 1e-9
+    assert abs(cfg.warmup_ratio - 0.02) < 1e-9
+    assert abs(cfg.grad_clip - 1.0) < 1e-9
+
+
+def test_seq_len_default_updated():
+    """seq_len default changes from 65 → 512 for WikiText-103."""
+    cfg = RBFFFNConfig()
+    assert cfg.seq_len == 512
+
+
+def test_load_config_accepts_model_type(tmp_path):
+    p = tmp_path / "m.yaml"
+    p.write_text("model_type: baseline\n")
+    cfg = load_config(p)
+    assert cfg.model_type == "baseline"
+
+
+def test_load_config_accepts_ffn_hidden(tmp_path):
+    p = tmp_path / "m.yaml"
+    p.write_text("ffn_hidden: 1024\n")
+    cfg = load_config(p)
+    assert cfg.ffn_hidden == 1024

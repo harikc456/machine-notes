@@ -8,5 +8,4 @@ sigma_init: 0.5
 sigma_variant: global
 sinkhorn_iters: 20
 dropout: 0.1
-num_classes: 10
-seq_len: 65
+seq_len: 512

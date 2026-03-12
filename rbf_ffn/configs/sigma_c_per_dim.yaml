@@ -8,5 +8,4 @@ centers: [-1.0, -0.5, 0.0, 0.5, 1.0]
 sigma_init: 0.5
 sinkhorn_iters: 20
 dropout: 0.1
-num_classes: 10
-seq_len: 65
+seq_len: 512

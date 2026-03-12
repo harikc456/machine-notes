@@ -15,17 +15,30 @@ class RBFFFNConfig:
     # RBF kernel
     K: int = 5
     centers: list[float] = field(default_factory=lambda: [-1.0, -0.5, 0.0, 0.5, 1.0])
-    sigma_init: float = 0.5  # initial bandwidth; matches grid spacing
-    sigma_variant: str = "global"  # one of: "global", "per_center", "per_dim"
+    sigma_init: float = 0.5
+    sigma_variant: str = "global"  # "global" | "per_center" | "per_dim"
 
-    # Gate variant: one of "G0", "G1A", "G1B", "G2"
-    gate_variant: str = "G0"
-    sinkhorn_iters: int = 20  # only used by G2
+    # Gate variant
+    gate_variant: str = "G0"       # "G0" | "G1A" | "G1B" | "G2"
+    sinkhorn_iters: int = 20       # G2 only
+
+    # Sequence / vocab
+    seq_len: int = 512
+    vocab_size: int = 50257
+
+    # Model type
+    model_type: str = "rbf"        # "baseline" | "rbf"
+    ffn_hidden: int = 688          # SwiGLU hidden dim; ignored by RBF model
 
     # Training
-    num_classes: int = 10
-    seq_len: int = 65
-    vocab_size: int = 50257
+    seed: int = 42
+    n_epochs: int = 10
+    batch_size: int = 32
+    muon_lr: float = 0.02
+    adamw_lr: float = 3e-4
+    adamw_wd: float = 0.1
+    warmup_ratio: float = 0.02
+    grad_clip: float = 1.0
 
 
 def load_config(path: str | Path) -> RBFFFNConfig:

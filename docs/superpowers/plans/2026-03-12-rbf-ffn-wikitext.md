@@ -329,6 +329,13 @@ def test_attn_gradient_flows(cfg):
     assert x.grad is not None
     for name in ("q_proj", "k_proj", "v_proj", "o_proj"):
         assert getattr(attn, name).weight.grad is not None
+
+
+def test_attn_flash_flag_matches_hardware(cfg):
+    """_use_flash must be True iff CUDA is present and flash_sdp is enabled."""
+    attn = CausalSelfAttention(cfg)
+    expected = torch.cuda.is_available() and torch.backends.cuda.flash_sdp_enabled()
+    assert attn._use_flash == expected
 ```
 
 - [ ] **Step 2: Run tests — verify they all fail**
@@ -344,11 +351,21 @@ Expected: `ERROR` — `ModuleNotFoundError: No module named 'rbf_ffn.models.atte
 
 ```python
 # rbf_ffn/models/attention.py
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.attention import SDPBackend, sdp_kernel
 from rbf_ffn.config import RBFFFNConfig
+
+# Backend preference order: FlashAttention → MemEfficient → Math fallback.
+# PyTorch tries each in order and picks the first that is supported for the
+# given dtype/device/sequence-length at runtime.
+_FLASH_BACKENDS = [SDPBackend.FLASH_ATTENTION, SDPBackend.EFFICIENT_ATTENTION, SDPBackend.MATH]
+
+
+def _flash_available() -> bool:
+    """Return True if the FlashAttention SDPA backend is globally enabled on CUDA."""
+    return torch.cuda.is_available() and torch.backends.cuda.flash_sdp_enabled()
 
 
 def _rotate_half(x: torch.Tensor) -> torch.Tensor:
@@ -401,6 +418,10 @@ class CausalSelfAttention(nn.Module):
     No bias on any projection. Causal mask via F.scaled_dot_product_attention
     with is_causal=True (no explicit mask tensor stored).
 
+    On CUDA when FlashAttention is available, uses sdp_kernel to explicitly
+    prefer the FlashAttention backend with graceful fallback to MemEfficient
+    and Math backends. On CPU, delegates backend selection to PyTorch.
+
     Input/output: (B, N, d_model)
     """
 
@@ -416,6 +437,7 @@ class CausalSelfAttention(nn.Module):
         self.o_proj = nn.Linear(D, D, bias=False)
         self.rope = RotaryEmbedding(self.head_dim)
         self._dropout = cfg.dropout
+        self._use_flash = _flash_available()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """x: (B, N, d_model)"""
@@ -428,7 +450,11 @@ class CausalSelfAttention(nn.Module):
         v = split_heads(self.v_proj(x))
 
         dp = self._dropout if self.training else 0.0
-        out = F.scaled_dot_product_attention(q, k, v, dropout_p=dp, is_causal=True)
+        if self._use_flash:
+            with sdp_kernel(_FLASH_BACKENDS):
+                out = F.scaled_dot_product_attention(q, k, v, dropout_p=dp, is_causal=True)
+        else:
+            out = F.scaled_dot_product_attention(q, k, v, dropout_p=dp, is_causal=True)
         out = out.transpose(1, 2).contiguous().view(B, N, D)
         return self.o_proj(out)
 ```
@@ -439,13 +465,13 @@ class CausalSelfAttention(nn.Module):
 pytest rbf_ffn/tests/test_attention.py -v
 ```
 
-Expected: `7 passed`
+Expected: `8 passed`
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add rbf_ffn/models/attention.py rbf_ffn/tests/test_attention.py
-git commit -m "feat: implement RotaryEmbedding and CausalSelfAttention (RoPE + SDPA)"
+git commit -m "feat: implement RotaryEmbedding and CausalSelfAttention (RoPE + SDPA, FlashAttention when available)"
 ```
 
 ---

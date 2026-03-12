@@ -1,0 +1,12 @@
+gate_variant: G1B
+d_model: 64
+n_heads: 4
+n_layers: 2
+K: 5
+centers: [-1.0, -0.5, 0.0, 0.5, 1.0]
+sigma_init: 0.5
+sigma_variant: global
+sinkhorn_iters: 20
+dropout: 0.1
+num_classes: 10
+seq_len: 65

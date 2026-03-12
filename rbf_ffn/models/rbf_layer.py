@@ -43,6 +43,7 @@ class RBFLayer(nn.Module):
         self.sigma_variant = sigma_variant
 
         # σ_raw shape depends on variant; σ = softplus(σ_raw) > 0
+        # Note: math.exp overflows for sigma_init >= ~710; practical range is 0.01–5.0
         raw_init = math.log(math.exp(sigma_init) - 1.0)
         if sigma_variant == "global":
             self.sigma_raw = nn.Parameter(torch.tensor(raw_init))

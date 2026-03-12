@@ -1,4 +1,3 @@
-import math
 import torch
 import pytest
 from rbf_ffn.models.rbf_layer import RBFLayer

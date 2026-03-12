@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn as nn
 from rbf_ffn.config import RBFFFNConfig
@@ -50,11 +51,16 @@ class RBFFFN(nn.Module):
 
         down_in = D * K if cfg.gate_variant != "G2" else D
         self.down_proj = nn.Linear(down_in, D)
-        nn.init.kaiming_uniform_(self.down_proj.weight)
+        nn.init.kaiming_uniform_(self.down_proj.weight, a=math.sqrt(5))
         nn.init.zeros_(self.down_proj.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """x: (B, N, d_model)"""
+        """
+        x: (B, N, d_model) — may be raw or pre-normalized; this module applies
+        its own internal LayerNorm first. When called from RBFTransformerBlock,
+        x is already norm2(x_post_attn), resulting in double normalization
+        (intentional — see class docstring).
+        """
         x_norm = self.norm(x)                      # (B, N, D)
         rbf_out = self.rbf(x_norm)                 # (B, N, D*K)
 

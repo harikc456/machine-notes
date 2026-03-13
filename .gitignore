@@ -59,3 +59,6 @@ Thumbs.db
 
 # Data cache
 rbf_ffn/data_cache/
+
+# Experiment outputs
+rbf_ffn/experiments/

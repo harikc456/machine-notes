@@ -17,6 +17,7 @@ env/
 
 # ML artifacts
 checkpoints/
+rbf_ffn/data_cache/
 *.pt
 *.pth
 *.ckpt
@@ -52,3 +53,9 @@ Thumbs.db
 
 # Git worktrees
 .worktrees/
+
+# Docs
+# docs/
+
+# Data cache
+rbf_ffn/data_cache/

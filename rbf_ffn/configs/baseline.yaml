@@ -1,6 +1,8 @@
-model_type: rbf
+# Llama SwiGLU baseline — gate_variant and sigma_variant are present for
+# uniform directory naming but are ignored by the model (model_type: baseline).
+model_type: baseline
 gate_variant: G0
-sigma_variant: per_center
+sigma_variant: global
 d_model: 256
 n_heads: 8
 n_layers: 6
@@ -13,7 +15,7 @@ sinkhorn_iters: 20
 vocab_size: 50257
 seq_len: 512
 seed: 42
-n_epochs: 10
+n_epochs: 3
 batch_size: 16
 muon_lr: 0.02
 adamw_lr: 0.0003

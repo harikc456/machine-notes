@@ -23,10 +23,10 @@ def test_load_config_returns_rbfffnconfig():
 
 def test_load_config_values_match_yaml():
     cfg = load_config(CONFIGS_DIR / "g0_baseline.yaml")
-    assert cfg.d_model == 64
+    assert cfg.d_model == 256
     assert cfg.K == 5
     assert cfg.sigma_init == 0.5
-    assert cfg.n_layers == 2
+    assert cfg.n_layers == 6
 
 
 def test_load_config_unknown_key_raises(tmp_path):

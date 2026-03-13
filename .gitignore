@@ -17,6 +17,7 @@ env/
 
 # ML artifacts
 checkpoints/
+rbf_ffn/data_cache/
 *.pt
 *.pth
 *.ckpt
@@ -50,3 +51,15 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Git worktrees
+.worktrees/
+
+# Docs
+# docs/
+
+# Data cache
+rbf_ffn/data_cache/
+
+# Experiment outputs
+rbf_ffn/experiments/

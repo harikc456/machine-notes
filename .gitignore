@@ -63,3 +63,5 @@ rbf_ffn/data_cache/
 
 # Experiment outputs
 rbf_ffn/experiments/
+hyberbolic_embeddings/experiments/
+hyberbolic_embeddings/checkpoints/

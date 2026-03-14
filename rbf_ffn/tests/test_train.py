@@ -119,3 +119,17 @@ def test_grad_accum_default_matches_no_accum(tmp_path):
         (exp_dir / "metrics.jsonl").read_text().strip().splitlines()[-1]
     )
     assert row["effective_batch_size"] == 2
+
+
+def test_epoch_end_flush_completes_without_error(tmp_path):
+    """Training completes when steps_per_epoch is not divisible by grad_accum_steps,
+    exercising the epoch-end gradient flush path."""
+    # n_train=6, batch_size=2 → 3 steps/epoch; 3 % grad_accum_steps=4 != 0 → flush fires
+    cfg = _tiny_cfg(grad_accum_steps=4, batch_size=2)
+    exp_dir = _run_train(cfg, tmp_path, n_train=6)
+    assert (exp_dir / "metrics.jsonl").exists()
+    row = json.loads(
+        (exp_dir / "metrics.jsonl").read_text().strip().splitlines()[-1]
+    )
+    assert row["effective_batch_size"] == 2 * 4
+

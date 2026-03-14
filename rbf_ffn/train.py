@@ -19,6 +19,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import AdamW, Muon
 from torch.optim.lr_scheduler import LambdaLR
+from tqdm import tqdm
 
 from rbf_ffn.config import RBFFFNConfig, load_config
 from rbf_ffn.data import get_dataloaders
@@ -75,12 +76,14 @@ def evaluate(model: CausalLM, loader, device: torch.device) -> tuple[float, floa
         batch = batch.to(device)
         inputs, targets = batch[:, :-1], batch[:, 1:]
         n_tokens = inputs.numel()
-        logits = model(inputs)
-        loss = F.cross_entropy(
-            logits.reshape(-1, logits.size(-1)),
-            targets.reshape(-1),
-            reduction="mean",
-        )
+        with torch.autocast("cuda", dtype=torch.bfloat16,
+                            enabled=(device.type == "cuda")):
+            logits = model(inputs)
+            loss = F.cross_entropy(
+                logits.reshape(-1, logits.size(-1)),
+                targets.reshape(-1),
+                reduction="mean",
+            )
         loss_sum    += loss.item() * n_tokens
         token_count += n_tokens
     val_loss = loss_sum / token_count
@@ -106,8 +109,9 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
     # ── Data ──────────────────────────────────────────────────────────────────
     train_loader, val_loader, _ = get_dataloaders(cfg)
     steps_per_epoch = len(train_loader)
-    total_steps     = cfg.n_epochs * steps_per_epoch
-    warmup_steps    = int(cfg.warmup_ratio * total_steps)
+    total_steps     = cfg.n_epochs * steps_per_epoch          # micro-batches; used for pbar
+    optimizer_steps = total_steps // cfg.grad_accum_steps     # optimizer updates; used for LR
+    warmup_steps    = int(cfg.warmup_ratio * optimizer_steps)
 
     # ── Model ─────────────────────────────────────────────────────────────────
     model = CausalLM(cfg).to(device)
@@ -120,13 +124,14 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
     adamw = AdamW(adamw_params, lr=cfg.adamw_lr,
                   weight_decay=cfg.adamw_wd, betas=(0.9, 0.95))
 
-    lr_fn = make_lr_lambda(warmup_steps, total_steps)
+    lr_fn = make_lr_lambda(warmup_steps, optimizer_steps)
     sched_muon  = LambdaLR(muon,  lr_fn)
     sched_adamw = LambdaLR(adamw, lr_fn)
 
     # ── Training loop ─────────────────────────────────────────────────────────
     best_val_loss = float("inf")
     val_loss, val_ppl = float("inf"), float("inf")   # initialised in case n_epochs=0
+    pbar = tqdm(total=total_steps, desc="training", unit="step", dynamic_ncols=True)
 
     def save_checkpoint(name: str, epoch: int, val_loss: float, val_ppl: float):
         torch.save({
@@ -145,39 +150,71 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
         loss_sum, token_count = 0.0, 0
         t0 = time.time()
 
+        global_step = 0
         for batch in train_loader:
-            batch   = batch.to(device)
-            inputs  = batch[:, :-1]
-            targets = batch[:, 1:]
+            batch    = batch.to(device)
+            inputs   = batch[:, :-1]
+            targets  = batch[:, 1:]
             n_tokens = inputs.numel()
 
-            logits = model(inputs)
-            loss   = F.cross_entropy(
-                logits.reshape(-1, logits.size(-1)),
-                targets.reshape(-1),
-                reduction="mean",
-            )
+            with torch.autocast("cuda", dtype=torch.bfloat16,
+                                enabled=(device.type == "cuda")):
+                logits = model(inputs)
+                loss   = F.cross_entropy(
+                    logits.reshape(-1, logits.size(-1)),
+                    targets.reshape(-1),
+                    reduction="mean",
+                )
+
+            raw_loss = loss.item()                    # capture before dividing
+            loss     = loss / cfg.grad_accum_steps    # non-in-place rebind
             loss.backward()
+
+            global_step += 1                          # increment before gate so step N triggers after N micro-batches
+
+            if global_step % cfg.grad_accum_steps == 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
+                muon.step();  adamw.step()
+                sched_muon.step(); sched_adamw.step()
+                muon.zero_grad(set_to_none=True)
+                adamw.zero_grad(set_to_none=True)
+
+            loss_sum    += raw_loss * n_tokens
+            token_count += n_tokens
+
+            pbar.update(1)
+            pbar.set_postfix(
+                epoch=f"{epoch+1}/{cfg.n_epochs}",
+                loss=f"{raw_loss:.4f}",
+            )
+
+        # Flush remaining accumulated gradients at epoch end.
+        # No scheduler step: LR stays at last scheduled value (no full window completed).
+        if global_step % cfg.grad_accum_steps != 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
             muon.step();  adamw.step()
-            sched_muon.step(); sched_adamw.step()
-            muon.zero_grad(); adamw.zero_grad()
-
-            loss_sum    += loss.item() * n_tokens
-            token_count += n_tokens
+            muon.zero_grad(set_to_none=True)
+            adamw.zero_grad(set_to_none=True)
 
         train_loss = loss_sum / token_count
         train_ppl  = math.exp(train_loss)
         val_loss, val_ppl = evaluate(model, val_loader, device)
         epoch_time = time.time() - t0
 
+        pbar.set_postfix(
+            epoch=f"{epoch+1}/{cfg.n_epochs}",
+            train_loss=f"{train_loss:.4f}",
+            val_loss=f"{val_loss:.4f}",
+        )
+
         row: dict = {
-            "epoch":        epoch,
-            "train_loss":   train_loss,
-            "train_ppl":    train_ppl,
-            "val_loss":     val_loss,
-            "val_ppl":      val_ppl,
-            "epoch_time_s": epoch_time,
+            "epoch":                epoch,
+            "train_loss":           train_loss,
+            "train_ppl":            train_ppl,
+            "val_loss":             val_loss,
+            "val_ppl":              val_ppl,
+            "epoch_time_s":         epoch_time,
+            "effective_batch_size": cfg.batch_size * cfg.grad_accum_steps,
         }
         if cfg.model_type == "rbf":
             row.update(collect_sigma_stats(model))
@@ -190,6 +227,7 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
             best_val_loss = val_loss
             save_checkpoint("checkpoint_best.pt", epoch, val_loss, val_ppl)
 
+    pbar.close()
     save_checkpoint("checkpoint_final.pt", cfg.n_epochs - 1, val_loss, val_ppl)
     print(f"Done. Metrics → {metrics_path}")
     return exp_dir

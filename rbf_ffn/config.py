@@ -39,6 +39,7 @@ class RBFFFNConfig:
     adamw_wd: float = 0.1
     warmup_ratio: float = 0.02
     grad_clip: float = 1.0
+    grad_accum_steps: int = 1      # mini-batches per optimizer step; 1 = no accumulation
 
 
 def load_config(path: str | Path) -> RBFFFNConfig:

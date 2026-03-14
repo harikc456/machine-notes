@@ -86,3 +86,33 @@ def test_load_config_accepts_ffn_hidden(tmp_path):
     p.write_text("ffn_hidden: 1024\n")
     cfg = load_config(p)
     assert cfg.ffn_hidden == 1024
+
+
+def test_grad_accum_steps_default():
+    """Default must be 1 — identity, no behavioral change for existing configs."""
+    cfg = RBFFFNConfig()
+    assert cfg.grad_accum_steps == 1
+
+
+def test_grad_accum_steps_yaml(tmp_path):
+    """YAML can set grad_accum_steps; load_config accepts it."""
+    p = tmp_path / "accum.yaml"
+    p.write_text("grad_accum_steps: 4\n")
+    cfg = load_config(p)
+    assert cfg.grad_accum_steps == 4
+
+
+def test_existing_yamls_load_without_grad_accum_steps():
+    """All 7 existing YAML configs remain valid (no grad_accum_steps key needed)."""
+    all_yamls = [
+        "baseline.yaml",
+        "g0_baseline.yaml",
+        "g1a_cross_kernel.yaml",
+        "g1b_input_driven.yaml",
+        "g2_sinkhorn.yaml",
+        "sigma_b_per_center.yaml",
+        "sigma_c_per_dim.yaml",
+    ]
+    for name in all_yamls:
+        cfg = load_config(CONFIGS_DIR / name)
+        assert cfg.grad_accum_steps == 1, f"{name} should default to 1"

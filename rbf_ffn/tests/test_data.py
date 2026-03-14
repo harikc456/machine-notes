@@ -45,3 +45,36 @@ def test_token_dataset_values():
     data = torch.arange(40, dtype=torch.long).view(8, 5)
     ds = TokenDataset(data)
     assert ds[2].tolist() == [10, 11, 12, 13, 14]
+
+
+from unittest.mock import patch
+from rbf_ffn.data import get_dataloaders
+from rbf_ffn.config import RBFFFNConfig
+
+
+def _fake_load_split(split, seq_len):
+    """Synthetic tensor so tests don't touch disk or network."""
+    return torch.zeros(32, seq_len, dtype=torch.long)
+
+
+def test_train_loader_has_persistent_workers():
+    cfg = RBFFFNConfig(seq_len=16, batch_size=4)
+    with patch("rbf_ffn.data._load_split", side_effect=_fake_load_split):
+        train_loader, _, _ = get_dataloaders(cfg)
+    assert train_loader.persistent_workers is True
+
+
+def test_train_loader_has_prefetch_factor():
+    cfg = RBFFFNConfig(seq_len=16, batch_size=4)
+    with patch("rbf_ffn.data._load_split", side_effect=_fake_load_split):
+        train_loader, _, _ = get_dataloaders(cfg)
+    assert train_loader.prefetch_factor == 2
+
+
+def test_val_and_test_loaders_unchanged():
+    """Val and test loaders must NOT have persistent_workers enabled."""
+    cfg = RBFFFNConfig(seq_len=16, batch_size=4)
+    with patch("rbf_ffn.data._load_split", side_effect=_fake_load_split):
+        _, val_loader, test_loader = get_dataloaders(cfg)
+    assert val_loader.persistent_workers is False
+    assert test_loader.persistent_workers is False

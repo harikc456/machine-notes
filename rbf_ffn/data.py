@@ -79,7 +79,9 @@ def get_dataloaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
     g = torch.Generator()
     g.manual_seed(cfg.seed)
 
-    def _make_loader(split: str, shuffle: bool, drop_last: bool) -> DataLoader:
+    def _make_loader(split: str, shuffle: bool, drop_last: bool,
+                     persistent_workers: bool = False,
+                     prefetch_factor: int | None = None) -> DataLoader:
         data = _load_split(split, cfg.seq_len)
         ds = TokenDataset(data)
         return DataLoader(
@@ -90,9 +92,12 @@ def get_dataloaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
             num_workers=4,
             pin_memory=True,
             generator=g if shuffle else None,
+            persistent_workers=persistent_workers,
+            prefetch_factor=prefetch_factor,
         )
 
-    train_loader = _make_loader("train",      shuffle=True,  drop_last=True)
+    train_loader = _make_loader("train",      shuffle=True,  drop_last=True,
+                                persistent_workers=True, prefetch_factor=2)
     val_loader   = _make_loader("validation", shuffle=False, drop_last=False)
     test_loader  = _make_loader("test",       shuffle=False, drop_last=False)
     return train_loader, val_loader, test_loader

@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 from rbf_ffn.config import RBFFFNConfig
-from rbf_ffn.models.transformer_block import LlamaBlock, RBFBlock, RationalBlock, RationalGLUBlock
+from rbf_ffn.models.transformer_block import LlamaBlock, RBFBlock, RationalBlock, RationalGLUBlock, PFDRationalBlock, PFDRationalGLUBlock
 
 
 def build_optimizer_groups(
@@ -50,19 +50,23 @@ class CausalLM(nn.Module):
         token_embedding → N × Block → RMSNorm → lm_head (weight-tied)
 
     Block type is selected by cfg.model_type:
-        "baseline"    → LlamaBlock     (SwiGLU FFN)
-        "rbf"         → RBFBlock       (RBF-FFN)
-        "rational"    → RationalBlock  (RationalFFN)
-        "rationalglu" → RationalGLUBlock (RationalGatedFFN)
+        "baseline"       → LlamaBlock          (SwiGLU FFN)
+        "rbf"            → RBFBlock            (RBF-FFN)
+        "rational"       → RationalBlock       (RationalFFN)
+        "rationalglu"    → RationalGLUBlock    (RationalGatedFFN)
+        "pfd_rational"   → PFDRationalBlock    (PFDRationalFFN)
+        "pfd_rationalglu"→ PFDRationalGLUBlock (PFDRationalGatedFFN)
     """
 
     def __init__(self, cfg: RBFFFNConfig):
         super().__init__()
         BlockClass = {
-            "baseline":    LlamaBlock,
-            "rbf":         RBFBlock,
-            "rational":    RationalBlock,
-            "rationalglu": RationalGLUBlock,
+            "baseline":        LlamaBlock,
+            "rbf":             RBFBlock,
+            "rational":        RationalBlock,
+            "rationalglu":     RationalGLUBlock,
+            "pfd_rational":    PFDRationalBlock,
+            "pfd_rationalglu": PFDRationalGLUBlock,
         }[cfg.model_type]
         self.token_embedding = nn.Embedding(cfg.vocab_size, cfg.d_model)
         self.blocks = nn.ModuleList([BlockClass(cfg) for _ in range(cfg.n_layers)])

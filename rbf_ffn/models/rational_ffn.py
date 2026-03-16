@@ -67,3 +67,69 @@ class RationalGatedFFN(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.down_proj(self.act(self.gate_proj(x)) * self.up_proj(x))
+
+
+class PFDRationalActivation(nn.Module):
+    """
+    Partial Fraction Decomposition Rational Activation.
+
+    f(x) = sum_{i=1}^{n} (a_i * x + b_i) / (x^2 + c_i^2) + gamma * x
+
+    Denominator x^2 + c_i^2 >= c_i^2 — numerically safe when c_i != 0.
+    Parameters a, b, c are vectors of length n; gamma is a scalar.
+    Applied element-wise; all parameters are shared across positions and channels.
+    """
+
+    def __init__(self, n: int = 4):
+        super().__init__()
+        self.a = nn.Parameter(torch.zeros(n))
+        self.b = nn.Parameter(torch.ones(n) * 0.1)
+        self.c = nn.Parameter(torch.arange(1, n + 1, dtype=torch.float))
+        self.gamma = nn.Parameter(torch.tensor(0.0))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x_exp = x.unsqueeze(-1)                         # (..., 1)
+        denom = x_exp.pow(2) + self.c.pow(2)            # (..., n)
+        numer = self.a * x_exp + self.b                 # (..., n)
+        return (numer / denom).sum(dim=-1) + self.gamma * x
+
+
+class PFDRationalFFN(nn.Module):
+    """
+    Feed-forward network with Partial Fraction Decomposition rational activation.
+
+        up_proj → PFDRationalActivation → down_proj
+
+    No bias on projections (Llama convention).
+    Input/output: (B, N, d_model).
+    """
+
+    def __init__(self, cfg: RBFFFNConfig, n: int = 4):
+        super().__init__()
+        self.up_proj   = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
+        self.act       = PFDRationalActivation(n)
+        self.down_proj = nn.Linear(cfg.ffn_hidden, cfg.d_model, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.down_proj(self.act(self.up_proj(x)))
+
+
+class PFDRationalGatedFFN(nn.Module):
+    """
+    Gated FFN with Partial Fraction Decomposition rational activation replacing SiLU.
+
+        gate = PFDRationalActivation(gate_proj(x))
+        out  = down_proj(gate * up_proj(x))
+
+    No bias (Llama convention). Input/output: (B, N, d_model).
+    """
+
+    def __init__(self, cfg: RBFFFNConfig, n: int = 4):
+        super().__init__()
+        self.gate_proj = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
+        self.up_proj   = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
+        self.act       = PFDRationalActivation(n)
+        self.down_proj = nn.Linear(cfg.ffn_hidden, cfg.d_model, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.down_proj(self.act(self.gate_proj(x)) * self.up_proj(x))

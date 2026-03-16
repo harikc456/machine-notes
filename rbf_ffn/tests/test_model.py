@@ -111,3 +111,23 @@ def test_rational_params_in_adamw():
         assert id(block.ffn.act.a) not in muon_ids, "act.a should not be in Muon"
         assert id(block.ffn.act.b) in adamw_ids,    "act.b should be in AdamW"
         assert id(block.ffn.act.b) not in muon_ids, "act.b should not be in Muon"
+
+
+def test_rationalglu_output_shape():
+    model = make_model("rationalglu")
+    tokens = torch.randint(0, VOCAB, (B, N))
+    assert model(tokens).shape == (B, N, VOCAB)
+
+
+def test_rationalglu_params_in_adamw():
+    """RationalGatedFFN act.a and act.b must be in AdamW (1-D), not Muon."""
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = make_model("rationalglu")
+    muon_params, adamw_params = build_optimizer_groups(model)
+    muon_ids  = {id(p) for p in muon_params}
+    adamw_ids = {id(p) for p in adamw_params}
+    for block in model.blocks:
+        assert id(block.ffn.act.a) in adamw_ids,    "act.a should be in AdamW"
+        assert id(block.ffn.act.a) not in muon_ids, "act.a should not be in Muon"
+        assert id(block.ffn.act.b) in adamw_ids,    "act.b should be in AdamW"
+        assert id(block.ffn.act.b) not in muon_ids, "act.b should not be in Muon"

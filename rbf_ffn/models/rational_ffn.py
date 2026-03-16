@@ -45,3 +45,25 @@ class RationalFFN(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.down_proj(self.act(self.up_proj(x)))
+
+
+class RationalGatedFFN(nn.Module):
+    """
+    Gated FFN with learnable rational activation replacing SiLU.
+
+        gate = RationalActivation(gate_proj(x))
+        out  = down_proj(gate * up_proj(x))
+
+    Matches SwiGLU parameter count at ffn_hidden=688.
+    No bias (Llama convention). Input/output: (B, N, d_model).
+    """
+
+    def __init__(self, cfg: RBFFFNConfig):
+        super().__init__()
+        self.gate_proj = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
+        self.up_proj   = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
+        self.act       = RationalActivation()
+        self.down_proj = nn.Linear(cfg.ffn_hidden, cfg.d_model, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.down_proj(self.act(self.gate_proj(x)) * self.up_proj(x))

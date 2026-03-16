@@ -99,9 +99,10 @@ class G2SinkhornGate(nn.Module):
         Column sums converge to d_model/K (not 1) for non-square matrices.
         """
         eps = 1e-8
-        for _ in range(self.n_iters):
-            A = A / (A.sum(dim=-2, keepdim=True) + eps)   # col-norm over d_model
-            A = A / (A.sum(dim=-1, keepdim=True) + eps)   # row-norm over K
+        with torch.no_grad():
+            for _ in range(self.n_iters):
+                A = A / (A.sum(dim=-2, keepdim=True) + eps)   # col-norm over d_model
+                A = A / (A.sum(dim=-1, keepdim=True) + eps)   # row-norm over K
         return A
 
     def forward(self, rbf_out: torch.Tensor) -> torch.Tensor:

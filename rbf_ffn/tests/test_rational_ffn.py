@@ -39,3 +39,10 @@ def test_rational_ffn_no_bias():
     ffn = RationalFFN(make_cfg())
     assert ffn.up_proj.bias is None
     assert ffn.down_proj.bias is None
+
+
+def test_rational_activation_input_gradient():
+    act = RationalActivation()
+    x = torch.randn(B, N, D, requires_grad=True)
+    act(x).sum().backward()
+    assert x.grad is not None

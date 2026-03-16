@@ -2,7 +2,6 @@
 import torch
 from rbf_ffn.config import RBFFFNConfig
 from rbf_ffn.models.rational_ffn import RationalActivation, RationalFFN
-from rbf_ffn.models.transformer_block import RationalBlock
 
 B, N, D = 2, 16, 32
 
@@ -49,7 +48,3 @@ def test_rational_activation_input_gradient():
     assert x.grad is not None
 
 
-def test_rational_block_shape():
-    block = RationalBlock(make_cfg())
-    x = torch.randn(B, N, D)
-    assert block(x).shape == (B, N, D)

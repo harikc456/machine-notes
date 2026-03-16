@@ -2,7 +2,7 @@
 import torch
 import pytest
 from rbf_ffn.config import RBFFFNConfig
-from rbf_ffn.models.transformer_block import LlamaBlock, RBFBlock, RationalBlock
+from rbf_ffn.models.transformer_block import LlamaBlock, RBFBlock, RationalBlock, RationalGLUBlock
 
 D, H, B, N = 32, 4, 2, 16
 
@@ -88,6 +88,34 @@ def test_rational_block_gradient_flow():
 
 def test_rational_block_residual_connection():
     block = make_rational()
+    with torch.no_grad():
+        block.ffn.down_proj.weight.zero_()
+        block.attn.o_proj.weight.zero_()
+    x = torch.randn(B, N, D)
+    assert torch.allclose(block(x), x, atol=1e-5)
+
+
+# ── RationalGLUBlock ──────────────────────────────────────────────────────────
+
+def make_rationalglu() -> RationalGLUBlock:
+    return RationalGLUBlock(RBFFFNConfig(d_model=D, n_heads=H, dropout=0.0, model_type="rationalglu"))
+
+
+def test_rationalglu_block_shape():
+    block = make_rationalglu()
+    x = torch.randn(B, N, D)
+    assert block(x).shape == (B, N, D)
+
+
+def test_rationalglu_block_gradient_flow():
+    block = make_rationalglu()
+    x = torch.randn(B, N, D, requires_grad=True)
+    block(x).sum().backward()
+    assert x.grad is not None
+
+
+def test_rationalglu_block_residual_connection():
+    block = make_rationalglu()
     with torch.no_grad():
         block.ffn.down_proj.weight.zero_()
         block.attn.o_proj.weight.zero_()

@@ -97,3 +97,17 @@ def test_gradient_flows_rbf():
     tokens = torch.randint(0, VOCAB, (B, N))
     model(tokens).sum().backward()
     assert model.token_embedding.weight.grad is not None
+
+
+def test_rational_params_in_adamw():
+    """RationalActivation a and b must be in AdamW (1-D), not Muon."""
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = make_model("rational")
+    muon_params, adamw_params = build_optimizer_groups(model)
+    muon_ids  = {id(p) for p in muon_params}
+    adamw_ids = {id(p) for p in adamw_params}
+    for block in model.blocks:
+        assert id(block.ffn.act.a) in adamw_ids,    "act.a should be in AdamW"
+        assert id(block.ffn.act.a) not in muon_ids, "act.a should not be in Muon"
+        assert id(block.ffn.act.b) in adamw_ids,    "act.b should be in AdamW"
+        assert id(block.ffn.act.b) not in muon_ids, "act.b should not be in Muon"

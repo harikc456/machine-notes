@@ -27,8 +27,8 @@ class RBFFFNConfig:
     vocab_size: int = 50257
 
     # Model type
-    model_type: str = "rbf"        # "baseline" | "rbf"
-    ffn_hidden: int = 688          # SwiGLU hidden dim; ignored by RBF model
+    model_type: str = "rbf"        # "baseline" | "rbf" | "rational"
+    ffn_hidden: int = 688          # FFN hidden dim (SwiGLU / RationalFFN); ignored by RBF model
 
     # Training
     seed: int = 42

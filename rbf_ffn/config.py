@@ -27,8 +27,9 @@ class RBFFFNConfig:
     vocab_size: int = 50257
 
     # Model type
-    model_type: str = "rbf"        # "baseline" | "rbf" | "rational" | "rationalglu"
+    model_type: str = "rbf"        # "baseline" | "rbf" | "rational" | "rationalglu" | "pfd_rational" | "pfd_rationalglu"
     ffn_hidden: int = 688          # FFN hidden dim (SwiGLU / RationalFFN); ignored by RBF model
+    pfd_n: int = 4                 # Number of partial fraction terms for PFDRational* models
 
     # Training
     seed: int = 42

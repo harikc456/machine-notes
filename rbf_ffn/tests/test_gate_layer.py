@@ -148,3 +148,24 @@ def test_g2_gradient_flows():
     rbf_out = torch.rand(B, N, DK, requires_grad=True)
     gate(rbf_out).sum().backward()
     assert rbf_out.grad is not None
+
+
+def test_g2_sinkhorn_builds_no_autograd_graph():
+    """_sinkhorn must not build an autograd graph through its iterations.
+
+    With n_iters=20 and 2 ops/iter, the loop creates 40 intermediate tensors.
+    Each is shape (B, N, d_model, K) and is retained by the autograd graph for
+    the entire backward pass — O(n_iters) activation memory that causes OOM.
+
+    Fix: run the normalization loop under torch.no_grad() so no graph is built.
+    Gradients still flow through the original rbf_out via (W * A).sum(-1) in
+    forward(), since A (the reshape of rbf_out) is not touched by _sinkhorn.
+    """
+    gate = G2SinkhornGate(d_model=D, K=K, n_iters=20)
+    rbf_out = torch.rand(B, N, DK, requires_grad=True)
+    A = rbf_out.reshape(B, N, D, K)
+    W = gate._sinkhorn(A.clone())
+    assert W.grad_fn is None, (
+        "_sinkhorn built an autograd graph through its iterations. "
+        "Wrap the normalization loop in torch.no_grad() to fix OOM."
+    )

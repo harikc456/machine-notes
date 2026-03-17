@@ -5,7 +5,7 @@ from rbf_ffn.config import RBFFFNConfig
 from rbf_ffn.models.attention import CausalSelfAttention
 from rbf_ffn.models.llama_ffn import SwiGLUFFN
 from rbf_ffn.models.rbf_ffn import RBFFFN
-from rbf_ffn.models.rational_ffn import RationalFFN, RationalGatedFFN, PFDRationalFFN, PFDRationalGatedFFN
+from rbf_ffn.models.rational_ffn import RationalFFN, RationalGatedFFN, PFDRationalFFN, PFDRationalGatedFFN, FirstOrderPFDRationalFFN
 
 
 class LlamaBlock(nn.Module):
@@ -140,6 +140,29 @@ class PFDRationalGLUBlock(nn.Module):
         self.attn  = CausalSelfAttention(cfg)
         self.norm2 = nn.RMSNorm(cfg.d_model)
         self.ffn   = PFDRationalGatedFFN(cfg, n=cfg.pfd_n)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x + self.attn(self.norm1(x))
+        x = x + self.ffn(self.norm2(x))
+        return x
+
+
+class FirstOrderPFDRationalBlock(nn.Module):
+    """
+    Transformer block with FirstOrderPFDRationalFFN replacing the MLP.
+
+        x = x + attn(norm1(x))
+        x = x + ffn(norm2(x))    ← ffn is FirstOrderPFDRationalFFN
+
+    Pre-norm with RMSNorm. No bias anywhere.
+    """
+
+    def __init__(self, cfg: RBFFFNConfig):
+        super().__init__()
+        self.norm1 = nn.RMSNorm(cfg.d_model)
+        self.attn  = CausalSelfAttention(cfg)
+        self.norm2 = nn.RMSNorm(cfg.d_model)
+        self.ffn   = FirstOrderPFDRationalFFN(cfg, n=cfg.pfd_n)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x + self.attn(self.norm1(x))

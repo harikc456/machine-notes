@@ -15,6 +15,7 @@ def make_model(model_type: str = "rbf", gate_variant: str = "G0") -> CausalLM:
         vocab_size=VOCAB, seq_len=N,
         model_type=model_type, gate_variant=gate_variant,
         ffn_hidden=86,   # 8/3 * 32 ≈ 85
+        pfd_n=4,
         dropout=0.0,
     )
     return CausalLM(cfg)

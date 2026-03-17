@@ -133,3 +133,31 @@ class PFDRationalGatedFFN(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.down_proj(self.act(self.gate_proj(x)) * self.up_proj(x))
+
+
+class FirstOrderPFDRationalFFN(nn.Module):
+    """
+    First-order gated FFN with PFD rational activation and shared projection.
+
+        u    = up_proj(x)
+        gate = PFDRationalActivation(sin(u + phi))
+        out  = down_proj(gate * u)
+
+    phi is a learnable vector of shape (ffn_hidden,) — phase shift that decouples
+    the gate signal from the value despite sharing the same projection u.
+
+    2 large matrices instead of 3 (no gate_proj) — ~33% fewer FFN params vs SwiGLU.
+    No bias (Llama convention). Input/output: (B, N, d_model).
+    """
+
+    def __init__(self, cfg: RBFFFNConfig, n: int = 4):
+        super().__init__()
+        self.up_proj   = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
+        self.down_proj = nn.Linear(cfg.ffn_hidden, cfg.d_model, bias=False)
+        self.phi       = nn.Parameter(torch.randn(cfg.ffn_hidden) * 0.02)
+        self.act       = PFDRationalActivation(n)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        u = self.up_proj(x)
+        gate = self.act(torch.sin(u + self.phi))
+        return self.down_proj(gate * u)

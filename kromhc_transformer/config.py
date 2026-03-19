@@ -36,6 +36,7 @@ class KromHCConfig:
     warmup_ratio: float = 0.02
     grad_clip: float = 1.0
     grad_accum_steps: int = 1
+    max_train_batches: int = -1  # -1 = no limit; set >0 to cap steps per epoch (useful for smoke tests)
 
 
 def load_config(path: str | Path) -> KromHCConfig:

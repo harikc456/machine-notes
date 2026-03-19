@@ -42,3 +42,12 @@ def test_kromhc_block_gradient_flow():
     out, _ = block(x)
     out.sum().backward()
     assert x.grad is not None
+
+def test_kromhc_block_use_kromhc_false():
+    """When use_kromhc=False, mixing matrix H should be None."""
+    cfg = KromHCConfig(d_model=64, n_heads=4, ffn_hidden=128, use_kromhc=False, dropout=0.0)
+    block = KromHCBlock(cfg)
+    x = torch.randn(2, 16, 64)
+    out, H = block(x)
+    assert out.shape == x.shape
+    assert H is None

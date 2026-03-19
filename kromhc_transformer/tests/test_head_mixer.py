@@ -55,3 +55,10 @@ def test_head_mixer_n_heads_16():
 def test_head_mixer_non_power_of_2_raises():
     with pytest.raises(AssertionError):
         KromHCHeadMixer(n_heads=6, head_dim=32)
+
+def test_head_mixer_no_bias():
+    """All Linear layers in KromHCHeadMixer should have bias=False."""
+    mixer = KromHCHeadMixer(n_heads=8, head_dim=64)
+    for name, param in mixer.named_parameters():
+        if 'bias' in name:
+            assert False, f"Found bias parameter: {name}"

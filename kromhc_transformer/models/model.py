@@ -14,6 +14,8 @@ def build_optimizer_groups(model: "CausalLM") -> tuple[list, list]:
     adamw_params: list[torch.Tensor] = []
 
     for _name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
         pid = id(param)
         if pid in seen:
             continue

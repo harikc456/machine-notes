@@ -30,10 +30,12 @@ class KromHCBlock(nn.Module):
         super().__init__()
         self.n_heads = cfg.n_heads
         self.head_dim = cfg.d_model // cfg.n_heads
+        self.use_kromhc = cfg.use_kromhc
 
         self.norm1 = nn.RMSNorm(cfg.d_model)
         self.attn = CausalSelfAttention(cfg)
-        self.head_mixer = KromHCHeadMixer(n_heads=cfg.n_heads, head_dim=self.head_dim)
+        if self.use_kromhc:
+            self.head_mixer = KromHCHeadMixer(n_heads=cfg.n_heads, head_dim=self.head_dim)
         self.mixer_proj = nn.Linear(cfg.d_model, cfg.d_model, bias=False)
         self.norm2 = nn.RMSNorm(cfg.d_model)
         self.ffn = SwiGLUFFN(cfg)
@@ -41,17 +43,21 @@ class KromHCBlock(nn.Module):
     def forward(self, x: torch.Tensor):
         """
         x: (B, N, d_model)
-        Returns: (out: (B, N, d_model), H: (B*N, n_heads, n_heads))
+        Returns: (out: (B, N, d_model), H: (B*N, n_heads, n_heads) or None)
         """
         B, N, D = x.shape
 
         # Standard attention
         attn_out = self.attn(self.norm1(x))  # (B, N, d_model)
 
-        # Reshape to per-token heads, mix, reshape back
-        heads = attn_out.reshape(B * N, self.n_heads, self.head_dim)
-        mixed_heads, H = self.head_mixer(heads)
-        attn_out = self.mixer_proj(mixed_heads.reshape(B, N, D))
+        if self.use_kromhc:
+            # Reshape to per-token heads, mix, reshape back
+            heads = attn_out.reshape(B * N, self.n_heads, self.head_dim)
+            mixed_heads, H = self.head_mixer(heads)
+            attn_out = self.mixer_proj(mixed_heads.reshape(B, N, D))
+        else:
+            H = None
+            attn_out = self.mixer_proj(attn_out)
 
         x = x + attn_out
         x = x + self.ffn(self.norm2(x))

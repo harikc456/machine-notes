@@ -39,3 +39,21 @@ def test_causal_lm_gradient_flow():
     for name, param in model.named_parameters():
         if param.requires_grad:
             assert param.grad is not None, f"No grad for {name}"
+
+def test_build_optimizer_groups_excludes_frozen_params():
+    """Non-trainable params (perm_bases) must not appear in optimizer groups."""
+    from kromhc_transformer.models.model import build_optimizer_groups
+    cfg = KromHCConfig(d_model=64, n_heads=4, n_layers=2, vocab_size=100,
+                       model_type="kromhc", dropout=0.0)
+    model = CausalLM(cfg)
+    muon, adamw = build_optimizer_groups(model)
+    all_opt_params = muon + adamw
+    # None of the optimizer params should be frozen
+    for p in all_opt_params:
+        assert p.requires_grad, "Frozen param leaked into optimizer groups"
+    # perm_bases should not appear
+    perm_base_ids = {
+        id(p) for n, p in model.named_parameters() if "perm_bases" in n
+    }
+    opt_ids = {id(p) for p in all_opt_params}
+    assert len(perm_base_ids & opt_ids) == 0, "perm_bases leaked into optimizer groups"

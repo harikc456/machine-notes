@@ -42,9 +42,9 @@ class KromHCHeadMixer(nn.Module):
 
             # Small MLP: context → 2 weights (for convex combination of the 2 permutations)
             self.weight_gens.append(nn.Sequential(
-                nn.Linear(d_context, 32),
+                nn.Linear(d_context, 32, bias=False),
                 nn.ReLU(),
-                nn.Linear(32, 2),
+                nn.Linear(32, 2, bias=False),
             ))
 
     def _batched_kronecker(self, A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:

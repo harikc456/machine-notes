@@ -10,7 +10,7 @@ dependencies = ["pyyaml"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["rbf_ffn*", "kromhc_transformer*"]
+include = ["rbf_ffn*", "kromhc_transformer*", "grokking*"]
 
 [tool.pytest.ini_options]
-testpaths = ["rbf_ffn/tests", "kromhc_transformer/tests"]
+testpaths = ["rbf_ffn/tests", "kromhc_transformer/tests", "grokking/tests"]

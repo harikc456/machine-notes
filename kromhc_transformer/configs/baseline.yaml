@@ -1,0 +1,17 @@
+model_type: baseline
+use_kromhc: false
+qk_norm: true
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+batch_size: 16
+n_epochs: 3
+seq_len: 512
+vocab_size: 50257
+seed: 42
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+dropout: 0.1

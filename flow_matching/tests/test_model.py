@@ -55,3 +55,35 @@ def test_patch_embed_output_dtype():
     x = torch.randn(2, 3, 32, 32)
     out = model(x)
     assert out.dtype == torch.float32
+
+
+# ── DiTBlock ──────────────────────────────────────────────────────────────────
+
+def test_ditblock_output_shape():
+    from flow_matching.model import DiTBlock
+    B, N, d_model = 2, 64, 64
+    block = DiTBlock(d_model=d_model, n_heads=2, mlp_ratio=4.0, dropout=0.0)
+    x = torch.randn(B, N, d_model)
+    c = torch.randn(B, d_model)
+    out = block(x, c)
+    assert out.shape == (B, N, d_model), f"Expected ({B},{N},{d_model}), got {out.shape}"
+
+
+def test_ditblock_adaln_mlp_outputs_6d():
+    from flow_matching.model import DiTBlock
+    d_model = 64
+    block = DiTBlock(d_model=d_model, n_heads=2, mlp_ratio=4.0, dropout=0.0)
+    c = torch.randn(2, d_model)
+    out = block.adaln_mlp(c)
+    assert out.shape == (2, 6 * d_model), f"Expected (2,{6*d_model}), got {out.shape}"
+
+
+def test_ditblock_adaln_zero_init():
+    """At init, adaln_mlp final layer is zero → block acts as identity on random input."""
+    from flow_matching.model import DiTBlock
+    d_model = 64
+    block = DiTBlock(d_model=d_model, n_heads=2, mlp_ratio=4.0, dropout=0.0)
+    # Final linear of adaln_mlp should be zero-initialized
+    final_layer = block.adaln_mlp[-1]
+    assert torch.allclose(final_layer.weight, torch.zeros_like(final_layer.weight))
+    assert torch.allclose(final_layer.bias,   torch.zeros_like(final_layer.bias))

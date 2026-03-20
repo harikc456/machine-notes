@@ -72,3 +72,60 @@ class PatchEmbed(nn.Module):
         x = x.flatten(2)       # (B, d_model, N)
         x = x.transpose(1, 2)  # (B, N, d_model)
         return x
+
+
+# ── DiTBlock ──────────────────────────────────────────────────────────────────
+
+class DiTBlock(nn.Module):
+    """Pre-norm transformer block with adaLN-Zero conditioning.
+
+    Forward:
+        x: (B, N, d_model) — patch tokens
+        c: (B, d_model)    — conditioning signal (time + class)
+    Returns: (B, N, d_model)
+    """
+
+    def __init__(self, d_model: int, n_heads: int, mlp_ratio: float, dropout: float):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(d_model, elementwise_affine=False)
+        self.attn  = nn.MultiheadAttention(
+            d_model, n_heads, dropout=dropout, batch_first=True, bias=True
+        )
+        self.norm2 = nn.LayerNorm(d_model, elementwise_affine=False)
+        ffn_hidden = int(mlp_ratio * d_model)
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, ffn_hidden),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(ffn_hidden, d_model),
+        )
+        # adaLN MLP: SiLU activation + single linear projecting c → 6 * d_model
+        self.adaln_mlp = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(d_model, 6 * d_model),
+        )
+        # Zero-init the final projection (the "Zero" in adaLN-Zero)
+        nn.init.zeros_(self.adaln_mlp[-1].weight)
+        nn.init.zeros_(self.adaln_mlp[-1].bias)
+
+    def forward(self, x: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+        # Compute 6 adaLN parameters; unsqueeze to broadcast over sequence dim
+        s = self.adaln_mlp(c)  # (B, 6*d_model)
+        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = s.chunk(6, dim=-1)
+        shift_msa = shift_msa.unsqueeze(1)  # (B, 1, d_model)
+        scale_msa = scale_msa.unsqueeze(1)
+        gate_msa  = gate_msa.unsqueeze(1)
+        shift_mlp = shift_mlp.unsqueeze(1)
+        scale_mlp = scale_mlp.unsqueeze(1)
+        gate_mlp  = gate_mlp.unsqueeze(1)
+
+        # Attention sublayer
+        normed = (1 + scale_msa) * self.norm1(x) + shift_msa
+        attn_out, _ = self.attn(normed, normed, normed, need_weights=False)
+        x = x + gate_msa * attn_out
+
+        # FFN sublayer
+        normed = (1 + scale_mlp) * self.norm2(x) + shift_mlp
+        x = x + gate_mlp * self.ffn(normed)
+
+        return x

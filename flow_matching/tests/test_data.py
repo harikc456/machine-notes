@@ -1,6 +1,5 @@
 from __future__ import annotations
 import numpy as np
-import pytest
 import torch
 from PIL import Image
 from unittest.mock import patch

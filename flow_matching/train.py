@@ -185,7 +185,12 @@ def train(
         # Checkpoint
         if step % cfg.save_every == 0:
             torch.save(
-                {"model": model.state_dict(), "step": step},
+                {
+                    "model":      model.state_dict(),
+                    "step":       step,
+                    "optimizers": [opt.state_dict() for opt in optimizers],
+                    "schedulers": [sched.state_dict() for sched in schedulers],
+                },
                 exp_dir / "ckpt.pt",
             )
 

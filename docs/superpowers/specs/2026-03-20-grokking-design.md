@@ -1,7 +1,7 @@
 # Grokking — Modular Arithmetic Training Script
 
 **Date:** 2026-03-20
-**Status:** Approved
+**Status:** Draft
 
 ## Goal
 
@@ -23,10 +23,18 @@ grokking/
     └── muon_add.yaml     # Muon variant, addition mod p
 ```
 
-Experiment outputs are saved to `grokking/experiments/<timestamp>_<op>_<optimizer>/`:
+Experiment outputs are saved to `grokking/experiments/<timestamp>_<op>_<optimizer>/`, where the path is anchored to `Path(__file__).parent / "experiments"` (i.e. relative to `train.py`, matching `rbf_ffn` convention):
 - `config.yaml` — copy of the run config
 - `metrics.jsonl` — one JSON line per log step with train/val loss and accuracy
 - `plot.png` — dual-panel loss + accuracy curve
+
+**CLI invocation:**
+```
+python -m grokking.train --config grokking/configs/adamw_add.yaml
+python -m grokking.train --config grokking/configs/muon_add.yaml --n_steps 100000
+```
+
+`train.py` exposes two CLI arguments: `--config` (required, path to YAML) and `--n_steps` (optional int, overrides the config value). No other config fields are CLI-overridable; all other changes must be made in the YAML.
 
 ---
 
@@ -35,20 +43,20 @@ Experiment outputs are saved to `grokking/experiments/<timestamp>_<op>_<optimize
 - **Universe:** all `p²` pairs `(a, b)` for `a, b ∈ {0, …, p-1}`
 - **Label:** result of the chosen operation mod p
 - **Train fraction:** configurable, default `0.4` (40 % forces memorisation before generalisation, following the paper)
-- **Input format:** token sequence `[a, op_token, b, =]`; the model predicts the token after `=` (classification over p classes)
+- **Input format:** token sequence `[a, op_token, b, =]` — always 4 tokens; sequence length is a **fixed constant (`seq_len = 4`)** in `model.py`, not user-configurable
 - **Supported operations:**
   - `add`: `(a + b) % p`
   - `sub`: `(a - b) % p`
   - `mul`: `(a * b) % p`
-  - `div`: `(a * b⁻¹) % p` (modular inverse, only defined where b ≠ 0)
-  - `x2_plus_xy_plus_y2`: `(a² + ab + b²) % p`
+  - `div`: `(a * pow(b, -1, p)) % p` (modular inverse; only valid pairs where `b ≠ 0`)
+  - `x2_plus_xy_plus_y2`: `(a**2 + a*b + b**2) % p`
 - **Seeded split:** reproducible train/val split via `seed`
 
 ---
 
 ## Model
 
-A standard transformer encoder (no causal masking needed; the input is a fixed-length sequence):
+A standard transformer encoder (no causal masking; input is fixed-length):
 
 | Hyperparameter | Default | Notes |
 |---|---|---|
@@ -58,9 +66,11 @@ A standard transformer encoder (no causal masking needed; the input is a fixed-l
 | `dropout` | 0.0 | paper uses 0 |
 | `p` | 97 | modulus (prime) |
 
-**Vocab:** `p` digit tokens + 1 op token + 1 equals token → size `p + 2`.
+**Vocab size:** `p + 2` (p digit tokens + 1 op token + 1 equals token).
 
-Only the logit at the `=` position (last input position) is used for cross-entropy loss. Loss is classification over `p` classes.
+**Weight tying:** the output head (`lm_head`) is **not weight-tied** to the input embedding. It is a separate `nn.Linear(d_model, p, bias=False)` layer.
+
+Only the logit at the `=` position (index 3, the last input token) is used for cross-entropy loss. Loss is classification over `p` classes.
 
 ---
 
@@ -68,16 +78,24 @@ Only the logit at the `=` position (last input position) is used for cross-entro
 
 ### Optimisers
 
-| Config key | Optimiser | Notes |
-|---|---|---|
-| `optimizer: adamw` | AdamW | `lr=1e-3`, `weight_decay=1.0`, `betas=(0.9, 0.98)` |
-| `optimizer: muon` | Muon (matrix params) + AdamW (scalars/biases/embeddings) | same split strategy as `rbf_ffn` |
+The optimiser is selected via `optimizer: adamw | muon` in config.
 
-Weight decay on AdamW is the critical hyperparameter for inducing grokking. Muon runs use AdamW for embedding and head parameters (non-matrix tensors).
+**AdamW mode:**
+- Single AdamW over all parameters
+- `lr = adamw_lr`, `weight_decay = weight_decay`, `betas = (0.9, 0.98)` (betas hard-coded in `train.py`, not in config)
+- Note: `betas` second value is `0.98`, matching Power et al. 2022 — this intentionally deviates from the `rbf_ffn` default of `0.95`
+
+**Muon mode:**
+- Muon for all 2-D weight matrices (criterion: `param.ndim == 2`), **excluding** the token embedding matrix (identified by tensor identity, same as `rbf_ffn.build_optimizer_groups`)
+- AdamW for all remaining parameters (embeddings, biases, scalars), with `weight_decay = weight_decay` and `betas = (0.9, 0.98)` — `weight_decay` applies to this AdamW sub-group in the same way as AdamW-only mode
+- Since the head is not weight-tied, `lm_head.weight` (2-D) goes to Muon
+- Separate learning rates: `muon_lr` for Muon, `adamw_lr` for AdamW sub-group (see config schema)
+
+Weight decay on AdamW (both modes) is the critical hyperparameter for inducing grokking.
 
 ### Schedule
 
-Cosine decay with linear warmup (warmup ratio configurable, default `0.01`).
+Cosine decay with linear warmup (warmup ratio configurable, default `0.01`), applied to both optimisers in Muon mode via a shared `LambdaLR`.
 
 ### Key hyperparameters
 
@@ -93,14 +111,13 @@ Cosine decay with linear warmup (warmup ratio configurable, default `0.01`).
 
 - `step`, `train_loss`, `val_loss`, `train_acc`, `val_acc`
 - Written as JSONL to `metrics.jsonl`
+- Validation runs over the full val set at each log step
 
 ### Plot
 
-Single PNG saved at end of training with two vertically stacked panels:
-1. **Loss** — train and val curves vs step (log-scale y recommended)
+Single PNG saved at end of training with two vertically stacked panels sharing the x-axis (step):
+1. **Loss** — train and val curves vs step (log-scale y)
 2. **Accuracy** — train and val curves vs step (linear 0–1)
-
-Both panels share the x-axis (step).
 
 ---
 
@@ -125,20 +142,21 @@ class GrokConfig:
     n_steps: int = 50_000
     batch_size: int = 512
     optimizer: str = "adamw"        # adamw | muon
-    lr: float = 1e-3
+    adamw_lr: float = 1e-3
+    muon_lr: float = 0.02           # only used when optimizer=muon
     weight_decay: float = 1.0
-    betas: tuple = (0.9, 0.98)
     warmup_ratio: float = 0.01
     grad_clip: float = 1.0
     log_every: int = 10
 ```
 
+`betas` are hard-coded to `(0.9, 0.98)` in `train.py` and are not YAML-serialised.
+
 ---
 
 ## Success Criteria
 
-1. With AdamW + `weight_decay=1.0`, training accuracy reaches ~100% within a few thousand steps while validation accuracy stays low, then validation accuracy jumps sharply to ~100% much later — the classic grokking signature.
-2. Muon run produces a comparable or different grokking curve, enabling comparison.
-3. Plots clearly show the two-phase behaviour (memorisation → generalisation).
-4. All supported operations run without error.
-5. Module integrates cleanly into the existing project structure (importable, consistent style).
+1. With `optimizer: adamw` and `weight_decay=1.0`, training accuracy reaches ~100% before validation accuracy does (memorisation phase), and validation accuracy then jumps sharply toward ~100% in a later phase — the classic grokking signature visible in the plot.
+2. A Muon run (`optimizer: muon`) completes all `n_steps` without error, producing a valid `metrics.jsonl` with one entry per `log_every` steps and a `plot.png` in the experiment directory.
+3. All five supported operations (`add`, `sub`, `mul`, `div`, `x2_plus_xy_plus_y2`) complete a short smoke run (e.g. 100 steps) without error.
+4. Module is importable as `grokking` and follows `rbf_ffn` style conventions (config dataclass, `load_config`, experiment dir anchored to `__file__`).

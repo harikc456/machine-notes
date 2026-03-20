@@ -79,7 +79,7 @@ def test_ditblock_adaln_mlp_outputs_6d():
 
 
 def test_ditblock_adaln_zero_init():
-    """At init, adaln_mlp final layer is zero → block acts as identity on random input."""
+    """At init, adaln_mlp final linear weight and bias are zero-initialized."""
     from flow_matching.model import DiTBlock
     d_model = 64
     block = DiTBlock(d_model=d_model, n_heads=2, mlp_ratio=4.0, dropout=0.0)

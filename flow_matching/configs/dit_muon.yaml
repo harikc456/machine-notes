@@ -1,0 +1,27 @@
+# DiT Muon variant — Muon for 2D weight matrices, AdamW for rest
+data_root: data/
+seed: 42
+
+d_model: 384
+n_heads: 6
+n_layers: 12
+patch_size: 4
+mlp_ratio: 4.0
+dropout: 0.0
+
+p_uncond: 0.1
+
+n_steps: 200000
+batch_size: 128
+optimizer: muon
+adamw_lr: 1.0e-4
+muon_lr: 0.02
+weight_decay: 0.0
+warmup_ratio: 0.05
+grad_clip: 1.0
+log_every: 100
+sample_every: 5000
+save_every: 10000
+
+n_steps_euler: 100
+cfg_scale: 3.0

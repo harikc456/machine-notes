@@ -1,0 +1,26 @@
+# Small DiT config — reduced model for rapid iteration / smoke tests
+data_root: data/
+seed: 42
+
+d_model: 192
+n_heads: 3
+n_layers: 6
+patch_size: 4
+mlp_ratio: 4.0
+dropout: 0.0
+
+p_uncond: 0.1
+
+n_steps: 1000
+batch_size: 32
+optimizer: adamw
+adamw_lr: 1.0e-4
+weight_decay: 0.0
+warmup_ratio: 0.05
+grad_clip: 1.0
+log_every: 10
+sample_every: 500
+save_every: 500
+
+n_steps_euler: 10
+cfg_scale: 3.0

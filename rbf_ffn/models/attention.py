@@ -86,6 +86,10 @@ class CausalSelfAttention(nn.Module):
         self.rope = RotaryEmbedding(self.head_dim)
         self._dropout = cfg.dropout
         self._use_flash = _flash_available()
+        self._qk_norm = cfg.qk_norm
+        if self._qk_norm:
+            self.q_norm = nn.RMSNorm(self.head_dim)
+            self.k_norm = nn.RMSNorm(self.head_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """x: (B, N, d_model)"""
@@ -96,6 +100,11 @@ class CausalSelfAttention(nn.Module):
         q = self.rope(split_heads(self.q_proj(x)))   # (B, H, N, head_dim)
         k = self.rope(split_heads(self.k_proj(x)))
         v = split_heads(self.v_proj(x))
+
+        # Apply QK normalization if enabled
+        if self._qk_norm:
+            q = self.q_norm(q)
+            k = self.k_norm(k)
 
         dp = self._dropout if self.training else 0.0
         if self._use_flash:

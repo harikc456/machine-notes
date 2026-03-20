@@ -22,6 +22,9 @@ class RBFFFNConfig:
     gate_variant: str = "G0"       # "G0" | "G1A" | "G1B" | "G2"
     sinkhorn_iters: int = 20       # G2 only
 
+    # Attention
+    qk_norm: bool = False          # Enable QK normalization in attention
+
     # Sequence / vocab
     seq_len: int = 512
     vocab_size: int = 50257

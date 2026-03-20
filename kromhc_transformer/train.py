@@ -68,7 +68,7 @@ def train(cfg: KromHCConfig, device: torch.device = None) -> dict:
     train_loader, val_loader, test_loader = get_dataloaders(cfg)
     model = CausalLM(cfg).to(device)
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"Model: {n_params / 1e6:.1f}M params | device: {device}")
+    print(f"Parameters: {n_params:,} | device: {device}")
 
     muon_params, adamw_params = build_optimizer_groups(model)
     optimizers = []
@@ -84,7 +84,7 @@ def train(cfg: KromHCConfig, device: torch.device = None) -> dict:
 
     exp_dir = get_experiment_dir()
     metrics: dict = {
-        "train_losses": [], "val_losses": [], "val_ppls": [],
+        "train_losses": [], "train_ppls": [], "val_losses": [], "val_ppls": [],
         "test_loss": None, "test_ppl": None,
         "n_params": n_params, "config": cfg.__dict__,
     }
@@ -120,10 +120,13 @@ def train(cfg: KromHCConfig, device: torch.device = None) -> dict:
             n_batches += 1
 
         val_loss, val_ppl = evaluate(model, val_loader, device)
-        metrics["train_losses"].append(epoch_loss / n_batches)
+        train_loss = epoch_loss / n_batches
+        train_ppl = math.exp(train_loss)
+        metrics["train_losses"].append(train_loss)
+        metrics["train_ppls"].append(train_ppl)
         metrics["val_losses"].append(val_loss)
         metrics["val_ppls"].append(val_ppl)
-        print(f"Epoch {epoch+1}: val_loss={val_loss:.4f} val_ppl={val_ppl:.2f}")
+        print(f"Epoch {epoch+1}: train_loss={train_loss:.4f} train_ppl={train_ppl:.2f} | val_loss={val_loss:.4f} val_ppl={val_ppl:.2f}")
 
     test_loss, test_ppl = evaluate(model, test_loader, device)
     metrics["test_loss"] = test_loss

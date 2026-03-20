@@ -5,8 +5,8 @@ d_model: 256
 n_heads: 8
 n_layers: 6
 ffn_hidden: 688
-batch_size: 32
-n_epochs: 10
+batch_size: 16
+n_epochs: 3
 seq_len: 512
 vocab_size: 50257
 seed: 42

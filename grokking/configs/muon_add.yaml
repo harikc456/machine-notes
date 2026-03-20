@@ -1,0 +1,12 @@
+# grokking/configs/muon_add.yaml
+# Muon variant — addition mod 97, to study optimizer impact on grokking
+operation: add
+optimizer: muon
+p: 97
+train_fraction: 0.4
+n_steps: 50000
+batch_size: 512
+muon_lr: 0.02
+adamw_lr: 3.0e-4
+weight_decay: 1.0
+log_every: 10

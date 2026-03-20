@@ -68,8 +68,7 @@ class PatchEmbed(nn.Module):
         self.proj = nn.Conv2d(3, d_model, kernel_size=patch_size, stride=patch_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.proj(x)          # (B, d_model, H//p, W//p)
-        B, C, H, W = x.shape
-        x = x.flatten(2)          # (B, d_model, N)
-        x = x.transpose(1, 2)     # (B, N, d_model)
+        x = self.proj(x)       # (B, d_model, H//p, W//p)
+        x = x.flatten(2)       # (B, d_model, N)
+        x = x.transpose(1, 2)  # (B, N, d_model)
         return x

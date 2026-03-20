@@ -1,0 +1,43 @@
+{
+  "train_losses": [
+    8.411798381103116,
+    4.847252917187038,
+    4.446727570451198
+  ],
+  "val_losses": [
+    5.067047948164564,
+    4.53556397940608,
+    4.263820582900305
+  ],
+  "val_ppls": [
+    158.70512936722204,
+    93.27610627593636,
+    71.08103632650736
+  ],
+  "test_loss": 4.239273938736044,
+  "test_ppl": 69.35747577638749,
+  "n_params": 18025616,
+  "config": {
+    "d_model": 256,
+    "n_heads": 8,
+    "n_layers": 6,
+    "dropout": 0.1,
+    "model_type": "kromhc",
+    "use_kromhc": true,
+    "qk_norm": true,
+    "ffn_hidden": 688,
+    "seq_len": 512,
+    "vocab_size": 50257,
+    "seed": 42,
+    "n_epochs": 3,
+    "batch_size": 16,
+    "muon_lr": 0.02,
+    "adamw_lr": 0.0003,
+    "adamw_wd": 0.1,
+    "warmup_ratio": 0.02,
+    "grad_clip": 1.0,
+    "grad_accum_steps": 1,
+    "max_train_batches": -1
+  },
+  "wall_clock_s": 4304.077340126038
+}

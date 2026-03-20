@@ -45,3 +45,22 @@ def test_load_config_empty_yaml_returns_defaults(tmp_path):
     path.write_text("")
     cfg = load_config(path)
     assert cfg.p == 97
+
+
+def test_invalid_train_fraction_raises():
+    with pytest.raises(ValueError, match="train_fraction"):
+        GrokConfig(train_fraction=0.0)
+    with pytest.raises(ValueError, match="train_fraction"):
+        GrokConfig(train_fraction=1.0)
+    with pytest.raises(ValueError, match="train_fraction"):
+        GrokConfig(train_fraction=-0.5)
+
+
+def test_invalid_operation_raises():
+    with pytest.raises(ValueError, match="operation"):
+        GrokConfig(operation="mod")
+
+
+def test_invalid_optimizer_raises():
+    with pytest.raises(ValueError, match="optimizer"):
+        GrokConfig(optimizer="sgd")

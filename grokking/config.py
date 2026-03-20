@@ -1,6 +1,5 @@
 from __future__ import annotations
-import dataclasses
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 import yaml
 
@@ -49,7 +48,7 @@ def load_config(path: str | Path) -> GrokConfig:
     raw = yaml.safe_load(Path(path).read_text())
     if raw is None:
         return GrokConfig()
-    valid_fields = {f.name for f in dataclasses.fields(GrokConfig)}
+    valid_fields = {f.name for f in fields(GrokConfig)}
     unknown = set(raw) - valid_fields
     if unknown:
         raise ValueError(f"Unknown config keys: {unknown}")

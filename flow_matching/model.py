@@ -52,3 +52,24 @@ def make_2d_sincos_pos_embed(d_model: int, grid_size: int = 8) -> torch.Tensor:
     pos = torch.cat([emb_h, emb_w], dim=-1)             # (grid_size, grid_size, d_model)
     pos = pos.reshape(grid_size * grid_size, d_model)    # (N, d_model)
     return pos.unsqueeze(0)                              # (1, N, d_model)
+
+
+# ── PatchEmbed ────────────────────────────────────────────────────────────────
+
+class PatchEmbed(nn.Module):
+    """Split image into patches and project to d_model.
+
+    Input:  (B, 3, H, W)
+    Output: (B, H//p * W//p, d_model)
+    """
+
+    def __init__(self, patch_size: int, d_model: int):
+        super().__init__()
+        self.proj = nn.Conv2d(3, d_model, kernel_size=patch_size, stride=patch_size)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.proj(x)          # (B, d_model, H//p, W//p)
+        B, C, H, W = x.shape
+        x = x.flatten(2)          # (B, d_model, N)
+        x = x.transpose(1, 2)     # (B, N, d_model)
+        return x

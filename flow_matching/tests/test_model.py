@@ -33,3 +33,25 @@ def test_make_2d_sincos_pos_embed_d_model_divisible_by_4():
     from flow_matching.model import make_2d_sincos_pos_embed
     with pytest.raises(AssertionError):
         make_2d_sincos_pos_embed(d_model=6, grid_size=8)
+
+
+# ── PatchEmbed ────────────────────────────────────────────────────────────────
+
+def test_patch_embed_output_shape():
+    from flow_matching.model import PatchEmbed
+    B, C, H, W = 2, 3, 32, 32
+    patch_size, d_model = 4, 64
+    model = PatchEmbed(patch_size=patch_size, d_model=d_model)
+    x = torch.randn(B, C, H, W)
+    out = model(x)
+    n_patches = (H // patch_size) * (W // patch_size)  # 64
+    assert out.shape == (B, n_patches, d_model), \
+        f"Expected ({B},{n_patches},{d_model}), got {out.shape}"
+
+
+def test_patch_embed_output_dtype():
+    from flow_matching.model import PatchEmbed
+    model = PatchEmbed(patch_size=4, d_model=64)
+    x = torch.randn(2, 3, 32, 32)
+    out = model(x)
+    assert out.dtype == torch.float32

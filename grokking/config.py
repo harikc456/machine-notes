@@ -1,4 +1,5 @@
 from __future__ import annotations
+import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
 import yaml
@@ -29,6 +30,16 @@ class GrokConfig:
     grad_clip: float = 1.0
     log_every: int = 10
 
+    def __post_init__(self) -> None:
+        if not (0.0 < self.train_fraction < 1.0):
+            raise ValueError(f"train_fraction must be in (0, 1), got {self.train_fraction}")
+        valid_ops = {"add", "sub", "mul", "div", "x2_plus_xy_plus_y2"}
+        if self.operation not in valid_ops:
+            raise ValueError(f"operation must be one of {valid_ops}, got {self.operation!r}")
+        valid_opts = {"adamw", "muon"}
+        if self.optimizer not in valid_opts:
+            raise ValueError(f"optimizer must be one of {valid_opts}, got {self.optimizer!r}")
+
 
 def load_config(path: str | Path) -> GrokConfig:
     """Load a GrokConfig from a YAML file.
@@ -38,7 +49,7 @@ def load_config(path: str | Path) -> GrokConfig:
     raw = yaml.safe_load(Path(path).read_text())
     if raw is None:
         return GrokConfig()
-    valid_fields = {f.name for f in GrokConfig.__dataclass_fields__.values()}
+    valid_fields = {f.name for f in dataclasses.fields(GrokConfig)}
     unknown = set(raw) - valid_fields
     if unknown:
         raise ValueError(f"Unknown config keys: {unknown}")

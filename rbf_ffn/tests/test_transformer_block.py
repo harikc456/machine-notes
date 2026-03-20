@@ -2,7 +2,7 @@
 import torch
 import pytest
 from rbf_ffn.config import RBFFFNConfig
-from rbf_ffn.models.transformer_block import LlamaBlock, RBFBlock, RationalBlock, RationalGLUBlock
+from rbf_ffn.models.transformer_block import LlamaBlock, RBFBlock, RationalBlock, RationalGLUBlock, FirstOrderPFDRationalBlock
 
 D, H, B, N = 32, 4, 2, 16
 
@@ -116,6 +116,36 @@ def test_rationalglu_block_gradient_flow():
 
 def test_rationalglu_block_residual_connection():
     block = make_rationalglu()
+    with torch.no_grad():
+        block.ffn.down_proj.weight.zero_()
+        block.attn.o_proj.weight.zero_()
+    x = torch.randn(B, N, D)
+    assert torch.allclose(block(x), x, atol=1e-5)
+
+
+# ── FirstOrderPFDRationalBlock ────────────────────────────────────────────────
+
+def make_first_order_pfd_cfg():
+    return RBFFFNConfig(d_model=D, n_heads=H, dropout=0.0,
+                        model_type="first_order_pfd_rational", pfd_n=4)
+
+
+def test_first_order_pfd_rational_block_shape():
+    block = FirstOrderPFDRationalBlock(make_first_order_pfd_cfg())
+    x = torch.randn(B, N, D)
+    assert block(x).shape == (B, N, D)
+
+
+def test_first_order_pfd_rational_block_gradient_flow():
+    block = FirstOrderPFDRationalBlock(make_first_order_pfd_cfg())
+    x = torch.randn(B, N, D)
+    block(x).sum().backward()
+    assert block.ffn.phi.grad is not None
+
+
+def test_first_order_pfd_rational_block_residual_connection():
+    """Zero FFN and attn output projections → output equals input."""
+    block = FirstOrderPFDRationalBlock(make_first_order_pfd_cfg())
     with torch.no_grad():
         block.ffn.down_proj.weight.zero_()
         block.attn.o_proj.weight.zero_()

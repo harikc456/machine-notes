@@ -15,6 +15,7 @@ def make_model(model_type: str = "rbf", gate_variant: str = "G0") -> CausalLM:
         vocab_size=VOCAB, seq_len=N,
         model_type=model_type, gate_variant=gate_variant,
         ffn_hidden=86,   # 8/3 * 32 ≈ 85
+        pfd_n=4,
         dropout=0.0,
     )
     return CausalLM(cfg)
@@ -131,3 +132,29 @@ def test_rationalglu_params_in_adamw():
         assert id(block.ffn.act.a) not in muon_ids, "act.a should not be in Muon"
         assert id(block.ffn.act.b) in adamw_ids,    "act.b should be in AdamW"
         assert id(block.ffn.act.b) not in muon_ids, "act.b should not be in Muon"
+
+
+def test_first_order_pfd_rational_output_shape():
+    model = make_model("first_order_pfd_rational")
+    tokens = torch.randint(0, VOCAB, (B, N))
+    assert model(tokens).shape == (B, N, VOCAB)
+
+
+def test_first_order_pfd_rational_params_in_adamw():
+    """phi and PFD activation params must be in AdamW, not Muon."""
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = make_model("first_order_pfd_rational")
+    muon_params, adamw_params = build_optimizer_groups(model)
+    muon_ids  = {id(p) for p in muon_params}
+    adamw_ids = {id(p) for p in adamw_params}
+    for block in model.blocks:
+        assert id(block.ffn.phi)       in adamw_ids,    "phi should be in AdamW"
+        assert id(block.ffn.phi)       not in muon_ids, "phi should not be in Muon"
+        assert id(block.ffn.act.a)     in adamw_ids,    "act.a should be in AdamW"
+        assert id(block.ffn.act.a)     not in muon_ids, "act.a should not be in Muon"
+        assert id(block.ffn.act.b)     in adamw_ids,    "act.b should be in AdamW"
+        assert id(block.ffn.act.b)     not in muon_ids, "act.b should not be in Muon"
+        assert id(block.ffn.act.c)     in adamw_ids,    "act.c should be in AdamW"
+        assert id(block.ffn.act.c)     not in muon_ids, "act.c should not be in Muon"
+        assert id(block.ffn.act.gamma) in adamw_ids,    "act.gamma should be in AdamW"
+        assert id(block.ffn.act.gamma) not in muon_ids, "act.gamma should not be in Muon"

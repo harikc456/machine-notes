@@ -1,0 +1,28 @@
+# Llama SwiGLU baseline with linear weight normalisation (target norm = 2.0).
+# All linear layer weight rows are projected to L2 norm 2.0 after every
+# optimizer step. The lm_head (weight-tied to the token embedding) is excluded.
+model_type: baseline
+gate_variant: G0
+sigma_variant: global
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+K: 5
+centers: [-1.0, -0.5, 0.0, 0.5, 1.0]
+sigma_init: 0.5
+sinkhorn_iters: 20
+vocab_size: 50257
+seq_len: 512
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0

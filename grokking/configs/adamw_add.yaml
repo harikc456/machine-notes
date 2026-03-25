@@ -1,10 +1,10 @@
 # grokking/configs/adamw_add.yaml
 # AdamW baseline — addition mod 97, following Power et al. 2022
-operation: add
+operation: x2_plus_xy_plus_y2
 optimizer: adamw
 p: 97
 train_fraction: 0.4
-n_steps: 50000
+n_steps: 100000
 batch_size: 512
 adamw_lr: 1.0e-3
 weight_decay: 1.0

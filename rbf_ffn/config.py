@@ -34,6 +34,13 @@ class RBFFFNConfig:
     ffn_hidden: int = 688          # FFN hidden dim (SwiGLU / RationalFFN); ignored by RBF model
     pfd_n: int = 4                 # Number of partial fraction terms for PFDRational* models
 
+    # Weight normalization
+    linear_weight_norm: bool = False   # Normalise each linear layer's weight rows after every optimizer step
+    linear_weight_norm_value: float = 2.0  # Target L2 norm per output neuron
+
+    # Activation coefficient normalization
+    activation_norm: bool = False      # Normalise rational/PFD activation coefficients to L2 norm 2.0 after every optimizer step
+
     # Training
     seed: int = 42
     n_epochs: int = 10

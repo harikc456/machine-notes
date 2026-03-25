@@ -24,6 +24,7 @@ from tqdm import tqdm
 from rbf_ffn.config import RBFFFNConfig, load_config
 from rbf_ffn.data import get_dataloaders
 from rbf_ffn.models.model import CausalLM, build_optimizer_groups
+from rbf_ffn.models.rational_ffn import PFDRationalActivation, RationalActivation
 
 
 def get_experiment_dir(cfg: RBFFFNConfig) -> Path:
@@ -65,6 +66,42 @@ def collect_sigma_stats(model: CausalLM) -> dict:
         "sigma_mean": sigma_cat.mean().item(),
         "sigma_std":  0.0 if all_scalar else sigma_cat.std().item(),
     }
+
+
+@torch.no_grad()
+def apply_linear_weight_norm(model: CausalLM, target_norm: float) -> None:
+    """Normalise each output neuron (row) of every Linear weight to `target_norm`.
+
+    Skips weight-tied layers (lm_head shares the token embedding matrix).
+    """
+    tied_id = id(model.token_embedding.weight)
+    for module in model.modules():
+        if isinstance(module, nn.Linear):
+            if id(module.weight) == tied_id:
+                continue
+            norms = module.weight.data.norm(dim=1, keepdim=True).clamp(min=1e-8)
+            module.weight.data.mul_(target_norm / norms)
+
+
+_ACTIVATION_COEFF_NORM = 2.0
+
+
+@torch.no_grad()
+def apply_activation_coeff_norm(model: CausalLM) -> None:
+    """Normalise each coefficient vector in rational/PFD activations to L2 norm 2.0.
+
+    For RationalActivation: normalises a and b independently.
+    For PFDRationalActivation: normalises a, b, and c independently; skips gamma (scalar).
+    """
+    for module in model.modules():
+        if isinstance(module, RationalActivation):
+            for param in (module.a, module.b):
+                norm = param.data.norm().clamp(min=1e-8)
+                param.data.mul_(_ACTIVATION_COEFF_NORM / norm)
+        elif isinstance(module, PFDRationalActivation):
+            for param in (module.a, module.b, module.c):
+                norm = param.data.norm().clamp(min=1e-8)
+                param.data.mul_(_ACTIVATION_COEFF_NORM / norm)
 
 
 @torch.no_grad()
@@ -178,6 +215,10 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
                 sched_muon.step(); sched_adamw.step()
                 muon.zero_grad(set_to_none=True)
                 adamw.zero_grad(set_to_none=True)
+                if cfg.linear_weight_norm:
+                    apply_linear_weight_norm(model, cfg.linear_weight_norm_value)
+                if cfg.activation_norm:
+                    apply_activation_coeff_norm(model)
 
             loss_sum    += raw_loss * n_tokens
             token_count += n_tokens
@@ -195,6 +236,10 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
             muon.step();  adamw.step()
             muon.zero_grad(set_to_none=True)
             adamw.zero_grad(set_to_none=True)
+            if cfg.linear_weight_norm:
+                apply_linear_weight_norm(model, cfg.linear_weight_norm_value)
+            if cfg.activation_norm:
+                apply_activation_coeff_norm(model)
 
         train_loss = loss_sum / token_count
         train_ppl  = math.exp(train_loss)

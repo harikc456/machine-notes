@@ -363,13 +363,27 @@ def train(
 
 def parse_args():
     p = argparse.ArgumentParser(description="Train RBF-FFN on WikiText-103")
-    p.add_argument("--config",   required=True, help="Path to YAML config")
-    p.add_argument("--n_epochs", type=int, default=None, help="Override n_epochs")
+    p.add_argument("--config",      required=True, help="Path to YAML config")
+    p.add_argument("--n_epochs",    type=int, default=None, help="Override n_epochs")
+    p.add_argument("--resume",      type=str, default=None,
+                   help="Experiment directory to resume training from")
+    p.add_argument("--resume_from", choices=["best", "final"], default="best",
+                   help="Which checkpoint to load when resuming (default: best)")
     return p.parse_args()
 
 
 if __name__ == "__main__":
-    args   = parse_args()
-    path   = Path(args.config)
-    cfg    = load_config(path)
-    train(cfg, config_path=path, n_epochs=args.n_epochs)
+    args = parse_args()
+
+    resume_checkpoint = None
+    if args.resume is not None:
+        resume_dir        = Path(args.resume)
+        path              = resume_dir / "config.yaml"
+        cfg               = load_config(path)
+        resume_checkpoint = resume_dir / f"checkpoint_{args.resume_from}.pt"
+    else:
+        path = Path(args.config)
+        cfg  = load_config(path)
+
+    train(cfg, config_path=path, n_epochs=args.n_epochs,
+          resume_checkpoint=resume_checkpoint)

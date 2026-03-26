@@ -358,3 +358,27 @@ def test_resume_already_complete_exits_early(tmp_path):
         (exp_dir / "metrics.jsonl").read_text().strip().splitlines()
     )
     assert line_count_after == line_count_before
+
+
+# ── parse_args tests ─────────────────────────────────────────────────────────
+
+def test_parse_args_resume_defaults(monkeypatch):
+    """--resume_from defaults to 'best' when not specified."""
+    import sys
+    from rbf_ffn.train import parse_args
+    monkeypatch.setattr(sys, "argv", ["train.py", "--config", "cfg.yaml",
+                                      "--resume", "experiments/foo"])
+    args = parse_args()
+    assert args.resume == "experiments/foo"
+    assert args.resume_from == "best"
+
+
+def test_parse_args_resume_from_final(monkeypatch):
+    """--resume_from final is accepted."""
+    import sys
+    from rbf_ffn.train import parse_args
+    monkeypatch.setattr(sys, "argv", ["train.py", "--config", "cfg.yaml",
+                                      "--resume", "experiments/foo",
+                                      "--resume_from", "final"])
+    args = parse_args()
+    assert args.resume_from == "final"

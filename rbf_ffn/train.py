@@ -363,13 +363,19 @@ def train(
 
 def parse_args():
     p = argparse.ArgumentParser(description="Train RBF-FFN on WikiText-103")
-    p.add_argument("--config",      required=True, help="Path to YAML config")
+    p.add_argument("--config",      default=None,
+                   help="Path to YAML config (not used when --resume is set)")
     p.add_argument("--n_epochs",    type=int, default=None, help="Override n_epochs")
     p.add_argument("--resume",      type=str, default=None,
                    help="Experiment directory to resume training from")
     p.add_argument("--resume_from", choices=["best", "final"], default="best",
                    help="Which checkpoint to load when resuming (default: best)")
-    return p.parse_args()
+    args = p.parse_args()
+    if args.resume is None and args.config is None:
+        p.error("--config is required when not using --resume")
+    if args.resume_from != "best" and args.resume is None:
+        p.error("--resume_from requires --resume")
+    return args
 
 
 if __name__ == "__main__":

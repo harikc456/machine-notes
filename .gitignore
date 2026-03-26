@@ -60,9 +60,12 @@ Thumbs.db
 
 # Data cache
 rbf_ffn/data_cache/
+flow_matching/data
 
 # Experiment outputs
 rbf_ffn/experiments/
+flow_matching/experiments
+grokking/experiments
 hyberbolic_embeddings/experiments/results/
 hyberbolic_embeddings/experiments/*/data/
 hyberbolic_embeddings/checkpoints/

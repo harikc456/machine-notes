@@ -28,11 +28,15 @@ from rbf_ffn.models.rational_ffn import PFDRationalActivation, RationalActivatio
 
 
 def get_experiment_dir(cfg: RBFFFNConfig) -> Path:
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    name = (
-        f"{stamp}_{cfg.model_type}_{cfg.gate_variant}_{cfg.sigma_variant}"
-        f"_d{cfg.d_model}_K{cfg.K}"
-    )
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    norm_tags = ""
+    if cfg.qk_norm:
+        norm_tags += "_qknorm"
+    if cfg.linear_weight_norm:
+        norm_tags += "_wnorm"
+    if cfg.activation_norm:
+        norm_tags += "_actnorm"
+    name = f"{stamp}_{cfg.model_type}{norm_tags}_d{cfg.d_model}"
     path = Path(__file__).parent / "experiments" / name
     path.mkdir(parents=True, exist_ok=True)
     return path

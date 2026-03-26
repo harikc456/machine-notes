@@ -101,7 +101,9 @@ def apply_adaptive_weight_norm(
     layers (correction weight = l/(L-1)).  A hard floor of 1.0 is enforced on
     every target to prevent flat-curvature dead zones.
 
-    Iterates model.blocks only — lm_head and embeddings are excluded by design.
+    Iterates model.blocks only — lm_head (weight-tied to token_embedding) and
+    embeddings are excluded by design; no explicit tie-guard is needed because
+    those modules live outside model.blocks.
     """
     L = len(model.blocks)
     for layer_idx, block in enumerate(model.blocks):

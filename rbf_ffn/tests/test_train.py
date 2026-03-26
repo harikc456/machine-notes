@@ -234,3 +234,26 @@ def test_adaptive_weight_norm_early_greater_than_late():
     assert norm_first > norm_last, \
         f"expected layer 0 norm ({norm_first:.4f}) > layer L-1 norm ({norm_last:.4f})"
 
+
+def test_adaptive_weight_norm_positive_delta_tightens_late_layers():
+    """A positive delta_log_gap (gap growing = memorization) reduces the target
+    norm below static for late layers. Specifically, with delta > 0 and gamma > 0,
+    the last layer's row norms must be strictly less than its static target."""
+    cfg = _adaptive_cfg(n_layers=4)
+    model = CausalLM(cfg)
+
+    # Compute expected static norm for the last layer (frac = 1.0)
+    L = len(model.blocks)
+    last_frac = (L - 1) / max(L - 1, 1)   # = 1.0
+    static_last = cfg.adaptive_norm_late + (cfg.adaptive_norm_early - cfg.adaptive_norm_late) * (1.0 - last_frac)
+    # static_last == adaptive_norm_late == 1.2
+
+    # Apply with large positive delta → correction is positive → target < static_last
+    apply_adaptive_weight_norm(model, cfg, delta_log_gap=10.0)
+
+    for module in model.blocks[-1].modules():
+        if isinstance(module, nn.Linear):
+            row_norms = module.weight.data.norm(dim=1)
+            # target should be max(1.0, 1.2 - correction) where correction > 0
+            assert (row_norms < static_last - 1e-5).all(), \
+                f"expected late-layer norm < static ({static_last:.4f}), got {row_norms.mean():.4f}"

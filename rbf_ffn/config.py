@@ -31,6 +31,14 @@ class RBFFFNConfig:
     # Activation coefficient normalization
     activation_norm: bool = False      # Normalise rational/PFD activation coefficients to L2 norm 2.0 after every optimizer step
 
+    # Adaptive weight normalization (depth-based)
+    adaptive_weight_norm: bool = False
+    adaptive_norm_early: float = 2.5   # target norm at layer 0
+    adaptive_norm_late: float = 1.2    # target norm at layer L-1 (must be >= 1.0)
+    adaptive_norm_gamma: float = 0.3   # max phase correction magnitude
+    adaptive_norm_beta: float = 5.0    # tanh sensitivity to gap derivative
+    adaptive_norm_alpha: float = 0.9   # EMA smoothing factor for log-gap
+
     # Training
     seed: int = 42
     n_epochs: int = 10
@@ -41,6 +49,18 @@ class RBFFFNConfig:
     warmup_ratio: float = 0.02
     grad_clip: float = 1.0
     grad_accum_steps: int = 1      # mini-batches per optimizer step; 1 = no accumulation
+
+    def __post_init__(self) -> None:
+        if self.adaptive_weight_norm:
+            if self.adaptive_norm_late < 1.0:
+                raise ValueError(
+                    f"adaptive_norm_late must be >= 1.0, got {self.adaptive_norm_late}"
+                )
+            if self.adaptive_norm_early <= self.adaptive_norm_late:
+                raise ValueError(
+                    f"adaptive_norm_early ({self.adaptive_norm_early}) must be > "
+                    f"adaptive_norm_late ({self.adaptive_norm_late})"
+                )
 
 
 def load_config(path: str | Path) -> RBFFFNConfig:

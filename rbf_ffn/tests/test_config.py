@@ -103,3 +103,44 @@ def test_existing_yamls_load_without_grad_accum_steps():
     for name in all_yamls:
         cfg = load_config(CONFIGS_DIR / name)
         assert cfg.grad_accum_steps == 1, f"{name} should default to 1"
+
+
+# ── Adaptive weight norm fields ───────────────────────────────────────────────
+
+def test_adaptive_weight_norm_defaults():
+    cfg = RBFFFNConfig()
+    assert cfg.adaptive_weight_norm is False
+    assert cfg.adaptive_norm_early == pytest.approx(2.5)
+    assert cfg.adaptive_norm_late  == pytest.approx(1.2)
+    assert cfg.adaptive_norm_gamma == pytest.approx(0.3)
+    assert cfg.adaptive_norm_beta  == pytest.approx(5.0)
+    assert cfg.adaptive_norm_alpha == pytest.approx(0.9)
+
+
+def test_adaptive_norm_late_below_one_raises():
+    with pytest.raises(ValueError, match="adaptive_norm_late"):
+        RBFFFNConfig(adaptive_weight_norm=True, adaptive_norm_late=0.9)
+
+
+def test_adaptive_norm_early_not_greater_than_late_raises():
+    with pytest.raises(ValueError, match="adaptive_norm_early"):
+        RBFFFNConfig(adaptive_weight_norm=True, adaptive_norm_early=1.2, adaptive_norm_late=1.2)
+
+
+def test_adaptive_norm_validation_only_when_enabled():
+    """Validation is skipped when adaptive_weight_norm=False (default)."""
+    cfg = RBFFFNConfig(adaptive_weight_norm=False, adaptive_norm_late=0.5)
+    assert cfg.adaptive_norm_late == pytest.approx(0.5)
+
+
+def test_adaptive_norm_yaml_roundtrip(tmp_path):
+    p = tmp_path / "cfg.yaml"
+    p.write_text(
+        "adaptive_weight_norm: true\n"
+        "adaptive_norm_early: 3.0\n"
+        "adaptive_norm_late: 1.5\n"
+    )
+    cfg = load_config(p)
+    assert cfg.adaptive_weight_norm is True
+    assert cfg.adaptive_norm_early == pytest.approx(3.0)
+    assert cfg.adaptive_norm_late  == pytest.approx(1.5)

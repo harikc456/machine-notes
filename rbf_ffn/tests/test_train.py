@@ -287,7 +287,7 @@ def test_checkpoint_contains_resume_keys(tmp_path):
     cfg = _tiny_cfg()
     exp_dir = _run_train(cfg, tmp_path)
     ckpt = torch.load(exp_dir / "checkpoint_final.pt", map_location="cpu",
-                      weights_only=False)
+                      weights_only=True)
     assert "best_val_loss" in ckpt
     assert "ema_log_gap" in ckpt
     assert isinstance(ckpt["best_val_loss"], float)

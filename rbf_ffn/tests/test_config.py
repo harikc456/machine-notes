@@ -144,3 +144,9 @@ def test_adaptive_norm_yaml_roundtrip(tmp_path):
     assert cfg.adaptive_weight_norm is True
     assert cfg.adaptive_norm_early == pytest.approx(3.0)
     assert cfg.adaptive_norm_late  == pytest.approx(1.5)
+
+
+def test_adaptive_norm_late_exactly_one_is_valid():
+    """adaptive_norm_late=1.0 with adaptive_weight_norm=True is valid (floor is >= 1.0)."""
+    cfg = RBFFFNConfig(adaptive_weight_norm=True, adaptive_norm_late=1.0, adaptive_norm_early=1.5)
+    assert cfg.adaptive_norm_late == pytest.approx(1.0)

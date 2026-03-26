@@ -58,8 +58,8 @@ class RBFFFNConfig:
                 )
             if self.adaptive_norm_early <= self.adaptive_norm_late:
                 raise ValueError(
-                    f"adaptive_norm_early ({self.adaptive_norm_early}) must be > "
-                    f"adaptive_norm_late ({self.adaptive_norm_late})"
+                    f"adaptive_norm_early must be > adaptive_norm_late, "
+                    f"got adaptive_norm_early={self.adaptive_norm_early} <= adaptive_norm_late={self.adaptive_norm_late}"
                 )
 
 

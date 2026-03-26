@@ -5,43 +5,30 @@ from rbf_ffn.config import RBFFFNConfig, load_config
 CONFIGS_DIR = Path(__file__).parent.parent / "configs"
 
 
-@pytest.mark.parametrize("filename,expected_variant", [
-    ("g0_baseline.yaml",    "G0"),
-    ("g1a_cross_kernel.yaml", "G1A"),
-    ("g1b_input_driven.yaml", "G1B"),
-    ("g2_sinkhorn.yaml",    "G2"),
-])
-def test_load_config_gate_variant(filename, expected_variant):
-    cfg = load_config(CONFIGS_DIR / filename)
-    assert cfg.gate_variant == expected_variant
-
-
 def test_load_config_returns_rbfffnconfig():
-    cfg = load_config(CONFIGS_DIR / "g0_baseline.yaml")
+    cfg = load_config(CONFIGS_DIR / "baseline.yaml")
     assert isinstance(cfg, RBFFFNConfig)
 
 
 def test_load_config_values_match_yaml():
-    cfg = load_config(CONFIGS_DIR / "g0_baseline.yaml")
+    cfg = load_config(CONFIGS_DIR / "baseline.yaml")
     assert cfg.d_model == 256
-    assert cfg.K == 5
-    assert cfg.sigma_init == 0.5
     assert cfg.n_layers == 6
 
 
 def test_load_config_unknown_key_raises(tmp_path):
     bad = tmp_path / "bad.yaml"
-    bad.write_text("gate_variant: G0\nunknown_key: 99\n")
+    bad.write_text("model_type: baseline\nunknown_key: 99\n")
     with pytest.raises(ValueError, match="Unknown config keys"):
         load_config(bad)
 
 
 def test_load_config_partial_yaml_uses_defaults(tmp_path):
-    """A YAML with only gate_variant set uses dataclass defaults for the rest."""
+    """A YAML with only model_type set uses dataclass defaults for the rest."""
     partial = tmp_path / "partial.yaml"
-    partial.write_text("gate_variant: G1A\n")
+    partial.write_text("model_type: rationalglu\n")
     cfg = load_config(partial)
-    assert cfg.gate_variant == "G1A"
+    assert cfg.model_type == "rationalglu"
     assert cfg.d_model == RBFFFNConfig().d_model   # default
 
 
@@ -56,7 +43,7 @@ def test_load_config_empty_yaml_uses_defaults(tmp_path):
 
 def test_new_fields_have_correct_defaults():
     cfg = RBFFFNConfig()
-    assert cfg.model_type == "rbf"
+    assert cfg.model_type == "baseline"
     assert cfg.ffn_hidden == 688
     assert cfg.seed == 42
     assert cfg.n_epochs == 10
@@ -103,15 +90,15 @@ def test_grad_accum_steps_yaml(tmp_path):
 
 
 def test_existing_yamls_load_without_grad_accum_steps():
-    """All 7 existing YAML configs remain valid (no grad_accum_steps key needed)."""
+    """All existing YAML configs remain valid (no grad_accum_steps key needed)."""
     all_yamls = [
         "baseline.yaml",
-        "g0_baseline.yaml",
-        "g1a_cross_kernel.yaml",
-        "g1b_input_driven.yaml",
-        "g2_sinkhorn.yaml",
-        "sigma_b_per_center.yaml",
-        "sigma_c_per_dim.yaml",
+        "baseline_qk_norm.yaml",
+        "baseline_weight_norm.yaml",
+        "rational_ffn.yaml",
+        "rationalglu_ffn.yaml",
+        "pfd_rationalglu_ffn.yaml",
+        "first_order_pfd_rational_ffn.yaml",
     ]
     for name in all_yamls:
         cfg = load_config(CONFIGS_DIR / name)

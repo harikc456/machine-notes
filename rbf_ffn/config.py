@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 import yaml
 
@@ -12,16 +12,6 @@ class RBFFFNConfig:
     n_layers: int = 6
     dropout: float = 0.1
 
-    # RBF kernel
-    K: int = 5
-    centers: list[float] = field(default_factory=lambda: [-1.0, -0.5, 0.0, 0.5, 1.0])
-    sigma_init: float = 0.5
-    sigma_variant: str = "global"  # "global" | "per_center" | "per_dim"
-
-    # Gate variant
-    gate_variant: str = "G0"       # "G0" | "G1A" | "G1B" | "G2"
-    sinkhorn_iters: int = 20       # G2 only
-
     # Attention
     qk_norm: bool = False          # Enable QK normalization in attention
 
@@ -30,8 +20,8 @@ class RBFFFNConfig:
     vocab_size: int = 50257
 
     # Model type
-    model_type: str = "rbf"        # "baseline" | "rbf" | "rational" | "rationalglu" | "pfd_rational" | "pfd_rationalglu" | "first_order_pfd_rational"
-    ffn_hidden: int = 688          # FFN hidden dim (SwiGLU / RationalFFN); ignored by RBF model
+    model_type: str = "baseline"   # "baseline" | "rational" | "rationalglu" | "pfd_rational" | "pfd_rationalglu" | "first_order_pfd_rational"
+    ffn_hidden: int = 688          # FFN hidden dim (SwiGLU / RationalFFN)
     pfd_n: int = 4                 # Number of partial fraction terms for PFDRational* models
 
     # Weight normalization

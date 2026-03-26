@@ -9,11 +9,11 @@ VOCAB = 256    # small for fast tests
 D, H, L = 32, 4, 2
 
 
-def make_model(model_type: str = "rbf", gate_variant: str = "G0") -> CausalLM:
+def make_model(model_type: str = "baseline") -> CausalLM:
     cfg = RBFFFNConfig(
         d_model=D, n_heads=H, n_layers=L,
         vocab_size=VOCAB, seq_len=N,
-        model_type=model_type, gate_variant=gate_variant,
+        model_type=model_type,
         ffn_hidden=86,   # 8/3 * 32 ≈ 85
         pfd_n=4,
         dropout=0.0,
@@ -26,12 +26,6 @@ def test_baseline_output_shape():
     tokens = torch.randint(0, VOCAB, (B, N))
     logits = model(tokens)
     assert logits.shape == (B, N, VOCAB)
-
-
-@pytest.mark.parametrize("variant", ["G0", "G1A", "G1B", "G2"])
-def test_rbf_output_shape(variant):
-    tokens = torch.randint(0, VOCAB, (B, N))
-    assert make_model("rbf", variant)(tokens).shape == (B, N, VOCAB)
 
 
 def test_weight_tying():
@@ -66,37 +60,11 @@ def test_embedding_in_adamw_not_muon():
     assert emb_id not in {id(p) for p in muon_params}
 
 
-def test_all_2d_non_embedding_non_sigma_in_muon():
-    """Every 2D param that is not the embedding and not sigma_raw must be in Muon."""
-    from rbf_ffn.models.model import build_optimizer_groups
-    model = make_model("rbf", "G0")
-    muon_params, adamw_params = build_optimizer_groups(model)
-    muon_ids  = {id(p) for p in muon_params}
-    adamw_ids = {id(p) for p in adamw_params}
-    emb_id = id(model.token_embedding.weight)
-    seen = set()
-    for name, param in model.named_parameters():
-        if id(param) in seen:
-            continue
-        seen.add(id(param))
-        if "sigma_raw" in name or id(param) == emb_id:
-            assert id(param) in adamw_ids, f"{name} should be AdamW"
-        elif param.ndim == 2:
-            assert id(param) in muon_ids, f"{name} (2D) should be Muon"
-
-
 def test_gradient_flows_baseline():
     model = make_model("baseline")
     tokens = torch.randint(0, VOCAB, (B, N))
     logits = model(tokens)
     logits.sum().backward()
-    assert model.token_embedding.weight.grad is not None
-
-
-def test_gradient_flows_rbf():
-    model = make_model("rbf")
-    tokens = torch.randint(0, VOCAB, (B, N))
-    model(tokens).sum().backward()
     assert model.token_embedding.weight.grad is not None
 
 

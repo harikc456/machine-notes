@@ -34,6 +34,8 @@ def get_experiment_dir(cfg: RBFFFNConfig) -> Path:
         norm_tags += "_qknorm"
     if cfg.linear_weight_norm:
         norm_tags += "_wnorm"
+    if cfg.adaptive_weight_norm:
+        norm_tags += "_adpwnorm"
     if cfg.activation_norm:
         norm_tags += "_actnorm"
     name = f"{stamp}_{cfg.model_type}{norm_tags}_d{cfg.d_model}"
@@ -85,6 +87,37 @@ def apply_linear_weight_norm(model: CausalLM, target_norm: float) -> None:
                 continue
             norms = module.weight.data.norm(dim=1, keepdim=True).clamp(min=1e-8)
             module.weight.data.mul_(target_norm / norms)
+
+
+@torch.no_grad()
+def apply_adaptive_weight_norm(
+    model: CausalLM,
+    cfg: RBFFFNConfig,
+    delta_log_gap: float,
+) -> None:
+    """Apply per-layer adaptive weight norm.
+
+    Target norm decreases linearly from cfg.adaptive_norm_early (layer 0)
+    to cfg.adaptive_norm_late (layer L-1).  A phase-aware derivative correction
+    proportional to tanh(beta * delta_log_gap) is applied most strongly to late
+    layers (correction weight = l/(L-1)).  A hard floor of 1.0 is enforced on
+    every target to prevent flat-curvature dead zones.
+
+    Iterates model.blocks only — lm_head (weight-tied to token_embedding) and
+    embeddings are excluded by design; no explicit tie-guard is needed because
+    those modules live outside model.blocks.
+    """
+    L = len(model.blocks)
+    for layer_idx, block in enumerate(model.blocks):
+        frac = layer_idx / max(L - 1, 1)
+        static = cfg.adaptive_norm_late + (cfg.adaptive_norm_early - cfg.adaptive_norm_late) * (1.0 - frac)
+        correction = cfg.adaptive_norm_gamma * frac * math.tanh(cfg.adaptive_norm_beta * delta_log_gap)
+        target = max(1.0, static - correction)
+
+        for module in block.modules():
+            if isinstance(module, nn.Linear):
+                norms = module.weight.data.norm(dim=1, keepdim=True).clamp(min=1e-8)
+                module.weight.data.mul_(target / norms)
 
 
 _ACTIVATION_COEFF_NORM = 2.0
@@ -172,6 +205,8 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
     # ── Training loop ─────────────────────────────────────────────────────────
     best_val_loss = float("inf")
     val_loss, val_ppl = float("inf"), float("inf")   # initialised in case n_epochs=0
+    ema_log_gap: float = 0.0
+    delta_log_gap: float = 0.0
     pbar = tqdm(total=total_steps, desc="training", unit="step", dynamic_ncols=True)
 
     def save_checkpoint(name: str, epoch: int, val_loss: float, val_ppl: float):
@@ -221,6 +256,8 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
                 adamw.zero_grad(set_to_none=True)
                 if cfg.linear_weight_norm:
                     apply_linear_weight_norm(model, cfg.linear_weight_norm_value)
+                if cfg.adaptive_weight_norm:
+                    apply_adaptive_weight_norm(model, cfg, delta_log_gap)
                 if cfg.activation_norm:
                     apply_activation_coeff_norm(model)
 
@@ -242,6 +279,8 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
             adamw.zero_grad(set_to_none=True)
             if cfg.linear_weight_norm:
                 apply_linear_weight_norm(model, cfg.linear_weight_norm_value)
+            if cfg.adaptive_weight_norm:
+                apply_adaptive_weight_norm(model, cfg, delta_log_gap)
             if cfg.activation_norm:
                 apply_activation_coeff_norm(model)
 
@@ -249,6 +288,12 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
         train_ppl  = math.exp(train_loss)
         val_loss, val_ppl = evaluate(model, val_loader, device)
         epoch_time = time.time() - t0
+
+        if cfg.adaptive_weight_norm:
+            log_gap = math.log(max(val_loss, 1e-8) / max(train_loss, 1e-8))
+            new_ema = cfg.adaptive_norm_alpha * log_gap + (1.0 - cfg.adaptive_norm_alpha) * ema_log_gap
+            delta_log_gap = new_ema - ema_log_gap
+            ema_log_gap = new_ema
 
         pbar.set_postfix(
             epoch=f"{epoch+1}/{cfg.n_epochs}",

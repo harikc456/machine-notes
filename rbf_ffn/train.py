@@ -172,6 +172,7 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
         cfg.n_epochs = n_epochs
 
     torch.manual_seed(cfg.seed)
+    torch.set_float32_matmul_precision("high")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
@@ -191,6 +192,9 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
     model = CausalLM(cfg).to(device)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Parameters: {n_params:,}")
+
+    if device.type == "cuda":
+        model = torch.compile(model, dynamic=False)
 
     # ── Optimisers ────────────────────────────────────────────────────────────
     muon_params, adamw_params = build_optimizer_groups(model)
@@ -216,9 +220,11 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
             "optimizer_adamw": adamw.state_dict(),
             "scheduler_muon":  sched_muon.state_dict(),
             "scheduler_adamw": sched_adamw.state_dict(),
-            "epoch":    epoch,
-            "val_loss": val_loss,
-            "val_ppl":  val_ppl,
+            "epoch":         epoch,
+            "val_loss":      val_loss,
+            "val_ppl":       val_ppl,
+            "best_val_loss": best_val_loss,
+            "ema_log_gap":   ema_log_gap,
         }, exp_dir / name)
 
     for epoch in range(cfg.n_epochs):
@@ -233,6 +239,7 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
             targets  = batch[:, 1:]
             n_tokens = inputs.numel()
 
+            torch.compiler.cudagraph_mark_step_begin()
             with torch.autocast("cuda", dtype=torch.bfloat16,
                                 enabled=(device.type == "cuda")):
                 logits = model(inputs)

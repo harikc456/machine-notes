@@ -280,3 +280,15 @@ def test_train_adaptive_weight_norm_smoke(tmp_path):
             exp_dir = train(cfg, config_path=config_path)
 
     assert "_adpwnorm" in exp_dir.name
+
+
+def test_checkpoint_contains_resume_keys(tmp_path):
+    """Checkpoints must include best_val_loss and ema_log_gap for resume."""
+    cfg = _tiny_cfg()
+    exp_dir = _run_train(cfg, tmp_path)
+    ckpt = torch.load(exp_dir / "checkpoint_final.pt", map_location="cpu",
+                      weights_only=False)
+    assert "best_val_loss" in ckpt
+    assert "ema_log_gap" in ckpt
+    assert isinstance(ckpt["best_val_loss"], float)
+    assert isinstance(ckpt["ema_log_gap"], float)

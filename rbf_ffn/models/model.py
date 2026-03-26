@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 from rbf_ffn.config import RBFFFNConfig
-from rbf_ffn.models.transformer_block import LlamaBlock, RBFBlock, RationalBlock, RationalGLUBlock, PFDRationalBlock, PFDRationalGLUBlock, FirstOrderPFDRationalBlock
+from rbf_ffn.models.transformer_block import LlamaBlock, RationalBlock, RationalGLUBlock, PFDRationalBlock, PFDRationalGLUBlock, FirstOrderPFDRationalBlock
 
 
 def build_optimizer_groups(
@@ -13,10 +13,9 @@ def build_optimizer_groups(
     Split model parameters into Muon and AdamW groups.
 
     Rules (first match wins, applied after deduplication by tensor id):
-      1. "sigma_raw" in name           → AdamW
-      2. param is token embedding weight → AdamW
-      3. param.ndim == 2               → Muon
-      4. else                          → AdamW
+      1. param is token embedding weight → AdamW
+      2. param.ndim == 2               → Muon
+      3. else                          → AdamW
 
     Returns (muon_params, adamw_params).
     """
@@ -31,9 +30,7 @@ def build_optimizer_groups(
             continue
         seen.add(pid)
 
-        if "sigma_raw" in name:
-            adamw.append(param)
-        elif pid == emb_id:
+        if pid == emb_id:
             adamw.append(param)
         elif param.ndim == 2:
             muon.append(param)
@@ -51,7 +48,6 @@ class CausalLM(nn.Module):
 
     Block type is selected by cfg.model_type:
         "baseline"       → LlamaBlock          (SwiGLU FFN)
-        "rbf"            → RBFBlock            (RBF-FFN)
         "rational"       → RationalBlock       (RationalFFN)
         "rationalglu"    → RationalGLUBlock    (RationalGatedFFN)
         "pfd_rational"   → PFDRationalBlock    (PFDRationalFFN)
@@ -63,7 +59,6 @@ class CausalLM(nn.Module):
         super().__init__()
         BlockClass = {
             "baseline":        LlamaBlock,
-            "rbf":             RBFBlock,
             "rational":        RationalBlock,
             "rationalglu":     RationalGLUBlock,
             "pfd_rational":    PFDRationalBlock,

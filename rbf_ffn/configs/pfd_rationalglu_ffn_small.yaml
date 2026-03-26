@@ -1,20 +1,11 @@
-# PFD RationalGLU ablation — gate_variant, sigma_variant, K, centers,
-# sigma_init, and sinkhorn_iters are inert for model_type: pfd_rationalglu
-# but present for a uniform config schema across all runs.
 # has smaller hidden dimension
 model_type: pfd_rationalglu
 pfd_n: 4
-gate_variant: G0
-sigma_variant: global
 d_model: 256
 n_heads: 8
 n_layers: 6
 ffn_hidden: 512
 dropout: 0.1
-K: 5
-centers: [-1.0, -0.5, 0.0, 0.5, 1.0]
-sigma_init: 0.5
-sinkhorn_iters: 20
 vocab_size: 50257
 seq_len: 512
 seed: 42

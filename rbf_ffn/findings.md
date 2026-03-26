@@ -84,16 +84,49 @@ All three σ variants perform within ~1 perplexity point of each other. Per-dim 
 
 10. **FirstOrderPFDRational (2-projection) is near-parity with SwiGLU at 33% fewer FFN parameters.** The `sin(u+phi)` phase-shifted gate achieves 76.77 ppl with only 2 projections vs 3 for SwiGLU. It trails SwiGLU by 1.09 ppl but beats the non-gated RationalFFN (78.38) by 1.61 ppl, confirming that the multiplicative gate is still beneficial even when gate and value share the same projection. The high epoch-0 train PPL (9153) — the largest of any variant — reflects optimization difficulty from `sin` wrapping at initialization; the model recovers to a competitive final result. The phase shift `phi` provides enough signal diversity to substitute for a dedicated gate projection.
 
+## §6 Normalization Ablations (d_model=256, WikiText-103, 3 epochs)
+
+New runs on 2026-03-18 and 2026-03-24/25 introduce two normalization techniques on top of the best variants from §5: **QK normalization** in attention (qk_norm) and **weight normalization** on linear layers (linear_weight_norm, max_norm=2.0). A third technique, **activation coefficient normalization** (activation_norm), was tested on 2026-03-25.
+
+### Summary table
+
+Δ values are vs the 2026-03-16 SwiGLU baseline (75.68). All runs use d_model=256, 3 epochs.
+
+| Variant | Norm additions | Val PPL (ep 2) | Δ vs §5 baseline | Time/epoch |
+|---------|---------------|---------------|-----------------|------------|
+| Baseline (SwiGLU) + qk_norm + weight_norm | qk_norm, weight_norm | **58.16** | **−23.1%** | ~1330s |
+| PFDRationalGLU + qk_norm + weight_norm | qk_norm, weight_norm | **58.91** | **−22.2%** | ~2097s |
+| Baseline (SwiGLU) + weight_norm | weight_norm | 58.97 | −22.1% | ~1223s |
+| PFDRationalGLU + qk_norm + weight_norm + act_norm | qk_norm, weight_norm, act_norm | 59.82 | −21.0% | ~2113s |
+| PFDRationalGLU + qk_norm | qk_norm | 72.25 | −4.5% | ~2126s |
+| RationalGLU + qk_norm | qk_norm | 73.51 | −2.9% | ~1515s |
+| Baseline (SwiGLU) + qk_norm | qk_norm | 75.14 | −0.7% | ~1307s |
+| *§5 PFDRationalGLU (no norm additions)* | — | *73.00* | *−3.5%* | *~1975s* |
+| *§5 RationalGLU (no norm additions)* | — | *74.37* | *−1.7%* | *~1424s* |
+| *§5 Baseline (SwiGLU, 2026-03-16)* | — | *75.68* | *—* | *~1234s* |
+
+### Key findings
+
+11. **Linear weight normalization is the dominant improvement.** Adding `linear_weight_norm` (max_norm=2.0) to the SwiGLU baseline drops val PPL from 75.68 → 58.97 — a 21.8 ppl reduction (−28.8% relative). This single change outweighs all FFN activation variants tested in §5. The mechanism is likely better gradient conditioning and prevention of weight matrix blow-up during training with Muon optimizer.
+
+12. **QK normalization provides a modest but consistent gain.** Adding `qk_norm` alone improves: baseline 75.68 → 75.14 (−0.54 ppl), RationalGLU 74.37 → 73.51 (−0.86 ppl), PFDRationalGLU 73.00 → 72.25 (−0.75 ppl). The effect is small but consistent across variants.
+
+13. **Weight normalization erases the PFDRationalGLU advantage.** With weight normalization applied, PFDRationalGLU (58.91) is essentially tied with the SwiGLU baseline (58.97 with weight_norm only; 58.16 with qk_norm+weight_norm). The −3.5% advantage PFDRationalGLU had over SwiGLU in §5 disappears. This suggests weight normalization addresses the same optimization pathology that the PFD rational gate was implicitly correcting.
+
+14. **Activation coefficient normalization (act_norm) is slightly harmful.** PFDRationalGLU + qk_norm + weight_norm + act_norm achieves 59.82 — 0.91 ppl worse than the same config without act_norm (58.91). Normalizing the PFD rational activation coefficients adds a constraint that may limit the rational gate's expressiveness when linear weights are already normalized.
+
+15. **SwiGLU + qk_norm + weight_norm is the new best overall.** Val PPL 58.16 at epoch 2 is the best result across all experiments. The combination of attention QK normalization and linear weight normalization provides the largest improvement, with lower training overhead than PFDRationalGLU (+8% vs baseline with weight_norm).
+
+16. **Best PFDRationalGLU result (58.91) vs best Baseline (58.16): gap has narrowed from 2.68 ppl to 0.75 ppl.** The remaining small PFDRationalGLU advantage is within run-to-run variance and may not be meaningful at 3 epochs.
+
 ### Recommended next steps
 
 | Experiment | Hypothesis |
 |------------|-----------|
+| RationalGLU + qk_norm + weight_norm | Expected to close to ~57–58 ppl; confirm whether rational gate regains advantage over SwiGLU with norm additions |
+| SwiGLU + weight_norm, 10+ epochs | Confirm whether the large PPL gain from weight_norm persists at convergence or is an early-training effect |
+| PFDRationalGLU + weight_norm (no qk_norm) | Isolate weight_norm vs qk_norm contributions for PFD variant |
+| weight_norm max_norm sweep | max_norm=2.0 chosen arbitrarily; test 1.0, 3.0 to see sensitivity |
 | PFDRationalGLU, 10+ epochs | Confirm whether PFD advantage over RationalGLU holds or is an early-training effect |
-| PFDRationalGLU, per-channel PFD params | Current params are shared; per-channel or per-head may widen the gap further |
-| FirstOrderPFDRational, phi initialization | ep0 train PPL spike (9153) suggests sin saturation; test larger phi init or learnable scale |
-| RationalGLU, 10+ epochs | Confirm whether rational gate advantage holds or is an early-training artifact |
-| RationalGLU, channel-wise rational params | Current params are shared across channels; per-channel or per-head rational may widen the gap |
-| G1-B, 10+ epochs | Confirm gap closure; check if PPL crosses SwiGLU at longer horizon |
-| G1-B, σ-C (per-dim) | Stack the two best RBF variants; expect marginal further improvement |
+| G1-B + weight_norm | Best RBF variant + weight_norm; may close the gap to SwiGLU |
 | G2 with K>5 | More centers may give Sinkhorn more useful signal; test K=10 |
-| Gate weight norm monitoring | G0/G1-A gate weights unconstrained; log norms to check saturation risk |

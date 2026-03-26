@@ -1,10 +1,11 @@
-model_type: pfd_rational
-pfd_n: 4
+# RationalGLU with QK norm, weight norm, and activation coefficient norm
+model_type: rationalglu
 d_model: 256
 n_heads: 8
 n_layers: 6
 ffn_hidden: 688
 dropout: 0.1
+qk_norm: true
 vocab_size: 50257
 seq_len: 512
 seed: 42
@@ -16,3 +17,6 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 grad_accum_steps: 1
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+activation_norm: true

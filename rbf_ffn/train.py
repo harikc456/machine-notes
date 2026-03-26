@@ -1,9 +1,9 @@
 """
-Training entry point for RBF-FFN WikiText-103 ablation experiments.
+Training entry point for WikiText-103 ablation experiments.
 
 Usage:
     python -m rbf_ffn.train --config rbf_ffn/configs/baseline.yaml
-    python -m rbf_ffn.train --config rbf_ffn/configs/g0_baseline.yaml --n_epochs 5
+    python -m rbf_ffn.train --config rbf_ffn/configs/pfd_rationalglu_qk_norm_weight_norm.yaml --n_epochs 5
 """
 from __future__ import annotations
 import argparse
@@ -28,11 +28,8 @@ from rbf_ffn.models.rational_ffn import PFDRationalActivation, RationalActivatio
 
 
 def get_experiment_dir(cfg: RBFFFNConfig) -> Path:
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    name = (
-        f"{stamp}_{cfg.model_type}_{cfg.gate_variant}_{cfg.sigma_variant}"
-        f"_d{cfg.d_model}_K{cfg.K}"
-    )
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    name = f"{stamp}_{cfg.model_type}_d{cfg.d_model}"
     path = Path(__file__).parent / "experiments" / name
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -45,27 +42,6 @@ def make_lr_lambda(warmup_steps: int, total_steps: int):
         progress = (step - warmup_steps) / max(1, total_steps - warmup_steps)
         return 0.1 + 0.9 * 0.5 * (1.0 + math.cos(math.pi * progress))
     return lr_lambda
-
-
-def collect_sigma_stats(model: CausalLM) -> dict:
-    """Collect mean/std of all sigma values (softplus of sigma_raw) across RBF layers.
-
-    sigma_std=0.0 for the global variant (each sigma_raw is a scalar per layer).
-    """
-    all_sigma = []
-    all_scalar = True
-    for name, param in model.named_parameters():
-        if "sigma_raw" in name:
-            all_sigma.append(F.softplus(param).detach().flatten())
-            if param.numel() > 1:
-                all_scalar = False
-    if not all_sigma:
-        return {}
-    sigma_cat = torch.cat(all_sigma)
-    return {
-        "sigma_mean": sigma_cat.mean().item(),
-        "sigma_std":  0.0 if all_scalar else sigma_cat.std().item(),
-    }
 
 
 @torch.no_grad()
@@ -261,8 +237,6 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
             "epoch_time_s":         epoch_time,
             "effective_batch_size": cfg.batch_size * cfg.grad_accum_steps,
         }
-        if cfg.model_type == "rbf":
-            row.update(collect_sigma_stats(model))
 
         print(row)
         with open(metrics_path, "a") as f:
@@ -279,7 +253,7 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Train RBF-FFN on WikiText-103")
+    p = argparse.ArgumentParser(description="Train on WikiText-103")
     p.add_argument("--config",   required=True, help="Path to YAML config")
     p.add_argument("--n_epochs", type=int, default=None, help="Override n_epochs")
     return p.parse_args()

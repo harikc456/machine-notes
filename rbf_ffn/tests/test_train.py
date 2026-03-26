@@ -280,3 +280,105 @@ def test_train_adaptive_weight_norm_smoke(tmp_path):
             exp_dir = train(cfg, config_path=config_path)
 
     assert "_adpwnorm" in exp_dir.name
+
+
+def test_checkpoint_contains_resume_keys(tmp_path):
+    """Checkpoints must include best_val_loss and ema_log_gap for resume."""
+    cfg = _tiny_cfg()
+    exp_dir = _run_train(cfg, tmp_path)
+    ckpt = torch.load(exp_dir / "checkpoint_final.pt", map_location="cpu",
+                      weights_only=True)
+    assert "best_val_loss" in ckpt
+    assert "ema_log_gap" in ckpt
+    assert isinstance(ckpt["best_val_loss"], float)
+    assert isinstance(ckpt["ema_log_gap"], float)
+
+
+def _run_resume(exp_dir, cfg: RBFFFNConfig,
+                resume_from: str = "best", n_epochs: int | None = None):
+    """Run train() in resume mode, reusing exp_dir."""
+    resume_ckpt = exp_dir / f"checkpoint_{resume_from}.pt"
+    loaders = _fake_loaders(cfg)
+    with patch("rbf_ffn.train.get_dataloaders", return_value=loaders), \
+         patch("rbf_ffn.train.Muon", _MuonStub):
+        return train(
+            cfg,
+            config_path=exp_dir / "config.yaml",
+            n_epochs=n_epochs,
+            resume_checkpoint=resume_ckpt,
+        )
+
+
+def test_resume_continues_from_correct_epoch(tmp_path):
+    """After a 1-epoch run, resuming with n_epochs=2 trains exactly one more epoch."""
+    cfg = _tiny_cfg(n_epochs=1)
+    exp_dir = _run_train(cfg, tmp_path)
+
+    # Resume for 1 more epoch (total=2)
+    cfg2 = _tiny_cfg(n_epochs=2)
+    result_dir = _run_resume(exp_dir, cfg2)
+
+    assert result_dir == exp_dir
+    rows = [json.loads(l) for l in
+            (exp_dir / "metrics.jsonl").read_text().strip().splitlines()]
+    assert len(rows) == 2
+    assert rows[0]["epoch"] == 0
+    assert rows[1]["epoch"] == 1
+
+
+def test_resume_appends_to_existing_metrics(tmp_path):
+    """metrics.jsonl is appended to, not overwritten, on resume."""
+    cfg = _tiny_cfg(n_epochs=1)
+    exp_dir = _run_train(cfg, tmp_path)
+    original_lines = (exp_dir / "metrics.jsonl").read_text().strip().splitlines()
+    assert len(original_lines) == 1
+
+    cfg2 = _tiny_cfg(n_epochs=2)
+    _run_resume(exp_dir, cfg2)
+
+    all_lines = (exp_dir / "metrics.jsonl").read_text().strip().splitlines()
+    assert all_lines[0] == original_lines[0]   # first line unchanged
+    assert len(all_lines) == 2
+
+
+def test_resume_already_complete_exits_early(tmp_path):
+    """Resuming when start_epoch >= n_epochs returns exp_dir without training."""
+    cfg = _tiny_cfg(n_epochs=2)
+    exp_dir = _run_train(cfg, tmp_path)
+    line_count_before = len(
+        (exp_dir / "metrics.jsonl").read_text().strip().splitlines()
+    )
+
+    # Try to resume with same n_epochs — nothing should happen
+    cfg2 = _tiny_cfg(n_epochs=2)
+    result_dir = _run_resume(exp_dir, cfg2)
+
+    assert result_dir == exp_dir
+    line_count_after = len(
+        (exp_dir / "metrics.jsonl").read_text().strip().splitlines()
+    )
+    assert line_count_after == line_count_before
+
+
+# ── parse_args tests ─────────────────────────────────────────────────────────
+
+def test_parse_args_resume_defaults(monkeypatch):
+    """--resume_from defaults to 'best' when not specified."""
+    import sys
+    from rbf_ffn.train import parse_args
+    monkeypatch.setattr(sys, "argv", ["train.py", "--config", "cfg.yaml",
+                                      "--resume", "experiments/foo"])
+    args = parse_args()
+    assert args.resume == "experiments/foo"
+    assert args.resume_from == "best"
+
+
+def test_parse_args_resume_from_final(monkeypatch):
+    """--resume_from final is accepted."""
+    import sys
+    from rbf_ffn.train import parse_args
+    monkeypatch.setattr(sys, "argv", ["train.py", "--config", "cfg.yaml",
+                                      "--resume", "experiments/foo",
+                                      "--resume_from", "final"])
+    args = parse_args()
+    assert args.resume_from == "final"

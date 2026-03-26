@@ -164,7 +164,12 @@ def evaluate(model: CausalLM, loader, device: torch.device) -> tuple[float, floa
     return val_loss, math.exp(val_loss)
 
 
-def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> Path:
+def train(
+    cfg: RBFFFNConfig,
+    config_path: Path,
+    n_epochs: int | None = None,
+    resume_checkpoint: Path | None = None,
+) -> Path:
     if not config_path.is_file():
         raise FileNotFoundError(f"Config not found: {config_path}")
 
@@ -172,18 +177,22 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
         cfg.n_epochs = n_epochs
 
     torch.manual_seed(cfg.seed)
+    torch.set_float32_matmul_precision("high")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    exp_dir = get_experiment_dir(cfg)
-    shutil.copy(config_path, exp_dir / "config.yaml")
+    if resume_checkpoint is not None:
+        exp_dir = resume_checkpoint.parent
+    else:
+        exp_dir = get_experiment_dir(cfg)
+        shutil.copy(config_path, exp_dir / "config.yaml")
     metrics_path = exp_dir / "metrics.jsonl"
     print(f"Experiment dir: {exp_dir}")
 
     # ── Data ──────────────────────────────────────────────────────────────────
     train_loader, val_loader, _ = get_dataloaders(cfg)
     steps_per_epoch = len(train_loader)
-    total_steps     = cfg.n_epochs * steps_per_epoch          # micro-batches; used for pbar
+    total_steps     = cfg.n_epochs * steps_per_epoch          # micro-batches; used for optimizer_steps
     optimizer_steps = total_steps // cfg.grad_accum_steps     # optimizer updates; used for LR
     warmup_steps    = int(cfg.warmup_ratio * optimizer_steps)
 
@@ -191,6 +200,9 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
     model = CausalLM(cfg).to(device)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Parameters: {n_params:,}")
+
+    if device.type == "cuda":
+        model = torch.compile(model, dynamic=False)
 
     # ── Optimisers ────────────────────────────────────────────────────────────
     muon_params, adamw_params = build_optimizer_groups(model)
@@ -207,7 +219,26 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
     val_loss, val_ppl = float("inf"), float("inf")   # initialised in case n_epochs=0
     ema_log_gap: float = 0.0
     delta_log_gap: float = 0.0
-    pbar = tqdm(total=total_steps, desc="training", unit="step", dynamic_ncols=True)
+
+    # ── Resume ────────────────────────────────────────────────────────────────
+    start_epoch = 0
+    if resume_checkpoint is not None:
+        ckpt = torch.load(resume_checkpoint, map_location=device, weights_only=True)
+        model.load_state_dict(ckpt["model"])
+        muon.load_state_dict(ckpt["optimizer_muon"])
+        adamw.load_state_dict(ckpt["optimizer_adamw"])
+        sched_muon.load_state_dict(ckpt["scheduler_muon"])
+        sched_adamw.load_state_dict(ckpt["scheduler_adamw"])
+        start_epoch   = ckpt["epoch"] + 1
+        best_val_loss = ckpt.get("best_val_loss", float("inf"))
+        ema_log_gap   = ckpt.get("ema_log_gap", 0.0)
+        print(f"Resuming from epoch {start_epoch} / {cfg.n_epochs}")
+        if start_epoch >= cfg.n_epochs:
+            print("Already at target epoch count. Nothing to do.")
+            return exp_dir
+
+    remaining_steps = (cfg.n_epochs - start_epoch) * steps_per_epoch
+    pbar = tqdm(total=remaining_steps, desc="training", unit="step", dynamic_ncols=True)
 
     def save_checkpoint(name: str, epoch: int, val_loss: float, val_ppl: float):
         torch.save({
@@ -216,12 +247,14 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
             "optimizer_adamw": adamw.state_dict(),
             "scheduler_muon":  sched_muon.state_dict(),
             "scheduler_adamw": sched_adamw.state_dict(),
-            "epoch":    epoch,
-            "val_loss": val_loss,
-            "val_ppl":  val_ppl,
+            "epoch":         epoch,
+            "val_loss":      val_loss,
+            "val_ppl":       val_ppl,
+            "best_val_loss": best_val_loss,
+            "ema_log_gap":   ema_log_gap,
         }, exp_dir / name)
 
-    for epoch in range(cfg.n_epochs):
+    for epoch in range(start_epoch, cfg.n_epochs):
         model.train()
         loss_sum, token_count = 0.0, 0
         t0 = time.time()
@@ -233,6 +266,7 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
             targets  = batch[:, 1:]
             n_tokens = inputs.numel()
 
+            torch.compiler.cudagraph_mark_step_begin()
             with torch.autocast("cuda", dtype=torch.bfloat16,
                                 enabled=(device.type == "cuda")):
                 logits = model(inputs)
@@ -329,13 +363,33 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
 
 def parse_args():
     p = argparse.ArgumentParser(description="Train RBF-FFN on WikiText-103")
-    p.add_argument("--config",   required=True, help="Path to YAML config")
-    p.add_argument("--n_epochs", type=int, default=None, help="Override n_epochs")
-    return p.parse_args()
+    p.add_argument("--config",      default=None,
+                   help="Path to YAML config (not used when --resume is set)")
+    p.add_argument("--n_epochs",    type=int, default=None, help="Override n_epochs")
+    p.add_argument("--resume",      type=str, default=None,
+                   help="Experiment directory to resume training from")
+    p.add_argument("--resume_from", choices=["best", "final"], default="best",
+                   help="Which checkpoint to load when resuming (default: best)")
+    args = p.parse_args()
+    if args.resume is None and args.config is None:
+        p.error("--config is required when not using --resume")
+    if args.resume_from != "best" and args.resume is None:
+        p.error("--resume_from requires --resume")
+    return args
 
 
 if __name__ == "__main__":
-    args   = parse_args()
-    path   = Path(args.config)
-    cfg    = load_config(path)
-    train(cfg, config_path=path, n_epochs=args.n_epochs)
+    args = parse_args()
+
+    resume_checkpoint = None
+    if args.resume is not None:
+        resume_dir        = Path(args.resume)
+        path              = resume_dir / "config.yaml"
+        cfg               = load_config(path)
+        resume_checkpoint = resume_dir / f"checkpoint_{args.resume_from}.pt"
+    else:
+        path = Path(args.config)
+        cfg  = load_config(path)
+
+    train(cfg, config_path=path, n_epochs=args.n_epochs,
+          resume_checkpoint=resume_checkpoint)

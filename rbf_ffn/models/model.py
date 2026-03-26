@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 from rbf_ffn.config import RBFFFNConfig
-from rbf_ffn.models.transformer_block import LlamaBlock, RBFBlock, RationalBlock, RationalGLUBlock, PFDRationalBlock, PFDRationalGLUBlock, FirstOrderPFDRationalBlock
+from rbf_ffn.models.transformer_block import LlamaBlock, RationalBlock, RationalGLUBlock, PFDRationalBlock, PFDRationalGLUBlock, FirstOrderPFDRationalBlock
 
 
 def build_optimizer_groups(
@@ -51,7 +51,6 @@ class CausalLM(nn.Module):
 
     Block type is selected by cfg.model_type:
         "baseline"       → LlamaBlock          (SwiGLU FFN)
-        "rbf"            → RBFBlock            (RBF-FFN)
         "rational"       → RationalBlock       (RationalFFN)
         "rationalglu"    → RationalGLUBlock    (RationalGatedFFN)
         "pfd_rational"   → PFDRationalBlock    (PFDRationalFFN)
@@ -63,7 +62,6 @@ class CausalLM(nn.Module):
         super().__init__()
         BlockClass = {
             "baseline":        LlamaBlock,
-            "rbf":             RBFBlock,
             "rational":        RationalBlock,
             "rationalglu":     RationalGLUBlock,
             "pfd_rational":    PFDRationalBlock,

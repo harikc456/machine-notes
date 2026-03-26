@@ -25,7 +25,6 @@ def _tiny_cfg(**kwargs) -> RBFFFNConfig:
         n_heads=2,
         n_layers=2,
         ffn_hidden=64,
-        K=2,
         seq_len=8,
         batch_size=2,
         n_epochs=1,

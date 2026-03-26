@@ -1,17 +1,10 @@
-# Llama SwiGLU baseline with QK normalization in attention
 model_type: baseline
-gate_variant: G0
-sigma_variant: global
 d_model: 256
 n_heads: 8
 n_layers: 6
 ffn_hidden: 688
 dropout: 0.1
 qk_norm: true
-K: 5
-centers: [-1.0, -0.5, 0.0, 0.5, 1.0]
-sigma_init: 0.5
-sinkhorn_iters: 20
 vocab_size: 50257
 seq_len: 512
 seed: 42

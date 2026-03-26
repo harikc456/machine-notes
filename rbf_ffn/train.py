@@ -87,6 +87,35 @@ def apply_linear_weight_norm(model: CausalLM, target_norm: float) -> None:
             module.weight.data.mul_(target_norm / norms)
 
 
+@torch.no_grad()
+def apply_adaptive_weight_norm(
+    model: CausalLM,
+    cfg: RBFFFNConfig,
+    delta_log_gap: float,
+) -> None:
+    """Apply per-layer adaptive weight norm.
+
+    Target norm decreases linearly from cfg.adaptive_norm_early (layer 0)
+    to cfg.adaptive_norm_late (layer L-1).  A phase-aware derivative correction
+    proportional to tanh(beta * delta_log_gap) is applied most strongly to late
+    layers (correction weight = l/(L-1)).  A hard floor of 1.0 is enforced on
+    every target to prevent flat-curvature dead zones.
+
+    Iterates model.blocks only — lm_head and embeddings are excluded by design.
+    """
+    L = len(model.blocks)
+    for layer_idx, block in enumerate(model.blocks):
+        frac = layer_idx / max(L - 1, 1)
+        static = cfg.adaptive_norm_late + (cfg.adaptive_norm_early - cfg.adaptive_norm_late) * (1.0 - frac)
+        correction = cfg.adaptive_norm_gamma * frac * math.tanh(cfg.adaptive_norm_beta * delta_log_gap)
+        target = max(1.0, static - correction)
+
+        for module in block.modules():
+            if isinstance(module, nn.Linear):
+                norms = module.weight.data.norm(dim=1, keepdim=True).clamp(min=1e-8)
+                module.weight.data.mul_(target / norms)
+
+
 _ACTIVATION_COEFF_NORM = 2.0
 
 

@@ -11,8 +11,10 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader, TensorDataset
 from unittest.mock import patch
 
+import torch.nn as nn
 from rbf_ffn.config import RBFFFNConfig
-from rbf_ffn.train import make_lr_lambda, train
+from rbf_ffn.models.model import CausalLM
+from rbf_ffn.train import make_lr_lambda, train, apply_adaptive_weight_norm
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -131,4 +133,104 @@ def test_epoch_end_flush_completes_without_error(tmp_path):
         (exp_dir / "metrics.jsonl").read_text().strip().splitlines()[-1]
     )
     assert row["effective_batch_size"] == 2 * 4
+
+
+# ── apply_adaptive_weight_norm ────────────────────────────────────────────────
+
+def _adaptive_cfg(n_layers: int = 4, **kwargs) -> RBFFFNConfig:
+    defaults = dict(
+        model_type="baseline",
+        d_model=32,
+        n_heads=2,
+        n_layers=n_layers,
+        ffn_hidden=64,
+        seq_len=8,
+        vocab_size=50,
+        seed=0,
+        adaptive_weight_norm=True,
+        adaptive_norm_early=2.5,
+        adaptive_norm_late=1.2,
+        adaptive_norm_gamma=0.3,
+        adaptive_norm_beta=5.0,
+        adaptive_norm_alpha=0.9,
+    )
+    defaults.update(kwargs)
+    return RBFFFNConfig(**defaults)
+
+
+def test_adaptive_weight_norm_zero_delta_matches_static_schedule():
+    """With delta_log_gap=0.0 the correction term is zero, so row norms equal
+    the static depth schedule exactly."""
+    cfg = _adaptive_cfg(n_layers=4)
+    model = CausalLM(cfg)
+    apply_adaptive_weight_norm(model, cfg, delta_log_gap=0.0)
+
+    L = len(model.blocks)
+    for layer_idx, block in enumerate(model.blocks):
+        frac = layer_idx / max(L - 1, 1)
+        expected = cfg.adaptive_norm_late + (cfg.adaptive_norm_early - cfg.adaptive_norm_late) * (1.0 - frac)
+        for module in block.modules():
+            if isinstance(module, nn.Linear):
+                row_norms = module.weight.data.norm(dim=1)
+                assert torch.allclose(
+                    row_norms,
+                    torch.full_like(row_norms, expected),
+                    atol=1e-5,
+                ), f"layer {layer_idx}: expected {expected:.4f}, got mean {row_norms.mean():.4f}"
+
+
+def test_adaptive_weight_norm_floor_never_below_one():
+    """Row norms never fall below 1.0 for any delta_log_gap, including
+    extreme values that would push correction > static."""
+    cfg = _adaptive_cfg(n_layers=4)
+    model = CausalLM(cfg)
+
+    for delta in [100.0, -100.0, 0.0, 0.5, -0.5]:
+        apply_adaptive_weight_norm(model, cfg, delta_log_gap=delta)
+        for block in model.blocks:
+            for module in block.modules():
+                if isinstance(module, nn.Linear):
+                    row_norms = module.weight.data.norm(dim=1)
+                    assert (row_norms >= 1.0 - 1e-5).all(), \
+                        f"norm < 1.0 with delta={delta}: {row_norms.min():.4f}"
+
+
+def test_adaptive_weight_norm_gamma_zero_disables_phase_correction():
+    """gamma=0 makes the correction term identically zero regardless of delta,
+    so any delta_log_gap produces the same result as delta=0."""
+    cfg = _adaptive_cfg(n_layers=3, adaptive_norm_gamma=0.0)
+    model = CausalLM(cfg)
+    apply_adaptive_weight_norm(model, cfg, delta_log_gap=50.0)
+
+    L = len(model.blocks)
+    for layer_idx, block in enumerate(model.blocks):
+        frac = layer_idx / max(L - 1, 1)
+        expected = cfg.adaptive_norm_late + (cfg.adaptive_norm_early - cfg.adaptive_norm_late) * (1.0 - frac)
+        for module in block.modules():
+            if isinstance(module, nn.Linear):
+                row_norms = module.weight.data.norm(dim=1)
+                assert torch.allclose(
+                    row_norms,
+                    torch.full_like(row_norms, expected),
+                    atol=1e-5,
+                )
+
+
+def test_adaptive_weight_norm_early_greater_than_late():
+    """Layer 0 has higher row norms than layer L-1 when delta=0."""
+    cfg = _adaptive_cfg(n_layers=4)
+    model = CausalLM(cfg)
+    apply_adaptive_weight_norm(model, cfg, delta_log_gap=0.0)
+
+    def mean_row_norm(block):
+        norms = []
+        for module in block.modules():
+            if isinstance(module, nn.Linear):
+                norms.append(module.weight.data.norm(dim=1).mean().item())
+        return sum(norms) / len(norms)
+
+    norm_first = mean_row_norm(model.blocks[0])
+    norm_last  = mean_row_norm(model.blocks[-1])
+    assert norm_first > norm_last, \
+        f"expected layer 0 norm ({norm_first:.4f}) > layer L-1 norm ({norm_last:.4f})"
 

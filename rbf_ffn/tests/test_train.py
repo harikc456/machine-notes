@@ -257,3 +257,26 @@ def test_adaptive_weight_norm_positive_delta_tightens_late_layers():
             # target should be max(1.0, 1.2 - correction) where correction > 0
             assert (row_norms < static_last - 1e-5).all(), \
                 f"expected late-layer norm < static ({static_last:.4f}), got {row_norms.mean():.4f}"
+
+
+def test_train_adaptive_weight_norm_smoke(tmp_path):
+    """Training completes without error with adaptive_weight_norm=True,
+    and the experiment dir name contains '_adpwnorm'."""
+    cfg = _tiny_cfg(
+        n_layers=2,
+        n_epochs=1,
+        adaptive_weight_norm=True,
+        adaptive_norm_early=2.5,
+        adaptive_norm_late=1.2,
+        adaptive_norm_gamma=0.3,
+        adaptive_norm_beta=5.0,
+        adaptive_norm_alpha=0.9,
+    )
+    config_path = tmp_path / "cfg.yaml"
+    config_path.write_text("")
+
+    with patch("rbf_ffn.train.get_dataloaders", return_value=_fake_loaders(cfg)):
+        with patch("torch.optim.Muon", _MuonStub):
+            exp_dir = train(cfg, config_path=config_path)
+
+    assert "_adpwnorm" in exp_dir.name

@@ -34,6 +34,8 @@ def get_experiment_dir(cfg: RBFFFNConfig) -> Path:
         norm_tags += "_qknorm"
     if cfg.linear_weight_norm:
         norm_tags += "_wnorm"
+    if cfg.adaptive_weight_norm:
+        norm_tags += "_adpwnorm"
     if cfg.activation_norm:
         norm_tags += "_actnorm"
     name = f"{stamp}_{cfg.model_type}{norm_tags}_d{cfg.d_model}"
@@ -203,6 +205,8 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
     # ── Training loop ─────────────────────────────────────────────────────────
     best_val_loss = float("inf")
     val_loss, val_ppl = float("inf"), float("inf")   # initialised in case n_epochs=0
+    ema_log_gap: float = 0.0
+    delta_log_gap: float = 0.0
     pbar = tqdm(total=total_steps, desc="training", unit="step", dynamic_ncols=True)
 
     def save_checkpoint(name: str, epoch: int, val_loss: float, val_ppl: float):
@@ -252,6 +256,8 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
                 adamw.zero_grad(set_to_none=True)
                 if cfg.linear_weight_norm:
                     apply_linear_weight_norm(model, cfg.linear_weight_norm_value)
+                if cfg.adaptive_weight_norm:
+                    apply_adaptive_weight_norm(model, cfg, delta_log_gap)
                 if cfg.activation_norm:
                     apply_activation_coeff_norm(model)
 
@@ -273,6 +279,8 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
             adamw.zero_grad(set_to_none=True)
             if cfg.linear_weight_norm:
                 apply_linear_weight_norm(model, cfg.linear_weight_norm_value)
+            if cfg.adaptive_weight_norm:
+                apply_adaptive_weight_norm(model, cfg, delta_log_gap)
             if cfg.activation_norm:
                 apply_activation_coeff_norm(model)
 
@@ -280,6 +288,12 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
         train_ppl  = math.exp(train_loss)
         val_loss, val_ppl = evaluate(model, val_loader, device)
         epoch_time = time.time() - t0
+
+        if cfg.adaptive_weight_norm:
+            log_gap = math.log(max(val_loss, 1e-8) / max(train_loss, 1e-8))
+            new_ema = cfg.adaptive_norm_alpha * log_gap + (1.0 - cfg.adaptive_norm_alpha) * ema_log_gap
+            delta_log_gap = new_ema - ema_log_gap
+            ema_log_gap = new_ema
 
         pbar.set_postfix(
             epoch=f"{epoch+1}/{cfg.n_epochs}",

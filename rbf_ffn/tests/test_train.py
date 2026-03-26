@@ -294,7 +294,7 @@ def test_checkpoint_contains_resume_keys(tmp_path):
     assert isinstance(ckpt["ema_log_gap"], float)
 
 
-def _run_resume(exp_dir, tmp_path, cfg: RBFFFNConfig,
+def _run_resume(exp_dir, cfg: RBFFFNConfig,
                 resume_from: str = "best", n_epochs: int | None = None):
     """Run train() in resume mode, reusing exp_dir."""
     resume_ckpt = exp_dir / f"checkpoint_{resume_from}.pt"
@@ -316,7 +316,7 @@ def test_resume_continues_from_correct_epoch(tmp_path):
 
     # Resume for 1 more epoch (total=2)
     cfg2 = _tiny_cfg(n_epochs=2)
-    result_dir = _run_resume(exp_dir, tmp_path, cfg2)
+    result_dir = _run_resume(exp_dir, cfg2)
 
     assert result_dir == exp_dir
     rows = [json.loads(l) for l in
@@ -334,7 +334,7 @@ def test_resume_appends_to_existing_metrics(tmp_path):
     assert len(original_lines) == 1
 
     cfg2 = _tiny_cfg(n_epochs=2)
-    _run_resume(exp_dir, tmp_path, cfg2)
+    _run_resume(exp_dir, cfg2)
 
     all_lines = (exp_dir / "metrics.jsonl").read_text().strip().splitlines()
     assert all_lines[0] == original_lines[0]   # first line unchanged
@@ -351,7 +351,7 @@ def test_resume_already_complete_exits_early(tmp_path):
 
     # Try to resume with same n_epochs — nothing should happen
     cfg2 = _tiny_cfg(n_epochs=2)
-    result_dir = _run_resume(exp_dir, tmp_path, cfg2)
+    result_dir = _run_resume(exp_dir, cfg2)
 
     assert result_dir == exp_dir
     line_count_after = len(

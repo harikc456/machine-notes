@@ -192,7 +192,7 @@ def train(
     # ── Data ──────────────────────────────────────────────────────────────────
     train_loader, val_loader, _ = get_dataloaders(cfg)
     steps_per_epoch = len(train_loader)
-    total_steps     = cfg.n_epochs * steps_per_epoch          # micro-batches; used for pbar
+    total_steps     = cfg.n_epochs * steps_per_epoch          # micro-batches; used for optimizer_steps
     optimizer_steps = total_steps // cfg.grad_accum_steps     # optimizer updates; used for LR
     warmup_steps    = int(cfg.warmup_ratio * optimizer_steps)
 

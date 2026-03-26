@@ -150,3 +150,15 @@ def test_adaptive_norm_late_exactly_one_is_valid():
     """adaptive_norm_late=1.0 with adaptive_weight_norm=True is valid (floor is >= 1.0)."""
     cfg = RBFFFNConfig(adaptive_weight_norm=True, adaptive_norm_late=1.0, adaptive_norm_early=1.5)
     assert cfg.adaptive_norm_late == pytest.approx(1.0)
+
+
+def test_baseline_adaptive_weight_norm_yaml_loads():
+    cfg = load_config(CONFIGS_DIR / "baseline_adaptive_weight_norm.yaml")
+    assert cfg.adaptive_weight_norm is True
+    assert cfg.adaptive_norm_early == pytest.approx(2.5)
+    assert cfg.adaptive_norm_late  == pytest.approx(1.2)
+    assert cfg.adaptive_norm_gamma == pytest.approx(0.3)
+    assert cfg.adaptive_norm_beta  == pytest.approx(5.0)
+    assert cfg.adaptive_norm_alpha == pytest.approx(0.9)
+    assert cfg.model_type == "baseline"
+    assert cfg.n_layers == 6

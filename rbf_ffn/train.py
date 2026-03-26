@@ -164,7 +164,12 @@ def evaluate(model: CausalLM, loader, device: torch.device) -> tuple[float, floa
     return val_loss, math.exp(val_loss)
 
 
-def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> Path:
+def train(
+    cfg: RBFFFNConfig,
+    config_path: Path,
+    n_epochs: int | None = None,
+    resume_checkpoint: Path | None = None,
+) -> Path:
     if not config_path.is_file():
         raise FileNotFoundError(f"Config not found: {config_path}")
 
@@ -176,8 +181,11 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    exp_dir = get_experiment_dir(cfg)
-    shutil.copy(config_path, exp_dir / "config.yaml")
+    if resume_checkpoint is not None:
+        exp_dir = resume_checkpoint.parent
+    else:
+        exp_dir = get_experiment_dir(cfg)
+        shutil.copy(config_path, exp_dir / "config.yaml")
     metrics_path = exp_dir / "metrics.jsonl"
     print(f"Experiment dir: {exp_dir}")
 
@@ -211,7 +219,26 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
     val_loss, val_ppl = float("inf"), float("inf")   # initialised in case n_epochs=0
     ema_log_gap: float = 0.0
     delta_log_gap: float = 0.0
-    pbar = tqdm(total=total_steps, desc="training", unit="step", dynamic_ncols=True)
+
+    # ── Resume ────────────────────────────────────────────────────────────────
+    start_epoch = 0
+    if resume_checkpoint is not None:
+        ckpt = torch.load(resume_checkpoint, map_location=device, weights_only=True)
+        model.load_state_dict(ckpt["model"])
+        muon.load_state_dict(ckpt["optimizer_muon"])
+        adamw.load_state_dict(ckpt["optimizer_adamw"])
+        sched_muon.load_state_dict(ckpt["scheduler_muon"])
+        sched_adamw.load_state_dict(ckpt["scheduler_adamw"])
+        start_epoch   = ckpt["epoch"] + 1
+        best_val_loss = ckpt.get("best_val_loss", float("inf"))
+        ema_log_gap   = ckpt.get("ema_log_gap", 0.0)
+        print(f"Resuming from epoch {start_epoch} / {cfg.n_epochs}")
+        if start_epoch >= cfg.n_epochs:
+            print("Already at target epoch count. Nothing to do.")
+            return exp_dir
+
+    remaining_steps = (cfg.n_epochs - start_epoch) * steps_per_epoch
+    pbar = tqdm(total=remaining_steps, desc="training", unit="step", dynamic_ncols=True)
 
     def save_checkpoint(name: str, epoch: int, val_loss: float, val_ppl: float):
         torch.save({
@@ -227,7 +254,7 @@ def train(cfg: RBFFFNConfig, config_path: Path, n_epochs: int | None = None) -> 
             "ema_log_gap":   ema_log_gap,
         }, exp_dir / name)
 
-    for epoch in range(cfg.n_epochs):
+    for epoch in range(start_epoch, cfg.n_epochs):
         model.train()
         loss_sum, token_count = 0.0, 0
         t0 = time.time()

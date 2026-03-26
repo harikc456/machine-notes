@@ -292,3 +292,69 @@ def test_checkpoint_contains_resume_keys(tmp_path):
     assert "ema_log_gap" in ckpt
     assert isinstance(ckpt["best_val_loss"], float)
     assert isinstance(ckpt["ema_log_gap"], float)
+
+
+def _run_resume(exp_dir, tmp_path, cfg: RBFFFNConfig,
+                resume_from: str = "best", n_epochs: int | None = None):
+    """Run train() in resume mode, reusing exp_dir."""
+    resume_ckpt = exp_dir / f"checkpoint_{resume_from}.pt"
+    loaders = _fake_loaders(cfg)
+    with patch("rbf_ffn.train.get_dataloaders", return_value=loaders), \
+         patch("rbf_ffn.train.Muon", _MuonStub):
+        return train(
+            cfg,
+            config_path=exp_dir / "config.yaml",
+            n_epochs=n_epochs,
+            resume_checkpoint=resume_ckpt,
+        )
+
+
+def test_resume_continues_from_correct_epoch(tmp_path):
+    """After a 1-epoch run, resuming with n_epochs=2 trains exactly one more epoch."""
+    cfg = _tiny_cfg(n_epochs=1)
+    exp_dir = _run_train(cfg, tmp_path)
+
+    # Resume for 1 more epoch (total=2)
+    cfg2 = _tiny_cfg(n_epochs=2)
+    result_dir = _run_resume(exp_dir, tmp_path, cfg2)
+
+    assert result_dir == exp_dir
+    rows = [json.loads(l) for l in
+            (exp_dir / "metrics.jsonl").read_text().strip().splitlines()]
+    assert len(rows) == 2
+    assert rows[0]["epoch"] == 0
+    assert rows[1]["epoch"] == 1
+
+
+def test_resume_appends_to_existing_metrics(tmp_path):
+    """metrics.jsonl is appended to, not overwritten, on resume."""
+    cfg = _tiny_cfg(n_epochs=1)
+    exp_dir = _run_train(cfg, tmp_path)
+    original_lines = (exp_dir / "metrics.jsonl").read_text().strip().splitlines()
+    assert len(original_lines) == 1
+
+    cfg2 = _tiny_cfg(n_epochs=2)
+    _run_resume(exp_dir, tmp_path, cfg2)
+
+    all_lines = (exp_dir / "metrics.jsonl").read_text().strip().splitlines()
+    assert all_lines[0] == original_lines[0]   # first line unchanged
+    assert len(all_lines) == 2
+
+
+def test_resume_already_complete_exits_early(tmp_path):
+    """Resuming when start_epoch >= n_epochs returns exp_dir without training."""
+    cfg = _tiny_cfg(n_epochs=2)
+    exp_dir = _run_train(cfg, tmp_path)
+    line_count_before = len(
+        (exp_dir / "metrics.jsonl").read_text().strip().splitlines()
+    )
+
+    # Try to resume with same n_epochs — nothing should happen
+    cfg2 = _tiny_cfg(n_epochs=2)
+    result_dir = _run_resume(exp_dir, tmp_path, cfg2)
+
+    assert result_dir == exp_dir
+    line_count_after = len(
+        (exp_dir / "metrics.jsonl").read_text().strip().splitlines()
+    )
+    assert line_count_after == line_count_before

@@ -201,9 +201,6 @@ def train(
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Parameters: {n_params:,}")
 
-    if device.type == "cuda":
-        model = torch.compile(model, dynamic=False)
-
     # ── Optimisers ────────────────────────────────────────────────────────────
     muon_params, adamw_params = build_optimizer_groups(model)
     muon  = Muon( muon_params,  lr=cfg.muon_lr, momentum=0.95)
@@ -214,13 +211,14 @@ def train(
     sched_muon  = LambdaLR(muon,  lr_fn)
     sched_adamw = LambdaLR(adamw, lr_fn)
 
-    # ── Training loop ─────────────────────────────────────────────────────────
+    # ── Resume ────────────────────────────────────────────────────────────────
+    # Load into the uncompiled CausalLM so checkpoint keys always match.
+    # torch.compile wraps the model in OptimizedModule whose state_dict() yields
+    # "_orig_mod.*" keys; loading before compile avoids that mismatch entirely.
     best_val_loss = float("inf")
     val_loss, val_ppl = float("inf"), float("inf")   # initialised in case n_epochs=0
     ema_log_gap: float = 0.0
     delta_log_gap: float = 0.0
-
-    # ── Resume ────────────────────────────────────────────────────────────────
     start_epoch = 0
     if resume_checkpoint is not None:
         ckpt = torch.load(resume_checkpoint, map_location=device, weights_only=True)
@@ -237,12 +235,21 @@ def train(
             print("Already at target epoch count. Nothing to do.")
             return exp_dir
 
+    # ── Compile ───────────────────────────────────────────────────────────────
+    # Compile AFTER resume so the checkpoint load above always targets the plain
+    # CausalLM — not the OptimizedModule wrapper with "_orig_mod.*" key names.
+    if device.type == "cuda":
+        model = torch.compile(model, dynamic=False)
+
     remaining_steps = (cfg.n_epochs - start_epoch) * steps_per_epoch
     pbar = tqdm(total=remaining_steps, desc="training", unit="step", dynamic_ncols=True)
 
     def save_checkpoint(name: str, epoch: int, val_loss: float, val_ppl: float):
+        # Unwrap OptimizedModule (if compiled) so saved keys never have the
+        # "_orig_mod." prefix — checkpoints remain loadable without compile.
+        raw_model = getattr(model, "_orig_mod", model)
         torch.save({
-            "model":           model.state_dict(),
+            "model":           raw_model.state_dict(),
             "optimizer_muon":  muon.state_dict(),
             "optimizer_adamw": adamw.state_dict(),
             "scheduler_muon":  sched_muon.state_dict(),

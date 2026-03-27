@@ -3,7 +3,7 @@ import math
 import torch
 import torch.nn as nn
 import pytest
-from rbf_ffn.config import RBFFFNConfig
+from rbf_ffn.config import ModelConfig
 from rbf_ffn.models.attention import RotaryEmbedding, CausalSelfAttention
 
 B, N, D, H = 2, 16, 64, 4   # small dims for fast tests
@@ -12,7 +12,7 @@ HEAD_DIM = D // H            # 16
 
 @pytest.fixture
 def cfg():
-    return RBFFFNConfig(d_model=D, n_heads=H, dropout=0.0)
+    return ModelConfig(d_model=D, n_heads=H, dropout=0.0)
 
 
 # ── RotaryEmbedding ───────────────────────────────────────────────────────────

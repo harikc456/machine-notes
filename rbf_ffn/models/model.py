@@ -2,7 +2,7 @@
 from __future__ import annotations
 import torch
 import torch.nn as nn
-from rbf_ffn.config import RBFFFNConfig
+from rbf_ffn.config import ModelConfig
 from rbf_ffn.models.transformer_block import LlamaBlock, RationalBlock, RationalGLUBlock, PFDRationalBlock, PFDRationalGLUBlock, FirstOrderPFDRationalBlock, PolarMLPBlock
 
 
@@ -59,7 +59,7 @@ class CausalLM(nn.Module):
         "polar_mlp"      → PolarMLPBlock       (AdaptivePolarMLP)
     """
 
-    def __init__(self, cfg: RBFFFNConfig):
+    def __init__(self, cfg: ModelConfig):
         super().__init__()
         BlockClass = {
             "baseline":        LlamaBlock,

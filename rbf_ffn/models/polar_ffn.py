@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from rbf_ffn.config import RBFFFNConfig
+from rbf_ffn.config import ModelConfig
 
 
 class AdaptivePolarMLP(nn.Module):
@@ -20,7 +20,7 @@ class AdaptivePolarMLP(nn.Module):
     Input/output: (B, N, d_model).
     """
 
-    def __init__(self, cfg: RBFFFNConfig):
+    def __init__(self, cfg: ModelConfig):
         super().__init__()
         D, H = cfg.d_model, cfg.ffn_hidden
         self.keys       = nn.Parameter(torch.randn(H, D))

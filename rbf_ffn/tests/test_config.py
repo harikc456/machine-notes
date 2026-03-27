@@ -1,13 +1,13 @@
 import pytest
 from pathlib import Path
-from rbf_ffn.config import RBFFFNConfig, load_config
+from rbf_ffn.config import ModelConfig, load_config
 
 CONFIGS_DIR = Path(__file__).parent.parent / "configs"
 
 
 def test_load_config_returns_rbfffnconfig():
     cfg = load_config(CONFIGS_DIR / "baseline.yaml")
-    assert isinstance(cfg, RBFFFNConfig)
+    assert isinstance(cfg, ModelConfig)
 
 
 def test_load_config_values_match_yaml():
@@ -29,20 +29,20 @@ def test_load_config_partial_yaml_uses_defaults(tmp_path):
     partial.write_text("model_type: rationalglu\n")
     cfg = load_config(partial)
     assert cfg.model_type == "rationalglu"
-    assert cfg.d_model == RBFFFNConfig().d_model   # default
+    assert cfg.d_model == ModelConfig().d_model   # default
 
 
 def test_load_config_empty_yaml_uses_defaults(tmp_path):
     empty = tmp_path / "empty.yaml"
     empty.write_text("")
     cfg = load_config(empty)
-    assert cfg == RBFFFNConfig()
+    assert cfg == ModelConfig()
 
 
 # ── New training field defaults ───────────────────────────────────────────────
 
 def test_new_fields_have_correct_defaults():
-    cfg = RBFFFNConfig()
+    cfg = ModelConfig()
     assert cfg.model_type == "baseline"
     assert cfg.ffn_hidden == 688
     assert cfg.seed == 42
@@ -57,7 +57,7 @@ def test_new_fields_have_correct_defaults():
 
 def test_seq_len_default_updated():
     """seq_len default changes from 65 → 512 for WikiText-103."""
-    cfg = RBFFFNConfig()
+    cfg = ModelConfig()
     assert cfg.seq_len == 512
 
 
@@ -77,7 +77,7 @@ def test_load_config_accepts_ffn_hidden(tmp_path):
 
 def test_grad_accum_steps_default():
     """Default must be 1 — identity, no behavioral change for existing configs."""
-    cfg = RBFFFNConfig()
+    cfg = ModelConfig()
     assert cfg.grad_accum_steps == 1
 
 
@@ -108,7 +108,7 @@ def test_existing_yamls_load_without_grad_accum_steps():
 # ── Adaptive weight norm fields ───────────────────────────────────────────────
 
 def test_adaptive_weight_norm_defaults():
-    cfg = RBFFFNConfig()
+    cfg = ModelConfig()
     assert cfg.adaptive_weight_norm is False
     assert cfg.adaptive_norm_early == pytest.approx(2.5)
     assert cfg.adaptive_norm_late  == pytest.approx(1.2)
@@ -119,17 +119,17 @@ def test_adaptive_weight_norm_defaults():
 
 def test_adaptive_norm_late_below_one_raises():
     with pytest.raises(ValueError, match="adaptive_norm_late"):
-        RBFFFNConfig(adaptive_weight_norm=True, adaptive_norm_late=0.9)
+        ModelConfig(adaptive_weight_norm=True, adaptive_norm_late=0.9)
 
 
 def test_adaptive_norm_early_not_greater_than_late_raises():
     with pytest.raises(ValueError, match="adaptive_norm_early"):
-        RBFFFNConfig(adaptive_weight_norm=True, adaptive_norm_early=1.2, adaptive_norm_late=1.2)
+        ModelConfig(adaptive_weight_norm=True, adaptive_norm_early=1.2, adaptive_norm_late=1.2)
 
 
 def test_adaptive_norm_validation_only_when_enabled():
     """Validation is skipped when adaptive_weight_norm=False (default)."""
-    cfg = RBFFFNConfig(adaptive_weight_norm=False, adaptive_norm_late=0.5)
+    cfg = ModelConfig(adaptive_weight_norm=False, adaptive_norm_late=0.5)
     assert cfg.adaptive_norm_late == pytest.approx(0.5)
 
 
@@ -148,7 +148,7 @@ def test_adaptive_norm_yaml_roundtrip(tmp_path):
 
 def test_adaptive_norm_late_exactly_one_is_valid():
     """adaptive_norm_late=1.0 with adaptive_weight_norm=True is valid (floor is >= 1.0)."""
-    cfg = RBFFFNConfig(adaptive_weight_norm=True, adaptive_norm_late=1.0, adaptive_norm_early=1.5)
+    cfg = ModelConfig(adaptive_weight_norm=True, adaptive_norm_late=1.0, adaptive_norm_early=1.5)
     assert cfg.adaptive_norm_late == pytest.approx(1.0)
 
 

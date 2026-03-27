@@ -1,5 +1,5 @@
 """
-Training entry point for RBF-FFN WikiText-103 ablation experiments.
+Training entry point for WikiText-103 ablation experiments.
 
 Usage:
     python -m rbf_ffn.train --config rbf_ffn/configs/baseline.yaml
@@ -21,13 +21,13 @@ from torch.optim import AdamW, Muon
 from torch.optim.lr_scheduler import LambdaLR
 from tqdm import tqdm
 
-from rbf_ffn.config import RBFFFNConfig, load_config
+from rbf_ffn.config import ModelConfig, load_config
 from rbf_ffn.data import get_dataloaders
 from rbf_ffn.models.model import CausalLM, build_optimizer_groups
 from rbf_ffn.models.rational_ffn import PFDRationalActivation, RationalActivation
 
 
-def get_experiment_dir(cfg: RBFFFNConfig) -> Path:
+def get_experiment_dir(cfg: ModelConfig) -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     norm_tags = ""
     if cfg.qk_norm:
@@ -54,7 +54,7 @@ def make_lr_lambda(warmup_steps: int, total_steps: int):
 
 
 def collect_sigma_stats(model: CausalLM) -> dict:
-    """Collect mean/std of all sigma values (softplus of sigma_raw) across RBF layers.
+    """Collect mean/std of all sigma values (softplus of sigma_raw) across layers.
 
     sigma_std=0.0 for the global variant (each sigma_raw is a scalar per layer).
     """
@@ -92,7 +92,7 @@ def apply_linear_weight_norm(model: CausalLM, target_norm: float) -> None:
 @torch.no_grad()
 def apply_adaptive_weight_norm(
     model: CausalLM,
-    cfg: RBFFFNConfig,
+    cfg: ModelConfig,
     delta_log_gap: float,
 ) -> None:
     """Apply per-layer adaptive weight norm.
@@ -165,7 +165,7 @@ def evaluate(model: CausalLM, loader, device: torch.device) -> tuple[float, floa
 
 
 def train(
-    cfg: RBFFFNConfig,
+    cfg: ModelConfig,
     config_path: Path,
     n_epochs: int | None = None,
     resume_checkpoint: Path | None = None,
@@ -351,9 +351,6 @@ def train(
             "epoch_time_s":         epoch_time,
             "effective_batch_size": cfg.batch_size * cfg.grad_accum_steps,
         }
-        if cfg.model_type == "rbf":
-            row.update(collect_sigma_stats(model))
-
         print(row)
         with open(metrics_path, "a") as f:
             f.write(json.dumps(row) + "\n")
@@ -371,7 +368,7 @@ def train(
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Train RBF-FFN on WikiText-103")
+    p = argparse.ArgumentParser(description="Train on WikiText-103")
     p.add_argument("--config",      default=None,
                    help="Path to YAML config (not used when --resume is set)")
     p.add_argument("--n_epochs",    type=int, default=None, help="Override n_epochs")

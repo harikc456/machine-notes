@@ -1,13 +1,13 @@
 # rbf_ffn/tests/test_first_order_pfd_rational_ffn.py
 import torch
-from rbf_ffn.config import RBFFFNConfig
+from rbf_ffn.config import ModelConfig
 from rbf_ffn.models.rational_ffn import FirstOrderPFDRationalFFN
 
 B, N, D = 2, 16, 32
 
 
 def make_cfg():
-    return RBFFFNConfig(
+    return ModelConfig(
         d_model=D, n_heads=4, n_layers=2, seq_len=N,
         ffn_hidden=86, dropout=0.0, model_type="first_order_pfd_rational", pfd_n=4,
     )

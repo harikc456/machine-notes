@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.attention import SDPBackend, sdpa_kernel
-from rbf_ffn.config import RBFFFNConfig
+from rbf_ffn.config import ModelConfig
 
 # Backend preference order: FlashAttention → MemEfficient → Math fallback.
 # PyTorch tries each in order and picks the first that is supported for the
@@ -73,7 +73,7 @@ class CausalSelfAttention(nn.Module):
     Input/output: (B, N, d_model)
     """
 
-    def __init__(self, cfg: RBFFFNConfig):
+    def __init__(self, cfg: ModelConfig):
         super().__init__()
         D, H = cfg.d_model, cfg.n_heads
         assert D % H == 0, f"d_model ({D}) must be divisible by n_heads ({H})"

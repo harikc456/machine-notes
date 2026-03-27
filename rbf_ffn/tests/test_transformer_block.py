@@ -1,18 +1,18 @@
 # rbf_ffn/tests/test_transformer_block.py
 import torch
 import pytest
-from rbf_ffn.config import RBFFFNConfig
+from rbf_ffn.config import ModelConfig
 from rbf_ffn.models.transformer_block import LlamaBlock, RationalBlock, RationalGLUBlock, FirstOrderPFDRationalBlock
 
 D, H, B, N = 32, 4, 2, 16
 
 
 def make_llama() -> LlamaBlock:
-    return LlamaBlock(RBFFFNConfig(d_model=D, n_heads=H, dropout=0.0))
+    return LlamaBlock(ModelConfig(d_model=D, n_heads=H, dropout=0.0))
 
 
 def make_rational() -> RationalBlock:
-    return RationalBlock(RBFFFNConfig(d_model=D, n_heads=H, dropout=0.0, model_type="rational"))
+    return RationalBlock(ModelConfig(d_model=D, n_heads=H, dropout=0.0, model_type="rational"))
 
 
 # ── LlamaBlock ────────────────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ def test_rational_block_residual_connection():
 # ── RationalGLUBlock ──────────────────────────────────────────────────────────
 
 def make_rationalglu() -> RationalGLUBlock:
-    return RationalGLUBlock(RBFFFNConfig(d_model=D, n_heads=H, dropout=0.0, model_type="rationalglu"))
+    return RationalGLUBlock(ModelConfig(d_model=D, n_heads=H, dropout=0.0, model_type="rationalglu"))
 
 
 def test_rationalglu_block_shape():
@@ -92,7 +92,7 @@ def test_rationalglu_block_residual_connection():
 # ── FirstOrderPFDRationalBlock ────────────────────────────────────────────────
 
 def make_first_order_pfd_cfg():
-    return RBFFFNConfig(d_model=D, n_heads=H, dropout=0.0,
+    return ModelConfig(d_model=D, n_heads=H, dropout=0.0,
                         model_type="first_order_pfd_rational", pfd_n=4)
 
 

@@ -20,7 +20,7 @@ class ModelConfig:
     vocab_size: int = 50257
 
     # Model type
-    model_type: str = "baseline"   # "baseline" | "rational" | "rationalglu" | "pfd_rational" | "pfd_rationalglu" | "first_order_pfd_rational" | "polar_mlp"
+    model_type: str = "baseline"   # "baseline" | "rational" | "rationalglu" | "pfd_rational" | "pfd_rationalglu" | "first_order_pfd_rational" | "polar_mlp" | "polar_attn" | "polar_full"
     ffn_hidden: int = 688          # FFN hidden dim (SwiGLU / RationalFFN)
     pfd_n: int = 4                 # Number of partial fraction terms for PFDRational* models
 

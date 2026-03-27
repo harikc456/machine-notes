@@ -59,6 +59,75 @@ class RotaryEmbedding(nn.Module):
         return (x * cos) + (_rotate_half(x) * sin)
 
 
+class PolarAttention(nn.Module):
+    """
+    Polar-coordinates causal self-attention.
+
+    Decomposes Q and K into direction (unit vector) and magnitude, computes
+    cosine similarity as the base geometric score, then re-weights by the
+    outer product of magnitudes scaled by per-head learnable confidence
+    parameters q_scale and k_scale.  Causal masking is applied via an
+    additive -inf mask before softmax.
+
+    q_scale / k_scale (shape: n_heads) are 1-D and go to AdamW.
+
+    Input/output: (B, N, d_model)
+    """
+
+    def __init__(self, cfg: ModelConfig):
+        super().__init__()
+        D, H = cfg.d_model, cfg.n_heads
+        assert D % H == 0, f"d_model ({D}) must be divisible by n_heads ({H})"
+        self.n_heads  = H
+        self.head_dim = D // H
+        self.q_proj = nn.Linear(D, D, bias=False)
+        self.k_proj = nn.Linear(D, D, bias=False)
+        self.v_proj = nn.Linear(D, D, bias=False)
+        self.o_proj = nn.Linear(D, D, bias=False)
+        # Per-head learnable confidence scalars for the magnitude contribution
+        self.q_scale = nn.Parameter(torch.ones(H))
+        self.k_scale = nn.Parameter(torch.ones(H))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """x: (B, N, d_model)"""
+        B, N, D = x.shape
+
+        q = self.q_proj(x).view(B, N, self.n_heads, self.head_dim)
+        k = self.k_proj(x).view(B, N, self.n_heads, self.head_dim)
+        v = self.v_proj(x).view(B, N, self.n_heads, self.head_dim)
+
+        # --- Polar decomposition ---
+        r_q = torch.norm(q, p=2, dim=-1, keepdim=True)   # (B, N, H, 1)
+        r_k = torch.norm(k, p=2, dim=-1, keepdim=True)
+        q_dir = q / (r_q + 1e-6)                          # unit vectors
+        k_dir = k / (r_k + 1e-6)
+
+        # Reshape to (B, H, N, .) for batch matmul
+        q_dir = q_dir.transpose(1, 2)          # (B, H, N, head_dim)
+        k_dir = k_dir.transpose(1, 2)
+        v     = v.transpose(1, 2)
+        r_q   = r_q.transpose(1, 2)            # (B, H, N, 1)
+        r_k   = r_k.transpose(1, 2)
+
+        # Cosine similarity: (B, H, N, N)
+        attn_weights = torch.matmul(q_dir, k_dir.transpose(-2, -1))
+
+        # Re-weight by magnitude product with per-head confidence scalars
+        scale_q = self.q_scale.view(1, -1, 1, 1)          # (1, H, 1, 1)
+        scale_k = self.k_scale.view(1, -1, 1, 1)
+        attn_weights = attn_weights * (r_q * scale_q) * (r_k.transpose(-2, -1) * scale_k)
+
+        # Causal mask
+        mask = torch.ones(N, N, device=x.device, dtype=torch.bool).tril()
+        attn_weights = attn_weights.masked_fill(~mask, float("-inf"))
+
+        attn_probs = F.softmax(attn_weights, dim=-1)
+        out = torch.matmul(attn_probs, v)                  # (B, H, N, head_dim)
+
+        out = out.transpose(1, 2).contiguous().view(B, N, D)
+        return self.o_proj(out)
+
+
 class CausalSelfAttention(nn.Module):
     """
     Multi-head causal self-attention with RoPE.

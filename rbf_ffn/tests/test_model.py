@@ -126,3 +126,20 @@ def test_first_order_pfd_rational_params_in_adamw():
         assert id(block.ffn.act.c)     not in muon_ids, "act.c should not be in Muon"
         assert id(block.ffn.act.gamma) in adamw_ids,    "act.gamma should be in AdamW"
         assert id(block.ffn.act.gamma) not in muon_ids, "act.gamma should not be in Muon"
+
+
+def test_polar_mlp_output_shape():
+    model = make_model("polar_mlp")
+    tokens = torch.randint(0, VOCAB, (B, N))
+    assert model(tokens).shape == (B, N, VOCAB)
+
+
+def test_polar_mlp_gradient_flows():
+    """Smoke test: backward pass through full model, loss is finite, grads propagate."""
+    model = make_model("polar_mlp")
+    tokens = torch.randint(0, VOCAB, (B, N))
+    logits = model(tokens)
+    loss = logits.sum()
+    assert torch.isfinite(loss)
+    loss.backward()
+    assert model.token_embedding.weight.grad is not None

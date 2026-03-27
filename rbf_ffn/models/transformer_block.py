@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 from rbf_ffn.config import ModelConfig
-from rbf_ffn.models.attention import CausalSelfAttention
+from rbf_ffn.models.attention import CausalSelfAttention, PolarAttention
 from rbf_ffn.models.llama_ffn import SwiGLUFFN
 from rbf_ffn.models.rational_ffn import RationalFFN, RationalGatedFFN, PFDRationalFFN, PFDRationalGatedFFN, FirstOrderPFDRationalFFN
 from rbf_ffn.models.polar_ffn import AdaptivePolarMLP
@@ -139,6 +139,56 @@ class FirstOrderPFDRationalBlock(nn.Module):
         self.attn  = CausalSelfAttention(cfg)
         self.norm2 = nn.RMSNorm(cfg.d_model)
         self.ffn   = FirstOrderPFDRationalFFN(cfg, n=cfg.pfd_n)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x + self.attn(self.norm1(x))
+        x = x + self.ffn(self.norm2(x))
+        return x
+
+
+class PolarAttnBlock(nn.Module):
+    """
+    Ablation block: PolarAttention + SwiGLU FFN.
+
+    Replaces the standard CausalSelfAttention with PolarAttention while
+    keeping the SwiGLU FFN unchanged, isolating the effect of the polar
+    attention mechanism.
+
+        x = x + attn(norm1(x))   ← attn is PolarAttention
+        x = x + ffn(norm2(x))    ← ffn is SwiGLUFFN
+
+    Pre-norm with RMSNorm. No bias anywhere.
+    """
+
+    def __init__(self, cfg: ModelConfig):
+        super().__init__()
+        self.norm1 = nn.RMSNorm(cfg.d_model)
+        self.attn  = PolarAttention(cfg)
+        self.norm2 = nn.RMSNorm(cfg.d_model)
+        self.ffn   = SwiGLUFFN(cfg)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x + self.attn(self.norm1(x))
+        x = x + self.ffn(self.norm2(x))
+        return x
+
+
+class PolarFullBlock(nn.Module):
+    """
+    Fully polar transformer block: PolarAttention + AdaptivePolarMLP.
+
+        x = x + attn(norm1(x))   ← PolarAttention
+        x = x + ffn(norm2(x))    ← AdaptivePolarMLP
+
+    Pre-norm with RMSNorm. No bias anywhere.
+    """
+
+    def __init__(self, cfg: ModelConfig):
+        super().__init__()
+        self.norm1 = nn.RMSNorm(cfg.d_model)
+        self.attn  = PolarAttention(cfg)
+        self.norm2 = nn.RMSNorm(cfg.d_model)
+        self.ffn   = AdaptivePolarMLP(cfg)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x + self.attn(self.norm1(x))

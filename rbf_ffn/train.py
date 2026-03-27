@@ -374,12 +374,12 @@ def parse_args():
     p.add_argument("--n_epochs",    type=int, default=None, help="Override n_epochs")
     p.add_argument("--resume",      type=str, default=None,
                    help="Experiment directory to resume training from")
-    p.add_argument("--resume_from", choices=["best", "final", "latest"], default="latest",
+    p.add_argument("--resume_from", choices=["best", "final", "latest"], default=None,
                    help="Which checkpoint to load when resuming (default: latest)")
     args = p.parse_args()
     if args.resume is None and args.config is None:
         p.error("--config is required when not using --resume")
-    if args.resume_from != "best" and args.resume is None:
+    if args.resume_from is not None and args.resume is None:
         p.error("--resume_from requires --resume")
     return args
 
@@ -392,7 +392,7 @@ if __name__ == "__main__":
         resume_dir        = Path(args.resume)
         path              = resume_dir / "config.yaml"
         cfg               = load_config(path)
-        resume_checkpoint = resume_dir / f"checkpoint_{args.resume_from}.pt"
+        resume_checkpoint = resume_dir / f"checkpoint_{args.resume_from or 'latest'}.pt"
     else:
         path = Path(args.config)
         cfg  = load_config(path)

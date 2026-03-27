@@ -362,6 +362,8 @@ def train(
             best_val_loss = val_loss
             save_checkpoint("checkpoint_best.pt", epoch, val_loss, val_ppl)
 
+        save_checkpoint("checkpoint_latest.pt", epoch, val_loss, val_ppl)
+
     pbar.close()
     save_checkpoint("checkpoint_final.pt", cfg.n_epochs - 1, val_loss, val_ppl)
     print(f"Done. Metrics → {metrics_path}")
@@ -375,8 +377,8 @@ def parse_args():
     p.add_argument("--n_epochs",    type=int, default=None, help="Override n_epochs")
     p.add_argument("--resume",      type=str, default=None,
                    help="Experiment directory to resume training from")
-    p.add_argument("--resume_from", choices=["best", "final"], default="best",
-                   help="Which checkpoint to load when resuming (default: best)")
+    p.add_argument("--resume_from", choices=["best", "final", "latest"], default="latest",
+                   help="Which checkpoint to load when resuming (default: latest)")
     args = p.parse_args()
     if args.resume is None and args.config is None:
         p.error("--config is required when not using --resume")

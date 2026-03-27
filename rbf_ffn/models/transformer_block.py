@@ -1,7 +1,7 @@
 # rbf_ffn/models/transformer_block.py
 import torch
 import torch.nn as nn
-from rbf_ffn.config import RBFFFNConfig
+from rbf_ffn.config import ModelConfig
 from rbf_ffn.models.attention import CausalSelfAttention
 from rbf_ffn.models.llama_ffn import SwiGLUFFN
 from rbf_ffn.models.rational_ffn import RationalFFN, RationalGatedFFN, PFDRationalFFN, PFDRationalGatedFFN, FirstOrderPFDRationalFFN
@@ -18,7 +18,7 @@ class LlamaBlock(nn.Module):
     Pre-norm with RMSNorm. No bias anywhere.
     """
 
-    def __init__(self, cfg: RBFFFNConfig):
+    def __init__(self, cfg: ModelConfig):
         super().__init__()
         self.norm1 = nn.RMSNorm(cfg.d_model)
         self.attn  = CausalSelfAttention(cfg)
@@ -41,7 +41,7 @@ class RationalBlock(nn.Module):
     Pre-norm with RMSNorm. No bias anywhere.
     """
 
-    def __init__(self, cfg: RBFFFNConfig):
+    def __init__(self, cfg: ModelConfig):
         super().__init__()
         self.norm1 = nn.RMSNorm(cfg.d_model)
         self.attn  = CausalSelfAttention(cfg)
@@ -64,7 +64,7 @@ class RationalGLUBlock(nn.Module):
     Pre-norm with RMSNorm. No bias anywhere.
     """
 
-    def __init__(self, cfg: RBFFFNConfig):
+    def __init__(self, cfg: ModelConfig):
         super().__init__()
         self.norm1 = nn.RMSNorm(cfg.d_model)
         self.attn  = CausalSelfAttention(cfg)
@@ -87,7 +87,7 @@ class PFDRationalBlock(nn.Module):
     Pre-norm with RMSNorm. No bias anywhere.
     """
 
-    def __init__(self, cfg: RBFFFNConfig):
+    def __init__(self, cfg: ModelConfig):
         super().__init__()
         self.norm1 = nn.RMSNorm(cfg.d_model)
         self.attn  = CausalSelfAttention(cfg)
@@ -110,7 +110,7 @@ class PFDRationalGLUBlock(nn.Module):
     Pre-norm with RMSNorm. No bias anywhere.
     """
 
-    def __init__(self, cfg: RBFFFNConfig):
+    def __init__(self, cfg: ModelConfig):
         super().__init__()
         self.norm1 = nn.RMSNorm(cfg.d_model)
         self.attn  = CausalSelfAttention(cfg)
@@ -133,7 +133,7 @@ class FirstOrderPFDRationalBlock(nn.Module):
     Pre-norm with RMSNorm. No bias anywhere.
     """
 
-    def __init__(self, cfg: RBFFFNConfig):
+    def __init__(self, cfg: ModelConfig):
         super().__init__()
         self.norm1 = nn.RMSNorm(cfg.d_model)
         self.attn  = CausalSelfAttention(cfg)
@@ -156,7 +156,7 @@ class PolarMLPBlock(nn.Module):
     Pre-norm with RMSNorm. No bias anywhere.
     """
 
-    def __init__(self, cfg: RBFFFNConfig):
+    def __init__(self, cfg: ModelConfig):
         super().__init__()
         self.norm1 = nn.RMSNorm(cfg.d_model)
         self.attn  = CausalSelfAttention(cfg)

@@ -5,7 +5,7 @@ import yaml
 
 
 @dataclass
-class RBFFFNConfig:
+class ModelConfig:
     # Model dimensions
     d_model: int = 256
     n_heads: int = 8
@@ -63,17 +63,17 @@ class RBFFFNConfig:
                 )
 
 
-def load_config(path: str | Path) -> RBFFFNConfig:
-    """Load an RBFFFNConfig from a YAML file.
+def load_config(path: str | Path) -> ModelConfig:
+    """Load an ModelConfig from a YAML file.
 
-    The YAML file may specify any subset of RBFFFNConfig fields; unspecified
+    The YAML file may specify any subset of ModelConfig fields; unspecified
     fields take their dataclass defaults. Unknown keys raise ValueError.
     """
     raw = yaml.safe_load(Path(path).read_text())
     if raw is None:
-        return RBFFFNConfig()
-    valid_fields = {f.name for f in RBFFFNConfig.__dataclass_fields__.values()}
+        return ModelConfig()
+    valid_fields = {f.name for f in ModelConfig.__dataclass_fields__.values()}
     unknown = set(raw) - valid_fields
     if unknown:
         raise ValueError(f"Unknown config keys: {unknown}")
-    return RBFFFNConfig(**raw)
+    return ModelConfig(**raw)

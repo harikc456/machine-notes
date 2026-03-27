@@ -1,7 +1,7 @@
 # rbf_ffn/tests/test_model.py
 import torch
 import pytest
-from rbf_ffn.config import RBFFFNConfig
+from rbf_ffn.config import ModelConfig
 from rbf_ffn.models.model import CausalLM
 
 B, N = 2, 16
@@ -10,7 +10,7 @@ D, H, L = 32, 4, 2
 
 
 def make_model(model_type: str = "baseline") -> CausalLM:
-    cfg = RBFFFNConfig(
+    cfg = ModelConfig(
         d_model=D, n_heads=H, n_layers=L,
         vocab_size=VOCAB, seq_len=N,
         model_type=model_type,

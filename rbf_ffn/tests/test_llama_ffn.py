@@ -1,7 +1,7 @@
 # rbf_ffn/tests/test_llama_ffn.py
 import torch
 import pytest
-from rbf_ffn.config import RBFFFNConfig
+from rbf_ffn.config import ModelConfig
 from rbf_ffn.models.llama_ffn import SwiGLUFFN
 
 B, N, D = 2, 10, 64
@@ -10,7 +10,7 @@ FFN_HIDDEN = 172  # 8/3 * 64 ≈ 170, rounded to nearest even
 
 @pytest.fixture
 def ffn():
-    cfg = RBFFFNConfig(d_model=D, ffn_hidden=FFN_HIDDEN)
+    cfg = ModelConfig(d_model=D, ffn_hidden=FFN_HIDDEN)
     return SwiGLUFFN(cfg)
 
 

@@ -12,14 +12,14 @@ from torch.utils.data import DataLoader, TensorDataset
 from unittest.mock import patch
 
 import torch.nn as nn
-from rbf_ffn.config import RBFFFNConfig
+from rbf_ffn.config import ModelConfig
 from rbf_ffn.models.model import CausalLM
 from rbf_ffn.train import make_lr_lambda, train, apply_adaptive_weight_norm
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _tiny_cfg(**kwargs) -> RBFFFNConfig:
+def _tiny_cfg(**kwargs) -> ModelConfig:
     """Minimal config for fast CPU tests (baseline model avoids RBF complexity)."""
     defaults = dict(
         model_type="baseline",
@@ -37,10 +37,10 @@ def _tiny_cfg(**kwargs) -> RBFFFNConfig:
         grad_accum_steps=1,
     )
     defaults.update(kwargs)
-    return RBFFFNConfig(**defaults)
+    return ModelConfig(**defaults)
 
 
-def _fake_loaders(cfg: RBFFFNConfig, n_train: int = 8):
+def _fake_loaders(cfg: ModelConfig, n_train: int = 8):
     """Synthetic DataLoaders that do not touch disk.
 
     Each sequence has length seq_len+1 because the training loop slices
@@ -85,7 +85,7 @@ def test_make_lr_lambda_cosine_decay_floor():
 
 # ── Integration smoke tests ───────────────────────────────────────────────────
 
-def _run_train(cfg: RBFFFNConfig, tmp_path, n_train: int = 8):
+def _run_train(cfg: ModelConfig, tmp_path, n_train: int = 8):
     """Helper: run train() with synthetic data and stubbed Muon."""
     config_path = tmp_path / "cfg.yaml"
     config_path.write_text("")   # train() copies config; content irrelevant
@@ -137,7 +137,7 @@ def test_epoch_end_flush_completes_without_error(tmp_path):
 
 # ── apply_adaptive_weight_norm ────────────────────────────────────────────────
 
-def _adaptive_cfg(n_layers: int = 4, **kwargs) -> RBFFFNConfig:
+def _adaptive_cfg(n_layers: int = 4, **kwargs) -> ModelConfig:
     defaults = dict(
         model_type="baseline",
         d_model=32,
@@ -155,7 +155,7 @@ def _adaptive_cfg(n_layers: int = 4, **kwargs) -> RBFFFNConfig:
         adaptive_norm_alpha=0.9,
     )
     defaults.update(kwargs)
-    return RBFFFNConfig(**defaults)
+    return ModelConfig(**defaults)
 
 
 def test_adaptive_weight_norm_zero_delta_matches_static_schedule():
@@ -294,7 +294,7 @@ def test_checkpoint_contains_resume_keys(tmp_path):
     assert isinstance(ckpt["ema_log_gap"], float)
 
 
-def _run_resume(exp_dir, cfg: RBFFFNConfig,
+def _run_resume(exp_dir, cfg: ModelConfig,
                 resume_from: str = "best", n_epochs: int | None = None):
     """Run train() in resume mode, reusing exp_dir."""
     resume_ckpt = exp_dir / f"checkpoint_{resume_from}.pt"

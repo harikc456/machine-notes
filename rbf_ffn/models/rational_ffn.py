@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 
-from rbf_ffn.config import RBFFFNConfig
+from rbf_ffn.config import ModelConfig
 
 
 class RationalActivation(nn.Module):
@@ -37,7 +37,7 @@ class RationalFFN(nn.Module):
     Input/output: (B, N, d_model).
     """
 
-    def __init__(self, cfg: RBFFFNConfig):
+    def __init__(self, cfg: ModelConfig):
         super().__init__()
         self.up_proj   = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
         self.act       = RationalActivation()
@@ -58,7 +58,7 @@ class RationalGatedFFN(nn.Module):
     No bias (Llama convention). Input/output: (B, N, d_model).
     """
 
-    def __init__(self, cfg: RBFFFNConfig):
+    def __init__(self, cfg: ModelConfig):
         super().__init__()
         self.gate_proj = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
         self.up_proj   = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
@@ -104,7 +104,7 @@ class PFDRationalFFN(nn.Module):
     Input/output: (B, N, d_model).
     """
 
-    def __init__(self, cfg: RBFFFNConfig, n: int = 4):
+    def __init__(self, cfg: ModelConfig, n: int = 4):
         super().__init__()
         self.up_proj   = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
         self.act       = PFDRationalActivation(n)
@@ -124,7 +124,7 @@ class PFDRationalGatedFFN(nn.Module):
     No bias (Llama convention). Input/output: (B, N, d_model).
     """
 
-    def __init__(self, cfg: RBFFFNConfig, n: int = 4):
+    def __init__(self, cfg: ModelConfig, n: int = 4):
         super().__init__()
         self.gate_proj = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
         self.up_proj   = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
@@ -150,7 +150,7 @@ class FirstOrderPFDRationalFFN(nn.Module):
     No bias (Llama convention). Input/output: (B, N, d_model).
     """
 
-    def __init__(self, cfg: RBFFFNConfig, n: int = 4):
+    def __init__(self, cfg: ModelConfig, n: int = 4):
         super().__init__()
         self.up_proj   = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
         self.down_proj = nn.Linear(cfg.ffn_hidden, cfg.d_model, bias=False)

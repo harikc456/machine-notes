@@ -126,3 +126,36 @@ def test_first_order_pfd_rational_params_in_adamw():
         assert id(block.ffn.act.c)     not in muon_ids, "act.c should not be in Muon"
         assert id(block.ffn.act.gamma) in adamw_ids,    "act.gamma should be in AdamW"
         assert id(block.ffn.act.gamma) not in muon_ids, "act.gamma should not be in Muon"
+
+
+def test_polar_mlp_output_shape():
+    model = make_model("polar_mlp")
+    tokens = torch.randint(0, VOCAB, (B, N))
+    assert model(tokens).shape == (B, N, VOCAB)
+
+
+def test_polar_mlp_gradient_flows():
+    """Smoke test: backward pass through full model, loss is finite, grads propagate."""
+    model = make_model("polar_mlp")
+    tokens = torch.randint(0, VOCAB, (B, N))
+    logits = model(tokens)
+    loss = logits.sum()
+    assert torch.isfinite(loss)
+    loss.backward()
+    assert model.token_embedding.weight.grad is not None
+
+
+def test_polar_mlp_thresholds_in_adamw():
+    """thresholds (1-D) must be in AdamW, not Muon; keys and down_proj.weight (2-D) must be in Muon."""
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = make_model("polar_mlp")
+    muon_params, adamw_params = build_optimizer_groups(model)
+    muon_ids  = {id(p) for p in muon_params}
+    adamw_ids = {id(p) for p in adamw_params}
+    for block in model.blocks:
+        assert id(block.ffn.thresholds)        in adamw_ids,    "thresholds should be in AdamW"
+        assert id(block.ffn.thresholds)        not in muon_ids, "thresholds should not be in Muon"
+        assert id(block.ffn.keys)              in muon_ids,     "keys should be in Muon"
+        assert id(block.ffn.keys)              not in adamw_ids,"keys should not be in AdamW"
+        assert id(block.ffn.down_proj.weight)  in muon_ids,     "down_proj.weight should be in Muon"
+        assert id(block.ffn.down_proj.weight)  not in adamw_ids,"down_proj.weight should not be in AdamW"

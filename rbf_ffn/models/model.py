@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 from rbf_ffn.config import RBFFFNConfig
-from rbf_ffn.models.transformer_block import LlamaBlock, RationalBlock, RationalGLUBlock, PFDRationalBlock, PFDRationalGLUBlock, FirstOrderPFDRationalBlock
+from rbf_ffn.models.transformer_block import LlamaBlock, RationalBlock, RationalGLUBlock, PFDRationalBlock, PFDRationalGLUBlock, FirstOrderPFDRationalBlock, PolarMLPBlock
 
 
 def build_optimizer_groups(
@@ -56,6 +56,7 @@ class CausalLM(nn.Module):
         "pfd_rational"   → PFDRationalBlock    (PFDRationalFFN)
         "pfd_rationalglu"→ PFDRationalGLUBlock (PFDRationalGatedFFN)
         "first_order_pfd_rational" → FirstOrderPFDRationalBlock (FirstOrderPFDRationalFFN)
+        "polar_mlp"      → PolarMLPBlock       (AdaptivePolarMLP)
     """
 
     def __init__(self, cfg: RBFFFNConfig):
@@ -67,6 +68,7 @@ class CausalLM(nn.Module):
             "pfd_rational":    PFDRationalBlock,
             "pfd_rationalglu": PFDRationalGLUBlock,
             "first_order_pfd_rational": FirstOrderPFDRationalBlock,
+            "polar_mlp":       PolarMLPBlock,
         }[cfg.model_type]
         self.token_embedding = nn.Embedding(cfg.vocab_size, cfg.d_model)
         self.blocks = nn.ModuleList([BlockClass(cfg) for _ in range(cfg.n_layers)])

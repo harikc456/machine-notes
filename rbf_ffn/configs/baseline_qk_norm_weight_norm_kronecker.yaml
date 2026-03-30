@@ -1,0 +1,24 @@
+# Llama SwiGLU baseline with QK norm, linear weight normalisation, and
+# Kronecker-factored MLP projections.
+model_type: baseline
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+linear_weight_norm: false
+linear_weight_norm_value: 2.0
+linear_weight_norm_max_only: false
+pre_lm_head_silu: false
+kronecker_mlp: true
+seed: 42
+n_epochs: 10
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0

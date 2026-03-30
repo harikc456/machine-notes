@@ -48,7 +48,7 @@ def make_lr_lambda(warmup_steps: int, total_steps: int):
     def lr_lambda(step: int) -> float:
         if step < warmup_steps:
             return step / max(1, warmup_steps)
-        progress = (step - warmup_steps) / max(1, total_steps - warmup_steps)
+        progress = min(1.0, (step - warmup_steps) / max(1, total_steps - warmup_steps))
         return 0.1 + 0.9 * 0.5 * (1.0 + math.cos(math.pi * progress))
     return lr_lambda
 
@@ -75,9 +75,15 @@ def collect_sigma_stats(model: CausalLM) -> dict:
 
 
 @torch.no_grad()
-def apply_linear_weight_norm(model: CausalLM, target_norm: float) -> None:
-    """Normalise each output neuron (row) of every Linear weight to `target_norm`.
+def apply_linear_weight_norm(
+    model: CausalLM,
+    target_norm: float,
+    max_only: bool = False,
+) -> None:
+    """Apply a norm constraint to each output neuron (row) of every Linear weight.
 
+    If max_only is True, scales down rows whose L2 norm exceeds `target_norm`.
+    Otherwise, normalises to exactly `target_norm`.
     Skips weight-tied layers (lm_head shares the token embedding matrix).
     """
     tied_id = id(model.token_embedding.weight)
@@ -86,7 +92,10 @@ def apply_linear_weight_norm(model: CausalLM, target_norm: float) -> None:
             if id(module.weight) == tied_id:
                 continue
             norms = module.weight.data.norm(dim=1, keepdim=True).clamp(min=1e-8)
-            module.weight.data.mul_(target_norm / norms)
+            scales = target_norm / norms
+            if max_only:
+                scales = torch.clamp(scales, max=1.0)
+            module.weight.data.mul_(scales)
 
 
 @torch.no_grad()
@@ -98,14 +107,8 @@ def apply_adaptive_weight_norm(
     """Apply per-layer adaptive weight norm.
 
     Target norm decreases linearly from cfg.adaptive_norm_early (layer 0)
-    to cfg.adaptive_norm_late (layer L-1).  A phase-aware derivative correction
-    proportional to tanh(beta * delta_log_gap) is applied most strongly to late
-    layers (correction weight = l/(L-1)).  A hard floor of 1.0 is enforced on
-    every target to prevent flat-curvature dead zones.
-
-    Iterates model.blocks only — lm_head (weight-tied to token_embedding) and
-    embeddings are excluded by design; no explicit tie-guard is needed because
-    those modules live outside model.blocks.
+    to cfg.adaptive_norm_late (layer L-1). Supports max-only constraint if
+    cfg.linear_weight_norm_max_only is set.
     """
     L = len(model.blocks)
     for layer_idx, block in enumerate(model.blocks):
@@ -117,7 +120,10 @@ def apply_adaptive_weight_norm(
         for module in block.modules():
             if isinstance(module, nn.Linear):
                 norms = module.weight.data.norm(dim=1, keepdim=True).clamp(min=1e-8)
-                module.weight.data.mul_(target / norms)
+                scales = target / norms
+                if cfg.linear_weight_norm_max_only:
+                    scales = torch.clamp(scales, max=1.0)
+                module.weight.data.mul_(scales)
 
 
 _ACTIVATION_COEFF_NORM = 2.0
@@ -207,26 +213,26 @@ def train(
     adamw = AdamW(adamw_params, lr=cfg.adamw_lr,
                   weight_decay=cfg.adamw_wd, betas=(0.9, 0.95))
 
-    lr_fn = make_lr_lambda(warmup_steps, optimizer_steps)
-    sched_muon  = LambdaLR(muon,  lr_fn)
-    sched_adamw = LambdaLR(adamw, lr_fn)
-
     # ── Resume ────────────────────────────────────────────────────────────────
     # Load into the uncompiled CausalLM so checkpoint keys always match.
     # torch.compile wraps the model in OptimizedModule whose state_dict() yields
     # "_orig_mod.*" keys; loading before compile avoids that mismatch entirely.
+    #
+    # The checkpoint is loaded BEFORE building the LR schedulers so that we can
+    # restore the original optimizer_steps / warmup_steps.  Recreating lr_fn
+    # from cfg.n_epochs after an --n_epochs override would shift the cosine
+    # schedule endpoint and place the LR at the wrong position on resume.
     best_val_loss = float("inf")
     val_loss, val_ppl = float("inf"), float("inf")   # initialised in case n_epochs=0
     ema_log_gap: float = 0.0
     delta_log_gap: float = 0.0
     start_epoch = 0
+    ckpt: dict | None = None
     if resume_checkpoint is not None:
         ckpt = torch.load(resume_checkpoint, map_location=device, weights_only=True)
         model.load_state_dict(ckpt["model"])
         muon.load_state_dict(ckpt["optimizer_muon"])
         adamw.load_state_dict(ckpt["optimizer_adamw"])
-        sched_muon.load_state_dict(ckpt["scheduler_muon"])
-        sched_adamw.load_state_dict(ckpt["scheduler_adamw"])
         start_epoch   = ckpt["epoch"] + 1
         best_val_loss = ckpt.get("best_val_loss", float("inf"))
         ema_log_gap   = ckpt.get("ema_log_gap", 0.0)
@@ -234,6 +240,17 @@ def train(
         if start_epoch >= cfg.n_epochs:
             print("Already at target epoch count. Nothing to do.")
             return exp_dir
+
+    # Build lr_fn using the schedule parameters from the checkpoint when resuming.
+    # Falling back to the current config values when starting a fresh run.
+    sched_optimizer_steps = (ckpt or {}).get("optimizer_steps", optimizer_steps)
+    sched_warmup_steps    = (ckpt or {}).get("warmup_steps",    warmup_steps)
+    lr_fn = make_lr_lambda(sched_warmup_steps, sched_optimizer_steps)
+    sched_muon  = LambdaLR(muon,  lr_fn)
+    sched_adamw = LambdaLR(adamw, lr_fn)
+    if ckpt is not None:
+        sched_muon.load_state_dict(ckpt["scheduler_muon"])
+        sched_adamw.load_state_dict(ckpt["scheduler_adamw"])
 
     # ── Compile ───────────────────────────────────────────────────────────────
     # Compile AFTER resume so the checkpoint load above always targets the plain
@@ -254,11 +271,13 @@ def train(
             "optimizer_adamw": adamw.state_dict(),
             "scheduler_muon":  sched_muon.state_dict(),
             "scheduler_adamw": sched_adamw.state_dict(),
-            "epoch":         epoch,
-            "val_loss":      val_loss,
-            "val_ppl":       val_ppl,
-            "best_val_loss": best_val_loss,
-            "ema_log_gap":   ema_log_gap,
+            "epoch":           epoch,
+            "val_loss":        val_loss,
+            "val_ppl":         val_ppl,
+            "best_val_loss":   best_val_loss,
+            "ema_log_gap":     ema_log_gap,
+            "optimizer_steps": sched_optimizer_steps,
+            "warmup_steps":    sched_warmup_steps,
         }, exp_dir / name)
 
     for epoch in range(start_epoch, cfg.n_epochs):
@@ -296,7 +315,7 @@ def train(
                 muon.zero_grad(set_to_none=True)
                 adamw.zero_grad(set_to_none=True)
                 if cfg.linear_weight_norm:
-                    apply_linear_weight_norm(model, cfg.linear_weight_norm_value)
+                    apply_linear_weight_norm(model, cfg.linear_weight_norm_value, cfg.linear_weight_norm_max_only)
                 if cfg.adaptive_weight_norm:
                     apply_adaptive_weight_norm(model, cfg, delta_log_gap)
                 if cfg.activation_norm:
@@ -319,7 +338,7 @@ def train(
             muon.zero_grad(set_to_none=True)
             adamw.zero_grad(set_to_none=True)
             if cfg.linear_weight_norm:
-                apply_linear_weight_norm(model, cfg.linear_weight_norm_value)
+                apply_linear_weight_norm(model, cfg.linear_weight_norm_value, cfg.linear_weight_norm_max_only)
             if cfg.adaptive_weight_norm:
                 apply_adaptive_weight_norm(model, cfg, delta_log_gap)
             if cfg.activation_norm:

@@ -14,6 +14,7 @@ class ModelConfig:
 
     # Attention
     qk_norm: bool = False          # Enable QK normalization in attention
+    qkv_silu: bool = False         # Apply SiLU after Q, K, V projections
 
     # Sequence / vocab
     seq_len: int = 512
@@ -23,10 +24,15 @@ class ModelConfig:
     model_type: str = "baseline"   # "baseline" | "rational" | "rationalglu" | "pfd_rational" | "pfd_rationalglu" | "first_order_pfd_rational" | "polar_mlp" | "polar_attn" | "polar_full"
     ffn_hidden: int = 688          # FFN hidden dim (SwiGLU / RationalFFN)
     pfd_n: int = 4                 # Number of partial fraction terms for PFDRational* models
+    pre_lm_head_silu: bool = False # Apply SiLU activation before lm_head
+
+    # Kronecker-factored MLP projections
+    kronecker_mlp: bool = False        # Replace nn.Linear in MLP/FFN layers with KroneckerLinear
 
     # Weight normalization
     linear_weight_norm: bool = False   # Normalise each linear layer's weight rows after every optimizer step
     linear_weight_norm_value: float = 2.0  # Target L2 norm per output neuron
+    linear_weight_norm_max_only: bool = False  # Scale down only; do not scale up if norm is below target
 
     # Activation coefficient normalization
     activation_norm: bool = False      # Normalise rational/PFD activation coefficients to L2 norm 2.0 after every optimizer step

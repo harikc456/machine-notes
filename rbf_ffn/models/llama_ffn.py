@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from rbf_ffn.config import ModelConfig
+from rbf_ffn.models.kronecker_linear import KroneckerLinear
 
 
 class SwiGLUFFN(nn.Module):
@@ -20,9 +21,10 @@ class SwiGLUFFN(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
         D, H = cfg.d_model, cfg.ffn_hidden
-        self.gate_proj = nn.Linear(D, H, bias=False)
-        self.up_proj   = nn.Linear(D, H, bias=False)
-        self.down_proj = nn.Linear(H, D, bias=False)
+        linear_cls = KroneckerLinear if cfg.kronecker_mlp else nn.Linear
+        self.gate_proj = linear_cls(D, H, bias=False)
+        self.up_proj   = linear_cls(D, H, bias=False)
+        self.down_proj = linear_cls(H, D, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """x: (B, N, d_model)"""

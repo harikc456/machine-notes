@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from rbf_ffn.config import ModelConfig
+from rbf_ffn.models.kronecker_linear import KroneckerLinear
 
 
 class AdaptivePolarMLP(nn.Module):
@@ -23,9 +24,10 @@ class AdaptivePolarMLP(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
         D, H = cfg.d_model, cfg.ffn_hidden
+        linear_cls = KroneckerLinear if cfg.kronecker_mlp else nn.Linear
         self.keys       = nn.Parameter(torch.randn(H, D))
         self.thresholds = nn.Parameter(torch.full((H,), 0.7))
-        self.down_proj  = nn.Linear(H, D, bias=False)
+        self.down_proj  = linear_cls(H, D, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """x: (B, N, d_model)"""

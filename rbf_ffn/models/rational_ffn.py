@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 
 from rbf_ffn.config import ModelConfig
+from rbf_ffn.models.kronecker_linear import KroneckerLinear
 
 
 class RationalActivation(nn.Module):
@@ -39,9 +40,10 @@ class RationalFFN(nn.Module):
 
     def __init__(self, cfg: ModelConfig):
         super().__init__()
-        self.up_proj   = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
+        linear_cls = KroneckerLinear if cfg.kronecker_mlp else nn.Linear
+        self.up_proj   = linear_cls(cfg.d_model, cfg.ffn_hidden, bias=False)
         self.act       = RationalActivation()
-        self.down_proj = nn.Linear(cfg.ffn_hidden, cfg.d_model, bias=False)
+        self.down_proj = linear_cls(cfg.ffn_hidden, cfg.d_model, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.down_proj(self.act(self.up_proj(x)))
@@ -60,10 +62,11 @@ class RationalGatedFFN(nn.Module):
 
     def __init__(self, cfg: ModelConfig):
         super().__init__()
-        self.gate_proj = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
-        self.up_proj   = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
+        linear_cls = KroneckerLinear if cfg.kronecker_mlp else nn.Linear
+        self.gate_proj = linear_cls(cfg.d_model, cfg.ffn_hidden, bias=False)
+        self.up_proj   = linear_cls(cfg.d_model, cfg.ffn_hidden, bias=False)
         self.act       = RationalActivation()
-        self.down_proj = nn.Linear(cfg.ffn_hidden, cfg.d_model, bias=False)
+        self.down_proj = linear_cls(cfg.ffn_hidden, cfg.d_model, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.down_proj(self.act(self.gate_proj(x)) * self.up_proj(x))
@@ -106,9 +109,10 @@ class PFDRationalFFN(nn.Module):
 
     def __init__(self, cfg: ModelConfig, n: int = 4):
         super().__init__()
-        self.up_proj   = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
+        linear_cls = KroneckerLinear if cfg.kronecker_mlp else nn.Linear
+        self.up_proj   = linear_cls(cfg.d_model, cfg.ffn_hidden, bias=False)
         self.act       = PFDRationalActivation(n)
-        self.down_proj = nn.Linear(cfg.ffn_hidden, cfg.d_model, bias=False)
+        self.down_proj = linear_cls(cfg.ffn_hidden, cfg.d_model, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.down_proj(self.act(self.up_proj(x)))
@@ -126,10 +130,11 @@ class PFDRationalGatedFFN(nn.Module):
 
     def __init__(self, cfg: ModelConfig, n: int = 4):
         super().__init__()
-        self.gate_proj = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
-        self.up_proj   = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
+        linear_cls = KroneckerLinear if cfg.kronecker_mlp else nn.Linear
+        self.gate_proj = linear_cls(cfg.d_model, cfg.ffn_hidden, bias=False)
+        self.up_proj   = linear_cls(cfg.d_model, cfg.ffn_hidden, bias=False)
         self.act       = PFDRationalActivation(n)
-        self.down_proj = nn.Linear(cfg.ffn_hidden, cfg.d_model, bias=False)
+        self.down_proj = linear_cls(cfg.ffn_hidden, cfg.d_model, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.down_proj(self.act(self.gate_proj(x)) * self.up_proj(x))
@@ -152,8 +157,9 @@ class FirstOrderPFDRationalFFN(nn.Module):
 
     def __init__(self, cfg: ModelConfig, n: int = 4):
         super().__init__()
-        self.up_proj   = nn.Linear(cfg.d_model, cfg.ffn_hidden, bias=False)
-        self.down_proj = nn.Linear(cfg.ffn_hidden, cfg.d_model, bias=False)
+        linear_cls = KroneckerLinear if cfg.kronecker_mlp else nn.Linear
+        self.up_proj   = linear_cls(cfg.d_model, cfg.ffn_hidden, bias=False)
+        self.down_proj = linear_cls(cfg.ffn_hidden, cfg.d_model, bias=False)
         self.phi       = nn.Parameter(torch.randn(cfg.ffn_hidden) * 0.02)
         self.act       = PFDRationalActivation(n)
 

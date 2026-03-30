@@ -87,14 +87,22 @@ class PolarAttention(nn.Module):
         # Per-head learnable confidence scalars for the magnitude contribution
         self.q_scale = nn.Parameter(torch.ones(H))
         self.k_scale = nn.Parameter(torch.ones(H))
+        self._qkv_silu = cfg.qkv_silu
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """x: (B, N, d_model)"""
         B, N, D = x.shape
 
-        q = self.q_proj(x).view(B, N, self.n_heads, self.head_dim)
-        k = self.k_proj(x).view(B, N, self.n_heads, self.head_dim)
-        v = self.v_proj(x).view(B, N, self.n_heads, self.head_dim)
+        q_raw = self.q_proj(x)
+        k_raw = self.k_proj(x)
+        v_raw = self.v_proj(x)
+        if self._qkv_silu:
+            q_raw = F.silu(q_raw)
+            k_raw = F.silu(k_raw)
+            v_raw = F.silu(v_raw)
+        q = q_raw.view(B, N, self.n_heads, self.head_dim)
+        k = k_raw.view(B, N, self.n_heads, self.head_dim)
+        v = v_raw.view(B, N, self.n_heads, self.head_dim)
 
         # --- Polar decomposition ---
         r_q = torch.norm(q, p=2, dim=-1, keepdim=True)   # (B, N, H, 1)
@@ -156,6 +164,7 @@ class CausalSelfAttention(nn.Module):
         self._dropout = cfg.dropout
         self._use_flash = _flash_available()
         self._qk_norm = cfg.qk_norm
+        self._qkv_silu = cfg.qkv_silu
         if self._qk_norm:
             self.q_norm = nn.RMSNorm(self.head_dim)
             self.k_norm = nn.RMSNorm(self.head_dim)
@@ -166,9 +175,9 @@ class CausalSelfAttention(nn.Module):
         def split_heads(t):
             return t.view(B, N, self.n_heads, self.head_dim).transpose(1, 2)
 
-        q = self.rope(split_heads(self.q_proj(x)))   # (B, H, N, head_dim)
-        k = self.rope(split_heads(self.k_proj(x)))
-        v = split_heads(self.v_proj(x))
+        q = self.rope(split_heads(F.silu(self.q_proj(x)) if self._qkv_silu else self.q_proj(x)))   # (B, H, N, head_dim)
+        k = self.rope(split_heads(F.silu(self.k_proj(x)) if self._qkv_silu else self.k_proj(x)))
+        v = split_heads(F.silu(self.v_proj(x)) if self._qkv_silu else self.v_proj(x))
 
         # Apply QK normalization if enabled
         if self._qk_norm:

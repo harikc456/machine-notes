@@ -77,6 +77,7 @@ class CausalLM(nn.Module):
         self.token_embedding = nn.Embedding(cfg.vocab_size, cfg.d_model)
         self.blocks = nn.ModuleList([BlockClass(cfg) for _ in range(cfg.n_layers)])
         self.norm = nn.RMSNorm(cfg.d_model)
+        self.pre_lm_head_silu = cfg.pre_lm_head_silu
         self.lm_head = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)
         # Weight tying: lm_head shares the embedding matrix
         self.lm_head.weight = self.token_embedding.weight
@@ -90,4 +91,6 @@ class CausalLM(nn.Module):
         for block in self.blocks:
             x = block(x)
         x = self.norm(x)
+        if self.pre_lm_head_silu:
+            x = torch.nn.functional.silu(x)
         return self.lm_head(x)             # (B, N, vocab_size)

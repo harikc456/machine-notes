@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from rbf_ffn.config import ModelConfig
-from rbf_ffn.models.kronecker_linear import KroneckerLinear
+from rbf_ffn.models.kronecker_linear import KroneckerLinear, KroneckerDeltaLinear
 
 
 class SwiGLUFFN(nn.Module):
@@ -22,7 +22,6 @@ class SwiGLUFFN(nn.Module):
         super().__init__()
         D, H = cfg.d_model, cfg.ffn_hidden
         if cfg.kronecker_delta_mlp:
-            from rbf_ffn.models.kronecker_linear import KroneckerDeltaLinear
             self.gate_proj = nn.Linear(D, H, bias=False)
             self.up_proj   = KroneckerDeltaLinear(D, H, bias=False, delta_rank=cfg.kronecker_delta_rank)
             self.down_proj = KroneckerDeltaLinear(H, D, bias=False, delta_rank=cfg.kronecker_delta_rank)

@@ -10,7 +10,7 @@ def _get_factors(n: int) -> tuple[int, int]:
     for i in range(root, 0, -1):
         if n % i == 0:
             return i, n // i
-    return 1, n
+    return 1, n  # Fallback for primes: creates an unbalanced (1, n) factorisation
 
 
 class KroneckerLinear(nn.Module):
@@ -83,6 +83,11 @@ class KroneckerDeltaLinear(nn.Module):
     Optimizer routing:
       - A, B (2-D)            → Muon  (via ndim == 2 rule)
       - delta_C, delta_D (2-D)→ AdamW (via "delta_" name rule)
+
+    Initialisation (LoRA convention): delta_C is zero-initialised so the delta
+    pathway contributes nothing on the first forward pass. delta_D.grad is
+    structurally zero on the first backward pass; delta_D will not move until
+    delta_C becomes nonzero after the first AdamW step on delta_C.
     """
     def __init__(self, in_features: int, out_features: int, bias: bool = True,
                  delta_rank: int = 16, device=None, dtype=None):

@@ -21,10 +21,19 @@ class SwiGLUFFN(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
         D, H = cfg.d_model, cfg.ffn_hidden
-        linear_cls = KroneckerLinear if cfg.kronecker_mlp else nn.Linear
-        self.gate_proj = linear_cls(D, H, bias=False)
-        self.up_proj   = linear_cls(D, H, bias=False)
-        self.down_proj = linear_cls(H, D, bias=False)
+        if cfg.kronecker_delta_mlp:
+            from rbf_ffn.models.kronecker_linear import KroneckerDeltaLinear
+            self.gate_proj = nn.Linear(D, H, bias=False)
+            self.up_proj   = KroneckerDeltaLinear(D, H, bias=False, delta_rank=cfg.kronecker_delta_rank)
+            self.down_proj = KroneckerDeltaLinear(H, D, bias=False, delta_rank=cfg.kronecker_delta_rank)
+        elif cfg.kronecker_mlp:
+            self.gate_proj = KroneckerLinear(D, H, bias=False)
+            self.up_proj   = KroneckerLinear(D, H, bias=False)
+            self.down_proj = KroneckerLinear(H, D, bias=False)
+        else:
+            self.gate_proj = nn.Linear(D, H, bias=False)
+            self.up_proj   = nn.Linear(D, H, bias=False)
+            self.down_proj = nn.Linear(H, D, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """x: (B, N, d_model)"""

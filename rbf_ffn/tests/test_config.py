@@ -162,3 +162,23 @@ def test_baseline_adaptive_weight_norm_yaml_loads():
     assert cfg.adaptive_norm_alpha == pytest.approx(0.9)
     assert cfg.model_type == "baseline"
     assert cfg.n_layers == 6
+
+
+# ── KroneckerDeltaLinear config fields ────────────────────────────────────────
+
+def test_kronecker_delta_mlp_default():
+    cfg = ModelConfig()
+    assert cfg.kronecker_delta_mlp is False
+
+
+def test_kronecker_delta_rank_default():
+    cfg = ModelConfig()
+    assert cfg.kronecker_delta_rank == 16
+
+
+def test_kronecker_delta_mlp_yaml(tmp_path):
+    p = tmp_path / "cfg.yaml"
+    p.write_text("kronecker_delta_mlp: true\nkronecker_delta_rank: 8\n")
+    cfg = load_config(p)
+    assert cfg.kronecker_delta_mlp is True
+    assert cfg.kronecker_delta_rank == 8

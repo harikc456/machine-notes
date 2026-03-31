@@ -28,6 +28,8 @@ class ModelConfig:
 
     # Kronecker-factored MLP projections
     kronecker_mlp: bool = False        # Replace nn.Linear in MLP/FFN layers with KroneckerLinear
+    kronecker_delta_mlp: bool = False      # Replace up_proj/down_proj with KroneckerDeltaLinear
+    kronecker_delta_rank: int = 16         # Rank of the low-rank delta pathway
 
     # Weight normalization
     linear_weight_norm: bool = False   # Normalise each linear layer's weight rows after every optimizer step

@@ -159,3 +159,62 @@ def test_polar_mlp_thresholds_in_adamw():
         assert id(block.ffn.keys)              not in adamw_ids,"keys should not be in AdamW"
         assert id(block.ffn.down_proj.weight)  in muon_ids,     "down_proj.weight should be in Muon"
         assert id(block.ffn.down_proj.weight)  not in adamw_ids,"down_proj.weight should not be in AdamW"
+
+
+def _make_delta_model() -> CausalLM:
+    cfg = ModelConfig(
+        d_model=D, n_heads=H, n_layers=L,
+        vocab_size=VOCAB, seq_len=N,
+        model_type="baseline",
+        ffn_hidden=86,
+        dropout=0.0,
+        kronecker_delta_mlp=True,
+        kronecker_delta_rank=4,
+    )
+    return CausalLM(cfg)
+
+
+def test_kronecker_delta_output_shape():
+    model = _make_delta_model()
+    tokens = torch.randint(0, VOCAB, (B, N))
+    assert model(tokens).shape == (B, N, VOCAB)
+
+
+def test_delta_params_in_adamw_not_muon():
+    """delta_C and delta_D must be routed to AdamW, not Muon."""
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = _make_delta_model()
+    muon_params, adamw_params = build_optimizer_groups(model)
+    muon_ids  = {id(p) for p in muon_params}
+    adamw_ids = {id(p) for p in adamw_params}
+    for block in model.blocks:
+        assert id(block.ffn.up_proj.delta_C)   in adamw_ids,    "up_proj.delta_C should be in AdamW"
+        assert id(block.ffn.up_proj.delta_C)   not in muon_ids, "up_proj.delta_C should not be in Muon"
+        assert id(block.ffn.up_proj.delta_D)   in adamw_ids,    "up_proj.delta_D should be in AdamW"
+        assert id(block.ffn.up_proj.delta_D)   not in muon_ids, "up_proj.delta_D should not be in Muon"
+        assert id(block.ffn.down_proj.delta_C) in adamw_ids,    "down_proj.delta_C should be in AdamW"
+        assert id(block.ffn.down_proj.delta_C) not in muon_ids, "down_proj.delta_C should not be in Muon"
+        assert id(block.ffn.down_proj.delta_D) in adamw_ids,    "down_proj.delta_D should be in AdamW"
+        assert id(block.ffn.down_proj.delta_D) not in muon_ids, "down_proj.delta_D should not be in Muon"
+
+
+def test_kronecker_core_params_in_muon():
+    """A and B of KroneckerDeltaLinear must still go to Muon."""
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = _make_delta_model()
+    muon_params, adamw_params = build_optimizer_groups(model)
+    muon_ids  = {id(p) for p in muon_params}
+    adamw_ids = {id(p) for p in adamw_params}
+    for block in model.blocks:
+        assert id(block.ffn.up_proj.A)   in muon_ids,     "up_proj.A should be in Muon"
+        assert id(block.ffn.up_proj.A)   not in adamw_ids,"up_proj.A should not be in AdamW"
+        assert id(block.ffn.down_proj.B) in muon_ids,     "down_proj.B should be in Muon"
+        assert id(block.ffn.down_proj.B) not in adamw_ids,"down_proj.B should not be in AdamW"
+
+
+def test_no_duplicate_params_delta_model():
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = _make_delta_model()
+    muon_params, adamw_params = build_optimizer_groups(model)
+    all_ids = [id(p) for p in muon_params] + [id(p) for p in adamw_params]
+    assert len(all_ids) == len(set(all_ids)), "Duplicate parameters in optimizer groups"

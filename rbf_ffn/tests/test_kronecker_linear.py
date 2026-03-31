@@ -55,6 +55,9 @@ def test_gradient_flows(layer):
     assert x.grad is not None
     for attr in ("A", "B", "delta_C", "delta_D"):
         assert getattr(layer, attr).grad is not None
+    # Note: delta_D.grad is structurally zero at init because delta_C=0 kills its
+    # gradient on the first step (matching LoRA convention). We only assert the
+    # grad tensor is allocated, not that it is nonzero.
 
 
 def test_no_bias_option():

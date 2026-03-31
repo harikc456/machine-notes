@@ -4,6 +4,15 @@ import torch.nn as nn
 import math
 
 
+def _get_factors(n: int) -> tuple[int, int]:
+    """Returns (a, b) with a * b == n and |a - b| minimised."""
+    root = int(math.isqrt(n))
+    for i in range(root, 0, -1):
+        if n % i == 0:
+            return i, n // i
+    return 1, n
+
+
 class KroneckerLinear(nn.Module):
     """
     A drop-in replacement for torch.nn.Linear that uses Kronecker-factored weights
@@ -17,8 +26,8 @@ class KroneckerLinear(nn.Module):
         self.out_features = out_features
 
         # Automatically factorize the input and output dimensions
-        self.in1, self.in2 = self._get_factors(in_features)
-        self.out1, self.out2 = self._get_factors(out_features)
+        self.in1, self.in2 = _get_factors(in_features)
+        self.out1, self.out2 = _get_factors(out_features)
 
         # Initialize A and B as 2D parameters for Muon compatibility
         self.A = nn.Parameter(torch.empty((self.out1, self.in1), **factory_kwargs))
@@ -30,13 +39,6 @@ class KroneckerLinear(nn.Module):
             self.register_parameter('bias', None)
 
         self.reset_parameters()
-
-    def _get_factors(self, n: int):
-        """Finds two integers a and b such that a * b = n and a is as close to b as possible."""
-        for i in range(int(math.isqrt(n)), 0, -1):
-            if n % i == 0:
-                return i, n // i
-        return 1, n  # Fallback (effectively creates a dense matrix if n is prime)
 
     def reset_parameters(self):
         # Kaiming uniform initialization adapted for factored matrices
@@ -89,9 +91,10 @@ class KroneckerDeltaLinear(nn.Module):
 
         self.in_features = in_features
         self.out_features = out_features
+        self.delta_rank = delta_rank
 
-        self.in1, self.in2 = self._find_closest_factors(in_features)
-        self.out1, self.out2 = self._find_closest_factors(out_features)
+        self.in1, self.in2 = _get_factors(in_features)
+        self.out1, self.out2 = _get_factors(out_features)
 
         # Kronecker core — trained by Muon
         self.A = nn.Parameter(torch.empty((self.out1, self.in1), **factory_kwargs))
@@ -107,14 +110,6 @@ class KroneckerDeltaLinear(nn.Module):
             self.register_parameter('bias', None)
 
         self.reset_parameters()
-
-    def _find_closest_factors(self, n: int):
-        """Returns (a, b) with a * b == n and |a - b| minimised."""
-        root = int(math.isqrt(n))
-        for i in range(root, 0, -1):
-            if n % i == 0:
-                return i, n // i
-        return 1, n
 
     def reset_parameters(self):
         kron_bound = 1 / math.sqrt(self.in_features)
@@ -145,4 +140,4 @@ class KroneckerDeltaLinear(nn.Module):
         return (f'in_features={self.in_features}, out_features={self.out_features}, '
                 f'bias={self.bias is not None}, '
                 f'factors=(in:{self.in1}x{self.in2}, out:{self.out1}x{self.out2}), '
-                f'delta_rank={self.delta_C.shape[1]}')
+                f'delta_rank={self.delta_rank}')

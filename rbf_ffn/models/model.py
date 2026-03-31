@@ -15,8 +15,9 @@ def build_optimizer_groups(
     Rules (first match wins, applied after deduplication by tensor id):
       1. "sigma_raw" in name           → AdamW
       2. param is token embedding weight → AdamW
-      3. param.ndim == 2               → Muon
-      4. else                          → AdamW
+      3. "delta_" in name              → AdamW  (KroneckerDeltaLinear delta_C/delta_D)
+      4. param.ndim == 2               → Muon
+      5. else                          → AdamW
 
     Returns (muon_params, adamw_params).
     """
@@ -34,6 +35,8 @@ def build_optimizer_groups(
         if "sigma_raw" in name:
             adamw.append(param)
         elif pid == emb_id:
+            adamw.append(param)
+        elif "delta_" in name:
             adamw.append(param)
         elif param.ndim == 2:
             muon.append(param)

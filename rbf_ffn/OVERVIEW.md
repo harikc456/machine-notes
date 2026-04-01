@@ -9,6 +9,18 @@ A systematic study of alternative FFN designs for transformer language models, c
 
 ---
 
+## Consolidation Note (2026-04-01)
+
+`rbf_ffn/` is now the **single source of truth** for transformer experiments in this repo.
+The original `kromhc_transformer/` implementation has been archived to `archive/kromhc_transformer/`.
+
+KromHC head mixing is available in `rbf_ffn/` via `use_kromhc: true` in any config.
+It wraps any `model_type` with a `KromHCWrapper` — see `models/head_mixer.py` and
+`models/transformer_block.py`. Configs: `baseline_kromhc.yaml`, `baseline_qk_norm_kromhc.yaml`,
+`pfd_rationalglu_qk_norm_weight_norm_kromhc.yaml`.
+
+---
+
 ## I. Motivation
 
 The standard SwiGLU FFN in modern transformers uses:

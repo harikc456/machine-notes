@@ -24,6 +24,7 @@ from tqdm import tqdm
 from rbf_ffn.config import ModelConfig, load_config
 from rbf_ffn.data import get_dataloaders
 from rbf_ffn.models.model import CausalLM, build_optimizer_groups
+from rbf_ffn.models.transformer_block import KromHCWrapper
 from rbf_ffn.models.rational_ffn import PFDRationalActivation, RationalActivation
 
 
@@ -89,9 +90,18 @@ def apply_linear_weight_norm(
     Skips weight-tied layers (lm_head shares the token embedding matrix).
     """
     tied_id = id(model.token_embedding.weight)
+    kromhc_ids: set[int] = {
+        id(m)
+        for block in model.blocks
+        if isinstance(block, KromHCWrapper)
+        for m in [block.mixer_proj, *block.head_mixer.weight_gens.modules()]
+        if isinstance(m, nn.Linear)
+    }
     for module in model.modules():
         if isinstance(module, nn.Linear):
             if id(module.weight) == tied_id:
+                continue
+            if id(module) in kromhc_ids:
                 continue
             norms = module.weight.data.norm(dim=1, keepdim=True).clamp(min=1e-8)
             scales = target_norm / norms
@@ -119,7 +129,8 @@ def apply_adaptive_weight_norm(
         correction = cfg.adaptive_norm_gamma * frac * math.tanh(cfg.adaptive_norm_beta * delta_log_gap)
         target = max(1.0, static - correction)
 
-        for module in block.modules():
+        inner = block.inner_block if isinstance(block, KromHCWrapper) else block
+        for module in inner.modules():
             if isinstance(module, nn.Linear):
                 norms = module.weight.data.norm(dim=1, keepdim=True).clamp(min=1e-8)
                 scales = target / norms

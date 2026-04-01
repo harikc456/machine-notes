@@ -21,8 +21,10 @@ def build_optimizer_groups(
       1. "sigma_raw" in name           → AdamW
       2. param is token embedding weight → AdamW
       3. "delta_" in name              → AdamW  (KroneckerDeltaLinear delta_C/delta_D)
-      4. param.ndim == 2               → Muon
-      5. else                          → AdamW
+      4. "weight_gens" in name         → AdamW  (KromHC gating MLPs — tiny, not suited for Muon)
+      5. "mixer_proj" in name          → AdamW  (KromHC output projection)
+      6. param.ndim == 2               → Muon
+      7. else                          → AdamW
 
     Returns (muon_params, adamw_params).
     """
@@ -42,6 +44,10 @@ def build_optimizer_groups(
         elif pid == emb_id:
             adamw.append(param)
         elif "delta_" in name:
+            adamw.append(param)
+        elif "weight_gens" in name:
+            adamw.append(param)
+        elif "mixer_proj" in name:
             adamw.append(param)
         elif param.ndim == 2:
             muon.append(param)

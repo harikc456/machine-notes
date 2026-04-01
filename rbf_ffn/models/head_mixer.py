@@ -1,6 +1,7 @@
 """KromHC Head Mixer: Kronecker-factored doubly-stochastic head mixing."""
 from __future__ import annotations
 
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -26,7 +27,6 @@ class KromHCHeadMixer(nn.Module):
             d_context = head_dim
         self.d_context = d_context
 
-        import math
         k = int(math.log2(n_heads))
         assert 2 ** k == n_heads, f"n_heads ({n_heads}) must be a power of 2"
         self.K = k

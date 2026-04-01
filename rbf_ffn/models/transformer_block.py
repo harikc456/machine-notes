@@ -238,6 +238,9 @@ class KromHCWrapper(nn.Module):
         super().__init__()
         self.inner_block = inner_block
         self.n_heads   = cfg.n_heads
+        assert cfg.d_model % cfg.n_heads == 0, (
+            f"d_model ({cfg.d_model}) must be divisible by n_heads ({cfg.n_heads})"
+        )
         self.head_dim  = cfg.d_model // cfg.n_heads
         self.head_mixer = KromHCHeadMixer(
             n_heads=cfg.n_heads,
@@ -246,7 +249,7 @@ class KromHCWrapper(nn.Module):
         )
         self.mixer_proj = nn.Linear(cfg.d_model, cfg.d_model, bias=False)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
         x: (B, N, D)
         Returns: (out: (B, N, D), H: (B, N, n_heads, n_heads))

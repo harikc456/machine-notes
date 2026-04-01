@@ -38,6 +38,8 @@ def get_experiment_dir(cfg: ModelConfig) -> Path:
         norm_tags += "_adpwnorm"
     if cfg.activation_norm:
         norm_tags += "_actnorm"
+    if cfg.use_kromhc:
+        norm_tags += "_kromhc"
     name = f"{stamp}_{cfg.model_type}{norm_tags}_d{cfg.d_model}"
     path = Path(__file__).parent / "experiments" / name
     path.mkdir(parents=True, exist_ok=True)
@@ -148,6 +150,37 @@ def apply_activation_coeff_norm(model: CausalLM) -> None:
 
 
 @torch.no_grad()
+def collect_kromhc_stats(model: CausalLM, batch: torch.Tensor, device: torch.device) -> dict:
+    """Compute summary stats for KromHC H matrices using a single batch.
+
+    Returns:
+        kromhc/H_row_entropy_mean  — mean Shannon entropy of H rows
+        kromhc/H_offdiag_mass_mean — mean fraction of probability mass on off-diagonal
+    """
+    model.eval()
+    inputs = batch[:, :-1].to(device)
+    _, hs = model(inputs)
+    if not hs:
+        return {}
+    # hs: list of (B, N, n_heads, n_heads) — one per layer
+    all_H = torch.stack(hs)                          # (n_layers, B, N, n_heads, n_heads)
+    n_heads = all_H.shape[-1]
+    flat = all_H.reshape(-1, n_heads, n_heads)        # (n_layers*B*N, n_heads, n_heads)
+
+    eps = 1e-8
+    row_entropy = -(flat * (flat + eps).log()).sum(dim=-1).mean().item()
+
+    diag_mask = torch.eye(n_heads, device=flat.device, dtype=torch.bool)
+    offdiag = flat.masked_fill(diag_mask.unsqueeze(0), 0.0)
+    offdiag_mass = (offdiag.sum(dim=(-2, -1)) / n_heads).mean().item()
+
+    return {
+        "kromhc/H_row_entropy_mean": row_entropy,
+        "kromhc/H_offdiag_mass_mean": offdiag_mass,
+    }
+
+
+@torch.no_grad()
 def evaluate(model: CausalLM, loader, device: torch.device) -> tuple[float, float]:
     """Returns (val_loss, val_ppl) in nats/token."""
     model.eval()
@@ -158,7 +191,7 @@ def evaluate(model: CausalLM, loader, device: torch.device) -> tuple[float, floa
         n_tokens = inputs.numel()
         with torch.autocast("cuda", dtype=torch.bfloat16,
                             enabled=(device.type == "cuda")):
-            logits = model(inputs)
+            logits, _ = model(inputs)
             loss = F.cross_entropy(
                 logits.reshape(-1, logits.size(-1)),
                 targets.reshape(-1),
@@ -295,7 +328,7 @@ def train(
             torch.compiler.cudagraph_mark_step_begin()
             with torch.autocast("cuda", dtype=torch.bfloat16,
                                 enabled=(device.type == "cuda")):
-                logits = model(inputs)
+                logits, _ = model(inputs)
                 loss   = F.cross_entropy(
                     logits.reshape(-1, logits.size(-1)),
                     targets.reshape(-1),
@@ -349,6 +382,13 @@ def train(
         val_loss, val_ppl = evaluate(model, val_loader, device)
         epoch_time = time.time() - t0
 
+        kromhc_stats: dict = {}
+        if cfg.use_kromhc:
+            # Use a single val batch for stats (no full-epoch overhead)
+            stats_batch = next(iter(val_loader))
+            kromhc_stats = collect_kromhc_stats(model, stats_batch, device)
+            model.train()
+
         if cfg.adaptive_weight_norm:
             log_gap = math.log(max(val_loss, 1e-8) / max(train_loss, 1e-8))
             new_ema = cfg.adaptive_norm_alpha * log_gap + (1.0 - cfg.adaptive_norm_alpha) * ema_log_gap
@@ -369,6 +409,7 @@ def train(
             "val_ppl":              val_ppl,
             "epoch_time_s":         epoch_time,
             "effective_batch_size": cfg.batch_size * cfg.grad_accum_steps,
+            **kromhc_stats,
         }
         print(row)
         with open(metrics_path, "a") as f:

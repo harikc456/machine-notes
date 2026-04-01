@@ -382,3 +382,22 @@ def test_parse_args_resume_from_final(monkeypatch):
                                       "--resume_from", "final"])
     args = parse_args()
     assert args.resume_from == "final"
+
+
+def test_kromhc_training_completes(tmp_path):
+    """KromHC training produces metrics.jsonl with kromhc stats."""
+    cfg = _tiny_cfg(use_kromhc=True, n_heads=2)
+    exp_dir = _run_train(cfg, tmp_path)
+    assert (exp_dir / "metrics.jsonl").exists()
+    rows = [json.loads(l) for l in (exp_dir / "metrics.jsonl").read_text().splitlines()]
+    assert len(rows) >= 1
+    assert "kromhc/H_row_entropy_mean" in rows[0]
+    assert "kromhc/H_offdiag_mass_mean" in rows[0]
+
+
+def test_non_kromhc_metrics_have_no_H_keys(tmp_path):
+    """Non-KromHC run must not emit kromhc/* keys in metrics."""
+    cfg = _tiny_cfg()
+    exp_dir = _run_train(cfg, tmp_path)
+    rows = [json.loads(l) for l in (exp_dir / "metrics.jsonl").read_text().splitlines()]
+    assert "kromhc/H_row_entropy_mean" not in rows[0]

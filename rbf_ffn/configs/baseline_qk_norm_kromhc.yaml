@@ -1,0 +1,20 @@
+# Llama SwiGLU baseline with QK norm and KromHC head mixing.
+# Matches default settings in kromhc_transformer (qk_norm=true by default there).
+model_type: baseline
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+use_kromhc: true
+seed: 42
+n_epochs: 10
+batch_size: 32
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0

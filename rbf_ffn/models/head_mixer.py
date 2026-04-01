@@ -1,5 +1,6 @@
 """KromHC Head Mixer: Kronecker-factored doubly-stochastic head mixing."""
-import math
+from __future__ import annotations
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -17,7 +18,7 @@ class KromHCHeadMixer(nn.Module):
     Output: mixed (bs, n_heads, head_dim), H (bs, n_heads, n_heads)
     """
 
-    def __init__(self, n_heads: int = 8, head_dim: int = 64, d_context: int = None):
+    def __init__(self, n_heads: int = 8, head_dim: int = 64, d_context: int | None = None):
         super().__init__()
         self.n = n_heads
         self.head_dim = head_dim
@@ -25,6 +26,7 @@ class KromHCHeadMixer(nn.Module):
             d_context = head_dim
         self.d_context = d_context
 
+        import math
         k = int(math.log2(n_heads))
         assert 2 ** k == n_heads, f"n_heads ({n_heads}) must be a power of 2"
         self.K = k
@@ -35,21 +37,24 @@ class KromHCHeadMixer(nn.Module):
         else:
             self.context_proj = None
 
-        self.perm_bases = nn.ParameterList()
         self.weight_gens = nn.ModuleList()
+        bases = []
 
-        for _ in range(k):
+        for i in range(k):
             basis = torch.zeros(2, 2, 2)
             for idx, p in enumerate(permutations(range(2))):
                 for r, c in enumerate(p):
                     basis[idx, r, c] = 1.0
-            self.perm_bases.append(nn.Parameter(basis, requires_grad=False))
+            bases.append(basis)
 
             self.weight_gens.append(nn.Sequential(
                 nn.Linear(d_context, 32, bias=False),
                 nn.ReLU(),
                 nn.Linear(32, 2, bias=False),
             ))
+
+        # Stack all bases into a single buffer: (K, 2, 2, 2)
+        self.register_buffer('perm_bases', torch.stack(bases))
 
     def _batched_kronecker(self, A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
         """Batched Kronecker product: (bs, m, m) ⊗ (bs, p, p) → (bs, m*p, m*p)"""
@@ -70,7 +75,8 @@ class KromHCHeadMixer(nn.Module):
             context = self.context_proj(context)  # (bs, d_context)
 
         small_us = []
-        for gen, basis in zip(self.weight_gens, self.perm_bases):
+        for i, gen in enumerate(self.weight_gens):
+            basis = self.perm_bases[i]                   # (2, 2, 2)
             logits = gen(context)                        # (bs, 2)
             a = F.softmax(logits, dim=-1)               # convex weights
             U = (a @ basis.view(2, -1)).view(bs, 2, 2)  # (bs, 2, 2)

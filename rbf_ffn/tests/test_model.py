@@ -24,8 +24,9 @@ def make_model(model_type: str = "baseline") -> CausalLM:
 def test_baseline_output_shape():
     model = make_model("baseline")
     tokens = torch.randint(0, VOCAB, (B, N))
-    logits = model(tokens)
+    logits, hs = model(tokens)
     assert logits.shape == (B, N, VOCAB)
+    assert hs == []
 
 
 def test_weight_tying():
@@ -63,7 +64,7 @@ def test_embedding_in_adamw_not_muon():
 def test_gradient_flows_baseline():
     model = make_model("baseline")
     tokens = torch.randint(0, VOCAB, (B, N))
-    logits = model(tokens)
+    logits, _ = model(tokens)
     logits.sum().backward()
     assert model.token_embedding.weight.grad is not None
 
@@ -85,7 +86,8 @@ def test_rational_params_in_adamw():
 def test_rationalglu_output_shape():
     model = make_model("rationalglu")
     tokens = torch.randint(0, VOCAB, (B, N))
-    assert model(tokens).shape == (B, N, VOCAB)
+    logits, _ = model(tokens)
+    assert logits.shape == (B, N, VOCAB)
 
 
 def test_rationalglu_params_in_adamw():
@@ -105,7 +107,8 @@ def test_rationalglu_params_in_adamw():
 def test_first_order_pfd_rational_output_shape():
     model = make_model("first_order_pfd_rational")
     tokens = torch.randint(0, VOCAB, (B, N))
-    assert model(tokens).shape == (B, N, VOCAB)
+    logits, _ = model(tokens)
+    assert logits.shape == (B, N, VOCAB)
 
 
 def test_first_order_pfd_rational_params_in_adamw():
@@ -131,14 +134,15 @@ def test_first_order_pfd_rational_params_in_adamw():
 def test_polar_mlp_output_shape():
     model = make_model("polar_mlp")
     tokens = torch.randint(0, VOCAB, (B, N))
-    assert model(tokens).shape == (B, N, VOCAB)
+    logits, _ = model(tokens)
+    assert logits.shape == (B, N, VOCAB)
 
 
 def test_polar_mlp_gradient_flows():
     """Smoke test: backward pass through full model, loss is finite, grads propagate."""
     model = make_model("polar_mlp")
     tokens = torch.randint(0, VOCAB, (B, N))
-    logits = model(tokens)
+    logits, _ = model(tokens)
     loss = logits.sum()
     assert torch.isfinite(loss)
     loss.backward()
@@ -177,7 +181,8 @@ def _make_delta_model() -> CausalLM:
 def test_kronecker_delta_output_shape():
     model = _make_delta_model()
     tokens = torch.randint(0, VOCAB, (B, N))
-    assert model(tokens).shape == (B, N, VOCAB)
+    logits, _ = model(tokens)
+    assert logits.shape == (B, N, VOCAB)
 
 
 def test_delta_params_in_adamw_not_muon():
@@ -218,3 +223,39 @@ def test_no_duplicate_params_delta_model():
     muon_params, adamw_params = build_optimizer_groups(model)
     all_ids = [id(p) for p in muon_params] + [id(p) for p in adamw_params]
     assert len(all_ids) == len(set(all_ids)), "Duplicate parameters in optimizer groups"
+
+
+def _make_kromhc_model() -> CausalLM:
+    cfg = ModelConfig(
+        d_model=D, n_heads=H, n_layers=L,
+        vocab_size=VOCAB, seq_len=N,
+        model_type="baseline",
+        ffn_hidden=86,
+        dropout=0.0,
+        use_kromhc=True,
+    )
+    return CausalLM(cfg)
+
+
+def test_kromhc_output_shape():
+    model = _make_kromhc_model()
+    tokens = torch.randint(0, VOCAB, (B, N))
+    logits, hs = model(tokens)
+    assert logits.shape == (B, N, VOCAB)
+    assert len(hs) == L
+
+
+def test_kromhc_H_shape():
+    model = _make_kromhc_model()
+    tokens = torch.randint(0, VOCAB, (B, N))
+    _, hs = model(tokens)
+    for H_mat in hs:
+        assert H_mat.shape == (B, N, H, H)  # H=4 heads
+
+
+def test_kromhc_no_duplicate_params():
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = _make_kromhc_model()
+    muon_params, adamw_params = build_optimizer_groups(model)
+    all_ids = [id(p) for p in muon_params] + [id(p) for p in adamw_params]
+    assert len(all_ids) == len(set(all_ids))

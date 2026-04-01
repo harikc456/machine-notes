@@ -182,3 +182,24 @@ def test_kronecker_delta_mlp_yaml(tmp_path):
     cfg = load_config(p)
     assert cfg.kronecker_delta_mlp is True
     assert cfg.kronecker_delta_rank == 8
+
+
+# ── KromHC head mixing config fields ──────────────────────────────────────────
+
+def test_use_kromhc_default_false():
+    cfg = ModelConfig()
+    assert cfg.use_kromhc is False
+
+
+def test_kromhc_mixer_hidden_default():
+    cfg = ModelConfig()
+    assert cfg.kromhc_mixer_hidden == 32
+
+
+def test_use_kromhc_loads_from_yaml(tmp_path):
+    yaml_text = "use_kromhc: true\nkromhc_mixer_hidden: 64\n"
+    path = tmp_path / "cfg.yaml"
+    path.write_text(yaml_text)
+    cfg = load_config(path)
+    assert cfg.use_kromhc is True
+    assert cfg.kromhc_mixer_hidden == 64

@@ -6,6 +6,7 @@ from rbf_ffn.models.attention import CausalSelfAttention, PolarAttention
 from rbf_ffn.models.llama_ffn import SwiGLUFFN
 from rbf_ffn.models.rational_ffn import RationalFFN, RationalGatedFFN, PFDRationalFFN, PFDRationalGatedFFN, FirstOrderPFDRationalFFN
 from rbf_ffn.models.polar_ffn import AdaptivePolarMLP
+from rbf_ffn.models.head_mixer import KromHCHeadMixer
 
 
 class LlamaBlock(nn.Module):
@@ -217,3 +218,43 @@ class PolarMLPBlock(nn.Module):
         x = x + self.attn(self.norm1(x))
         x = x + self.ffn(self.norm2(x))
         return x
+
+
+class KromHCWrapper(nn.Module):
+    """
+    Wraps any transformer block with KromHC head mixing.
+
+    Applies head mixing as an additive residual after the inner block:
+
+        x_block = inner_block(x)
+        heads   = x_block reshaped to (B*N, n_heads, head_dim)
+        mixed   = KromHCHeadMixer(heads)
+        out     = x_block + mixer_proj(mixed reshaped back)
+
+    Returns (out, H) where H: (B, N, n_heads, n_heads).
+    """
+
+    def __init__(self, inner_block: nn.Module, cfg: ModelConfig):
+        super().__init__()
+        self.inner_block = inner_block
+        self.n_heads   = cfg.n_heads
+        self.head_dim  = cfg.d_model // cfg.n_heads
+        self.head_mixer = KromHCHeadMixer(
+            n_heads=cfg.n_heads,
+            head_dim=self.head_dim,
+            d_context=self.head_dim,
+        )
+        self.mixer_proj = nn.Linear(cfg.d_model, cfg.d_model, bias=False)
+
+    def forward(self, x: torch.Tensor):
+        """
+        x: (B, N, D)
+        Returns: (out: (B, N, D), H: (B, N, n_heads, n_heads))
+        """
+        x_block = self.inner_block(x)                           # (B, N, D)
+        B, N, D = x_block.shape
+        heads = x_block.view(B * N, self.n_heads, self.head_dim)
+        mixed, H = self.head_mixer(heads)                       # mixed: (B*N, n_heads, head_dim)
+        correction = self.mixer_proj(mixed.view(B, N, D))
+        H_4d = H.view(B, N, self.n_heads, self.n_heads)
+        return x_block + correction, H_4d

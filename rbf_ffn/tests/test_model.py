@@ -259,3 +259,16 @@ def test_kromhc_no_duplicate_params():
     muon_params, adamw_params = build_optimizer_groups(model)
     all_ids = [id(p) for p in muon_params] + [id(p) for p in adamw_params]
     assert len(all_ids) == len(set(all_ids))
+
+
+def test_kromhc_gradient_flows():
+    """Gradients must reach mixer_proj and weight_gens despite H being detached."""
+    model = _make_kromhc_model()
+    tokens = torch.randint(0, VOCAB, (B, N))
+    logits, _ = model(tokens)
+    logits.sum().backward()
+    for block in model.blocks:
+        assert block.mixer_proj.weight.grad is not None
+        for gen in block.head_mixer.weight_gens:
+            for p in gen.parameters():
+                assert p.grad is not None

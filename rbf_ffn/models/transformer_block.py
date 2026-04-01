@@ -246,6 +246,7 @@ class KromHCWrapper(nn.Module):
             n_heads=cfg.n_heads,
             head_dim=self.head_dim,
             d_context=self.head_dim,
+            mixer_hidden=cfg.kromhc_mixer_hidden,
         )
         self.mixer_proj = nn.Linear(cfg.d_model, cfg.d_model, bias=False)
 

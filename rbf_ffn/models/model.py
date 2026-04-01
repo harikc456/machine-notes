@@ -101,7 +101,7 @@ class CausalLM(nn.Module):
         self.norm = nn.RMSNorm(cfg.d_model)
         self.pre_lm_head_silu = cfg.pre_lm_head_silu
         self.lm_head = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)
-        self.lm_head.weight = self.token_embedding.weight
+        self.lm_head.weight = self.token_embedding.weight  # weight tying: shares the embedding matrix
 
     def forward(self, tokens: torch.Tensor) -> tuple[torch.Tensor, list]:
         """
@@ -110,13 +110,13 @@ class CausalLM(nn.Module):
         """
         x = self.token_embedding(tokens)
         hs: list[torch.Tensor] = []
-        if self.use_kromhc:
-            for block in self.blocks:
-                x, H = block(x)
+        for block in self.blocks:
+            result = block(x)
+            if self.use_kromhc:
+                x, H = result
                 hs.append(H.detach())
-        else:
-            for block in self.blocks:
-                x = block(x)
+            else:
+                x = result
         x = self.norm(x)
         if self.pre_lm_head_silu:
             x = torch.nn.functional.silu(x)

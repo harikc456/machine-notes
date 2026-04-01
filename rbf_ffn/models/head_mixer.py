@@ -18,7 +18,7 @@ class KromHCHeadMixer(nn.Module):
     Output: mixed (bs, n_heads, head_dim), H (bs, n_heads, n_heads)
     """
 
-    def __init__(self, n_heads: int = 8, head_dim: int = 64, d_context: int | None = None):
+    def __init__(self, n_heads: int = 8, head_dim: int = 64, d_context: int | None = None, mixer_hidden: int = 32):
         super().__init__()
         self.n = n_heads
         self.head_dim = head_dim
@@ -48,9 +48,9 @@ class KromHCHeadMixer(nn.Module):
             bases.append(basis)
 
             self.weight_gens.append(nn.Sequential(
-                nn.Linear(d_context, 32, bias=False),
+                nn.Linear(d_context, mixer_hidden, bias=False),
                 nn.ReLU(),
-                nn.Linear(32, 2, bias=False),
+                nn.Linear(mixer_hidden, 2, bias=False),
             ))
 
         # Stack all bases into a single buffer: (K, 2, 2, 2)

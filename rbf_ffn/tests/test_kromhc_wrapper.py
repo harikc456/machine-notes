@@ -39,10 +39,15 @@ def test_gradient_flows():
     out, _ = wrapper(x)
     out.sum().backward()
     assert x.grad is not None
+    assert wrapper.mixer_proj.weight.grad is not None
+    for gen in wrapper.head_mixer.weight_gens:
+        for p in gen.parameters():
+            assert p.grad is not None
 
 
 def test_zero_mixer_proj_is_identity_of_inner_block():
-    """When mixer_proj weights are zero, wrapper output == inner_block output."""
+    """When mixer_proj weights are zero, wrapper output == inner_block output.
+    dropout=0.0 is required for the deterministic equality assertion to hold."""
     cfg = ModelConfig(d_model=D, n_heads=H, dropout=0.0)
     inner = LlamaBlock(cfg)
     wrapper = KromHCWrapper(inner, cfg)

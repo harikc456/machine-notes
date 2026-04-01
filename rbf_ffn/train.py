@@ -155,7 +155,7 @@ def collect_kromhc_stats(model: CausalLM, batch: torch.Tensor, device: torch.dev
 
     Returns:
         kromhc/H_row_entropy_mean  — mean Shannon entropy of H rows
-        kromhc/H_offdiag_mass_mean — mean fraction of probability mass on off-diagonal
+        kromhc/H_offdiag_mass_mean — mean fraction of off-diagonal mass (0=identity, 1=fully mixed)
     """
     model.eval()
     inputs = batch[:, :-1].to(device)
@@ -168,11 +168,11 @@ def collect_kromhc_stats(model: CausalLM, batch: torch.Tensor, device: torch.dev
     flat = all_H.reshape(-1, n_heads, n_heads)        # (n_layers*B*N, n_heads, n_heads)
 
     eps = 1e-8
-    row_entropy = -(flat * (flat + eps).log()).sum(dim=-1).mean().item()
+    row_entropy = -torch.xlogy(flat, flat.clamp(min=eps)).sum(dim=-1).mean().item()
 
     diag_mask = torch.eye(n_heads, device=flat.device, dtype=torch.bool)
     offdiag = flat.masked_fill(diag_mask.unsqueeze(0), 0.0)
-    offdiag_mass = (offdiag.sum(dim=(-2, -1)) / n_heads).mean().item()
+    offdiag_mass = (offdiag.sum(dim=(-2, -1)) / (n_heads - 1)).mean().item()
 
     return {
         "kromhc/H_row_entropy_mean": row_entropy,
@@ -387,7 +387,7 @@ def train(
             # Use a single val batch for stats (no full-epoch overhead)
             stats_batch = next(iter(val_loader))
             kromhc_stats = collect_kromhc_stats(model, stats_batch, device)
-            model.train()
+        model.train()
 
         if cfg.adaptive_weight_norm:
             log_gap = math.log(max(val_loss, 1e-8) / max(train_loss, 1e-8))

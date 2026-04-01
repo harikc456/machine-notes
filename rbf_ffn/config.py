@@ -31,6 +31,10 @@ class ModelConfig:
     kronecker_delta_mlp: bool = False      # Replace up_proj/down_proj with KroneckerDeltaLinear
     kronecker_delta_rank: int = 16         # Rank of the low-rank delta pathway
 
+    # KromHC head mixing
+    use_kromhc: bool = False           # wrap any block with KromHC head mixing
+    kromhc_mixer_hidden: int = 32      # hidden dim of per-factor weight MLP
+
     # Weight normalization
     linear_weight_norm: bool = False   # Normalise each linear layer's weight rows after every optimizer step
     linear_weight_norm_value: float = 2.0  # Target L2 norm per output neuron

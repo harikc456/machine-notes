@@ -165,6 +165,97 @@ def test_polar_mlp_thresholds_in_adamw():
         assert id(block.ffn.down_proj.weight)  not in adamw_ids,"down_proj.weight should not be in AdamW"
 
 
+def _make_untied_model() -> CausalLM:
+    cfg = ModelConfig(
+        d_model=D, n_heads=H, n_layers=L,
+        vocab_size=VOCAB, seq_len=N,
+        model_type="baseline",
+        ffn_hidden=86,
+        dropout=0.0,
+        tie_embeddings=False,
+    )
+    return CausalLM(cfg)
+
+
+def _make_kronecker_lm_head_model() -> CausalLM:
+    cfg = ModelConfig(
+        d_model=D, n_heads=H, n_layers=L,
+        vocab_size=VOCAB, seq_len=N,
+        model_type="baseline",
+        ffn_hidden=86,
+        dropout=0.0,
+        tie_embeddings=False,
+        lm_head_kronecker=True,
+    )
+    return CausalLM(cfg)
+
+
+def test_untied_embeddings_lm_head_is_independent():
+    model = _make_untied_model()
+    assert model.lm_head.weight is not model.token_embedding.weight
+
+
+def test_untied_embeddings_output_shape():
+    model = _make_untied_model()
+    tokens = torch.randint(0, VOCAB, (B, N))
+    logits, _ = model(tokens)
+    assert logits.shape == (B, N, VOCAB)
+
+
+def test_untied_embeddings_lm_head_in_muon():
+    """Untied lm_head.weight is 2-D and not the embedding, so it must go to Muon."""
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = _make_untied_model()
+    muon_params, _ = build_optimizer_groups(model)
+    muon_ids = {id(p) for p in muon_params}
+    assert id(model.lm_head.weight) in muon_ids
+
+
+def test_kronecker_lm_head_output_shape():
+    model = _make_kronecker_lm_head_model()
+    tokens = torch.randint(0, VOCAB, (B, N))
+    logits, _ = model(tokens)
+    assert logits.shape == (B, N, VOCAB)
+
+
+def test_kronecker_lm_head_gradient_flows():
+    model = _make_kronecker_lm_head_model()
+    tokens = torch.randint(0, VOCAB, (B, N))
+    logits, _ = model(tokens)
+    logits.sum().backward()
+    assert model.lm_head.A.grad is not None
+    assert model.lm_head.B.grad is not None
+
+
+def test_kronecker_lm_head_factors_in_muon():
+    """KroneckerLMHead A and B are 2-D and must be routed to Muon."""
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = _make_kronecker_lm_head_model()
+    muon_params, adamw_params = build_optimizer_groups(model)
+    muon_ids  = {id(p) for p in muon_params}
+    adamw_ids = {id(p) for p in adamw_params}
+    assert id(model.lm_head.A) in muon_ids,     "lm_head.A should be in Muon"
+    assert id(model.lm_head.A) not in adamw_ids, "lm_head.A should not be in AdamW"
+    assert id(model.lm_head.B) in muon_ids,     "lm_head.B should be in Muon"
+    assert id(model.lm_head.B) not in adamw_ids, "lm_head.B should not be in AdamW"
+
+
+def test_no_duplicate_params_untied():
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = _make_untied_model()
+    muon_params, adamw_params = build_optimizer_groups(model)
+    all_ids = [id(p) for p in muon_params] + [id(p) for p in adamw_params]
+    assert len(all_ids) == len(set(all_ids)), "Duplicate parameters in optimizer groups"
+
+
+def test_no_duplicate_params_kronecker_lm_head():
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = _make_kronecker_lm_head_model()
+    muon_params, adamw_params = build_optimizer_groups(model)
+    all_ids = [id(p) for p in muon_params] + [id(p) for p in adamw_params]
+    assert len(all_ids) == len(set(all_ids)), "Duplicate parameters in optimizer groups"
+
+
 def _make_delta_model() -> CausalLM:
     cfg = ModelConfig(
         d_model=D, n_heads=H, n_layers=L,

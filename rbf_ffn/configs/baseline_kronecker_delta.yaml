@@ -14,7 +14,7 @@ linear_weight_norm: true
 linear_weight_norm_value: 2.0
 linear_weight_norm_max_only: false
 kronecker_delta_mlp: true
-kronecker_delta_rank: 16
+kronecker_delta_rank: 32
 seed: 42
 n_epochs: 10
 batch_size: 16

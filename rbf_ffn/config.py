@@ -26,6 +26,17 @@ class ModelConfig:
     pfd_n: int = 4                 # Number of partial fraction terms for PFDRational* models
     pre_lm_head_silu: bool = False # Apply SiLU activation before lm_head
 
+    # Embedding / LM head
+    tie_embeddings: bool = True        # If False, lm_head gets its own weight matrix (not shared with token_embedding)
+
+    # Kronecker-factored LM head
+    # Replaces lm_head dense weight W ∈ R^{V×H} with an implicit A⊗B.
+    # Factor dimensions are derived automatically: find the most balanced factor
+    # pair (p, m) of vocab_size (p ≈ m ≈ √V) and (q, n) of d_model (q ≈ n ≈ √H).
+    # Forward: reshape h → H_mat ∈ R^{n×q}, compute Z_mat = B H_mat A^T, flatten.
+    # W never materialises in memory; avoids rank suppression during back-prop.
+    lm_head_kronecker: bool = False    # Replace lm_head with Kronecker-factored projection
+
     # Kronecker-factored MLP projections
     kronecker_mlp: bool = False        # Replace nn.Linear in MLP/FFN layers with KroneckerLinear
     kronecker_delta_mlp: bool = False      # Replace up_proj/down_proj with KroneckerDeltaLinear

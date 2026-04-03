@@ -9,6 +9,7 @@ from rbf_ffn.models.transformer_block import (
     PolarMLPBlock, PolarAttnBlock, PolarFullBlock,
     KromHCWrapper,
 )
+from rbf_ffn.models.kronecker_linear import KroneckerLMHead
 
 
 def build_optimizer_groups(
@@ -61,7 +62,12 @@ class CausalLM(nn.Module):
     """
     Causal language model.
 
-        token_embedding → N × Block → RMSNorm → lm_head (weight-tied)
+        token_embedding → N × Block → RMSNorm → lm_head
+
+    lm_head variants (selected by cfg):
+        default (tie_embeddings=True)  → nn.Linear, weight tied to token_embedding
+        tie_embeddings=False           → nn.Linear, independent weight (Muon-trained)
+        lm_head_kronecker=True         → KroneckerLMHead; tie_embeddings is ignored
 
     Block type is selected by cfg.model_type:
         "baseline"       → LlamaBlock          (SwiGLU FFN)
@@ -106,8 +112,12 @@ class CausalLM(nn.Module):
         self.blocks = nn.ModuleList([make_block() for _ in range(cfg.n_layers)])
         self.norm = nn.RMSNorm(cfg.d_model)
         self.pre_lm_head_silu = cfg.pre_lm_head_silu
-        self.lm_head = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)
-        self.lm_head.weight = self.token_embedding.weight  # weight tying: shares the embedding matrix
+        if cfg.lm_head_kronecker:
+            self.lm_head = KroneckerLMHead(cfg.d_model, cfg.vocab_size)
+        else:
+            self.lm_head = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)
+            if cfg.tie_embeddings:
+                self.lm_head.weight = self.token_embedding.weight
 
     def forward(self, tokens: torch.Tensor) -> tuple[torch.Tensor, list]:
         """

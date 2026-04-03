@@ -75,6 +75,48 @@ class KroneckerLinear(nn.Module):
                 f'factors=(in:{self.in1}x{self.in2}, out:{self.out1}x{self.out2})')
 
 
+class KroneckerLMHead(nn.Module):
+    """
+    Memory-efficient Kronecker-factored LM head.
+
+    W ∈ R^{V×H} is never materialised. Instead stores A ∈ R^{p×q} and B ∈ R^{m×n}
+    where (p, m) = _get_factors(vocab_size) and (q, n) = _get_factors(d_model).
+
+    Forward (mathematically equivalent to z = Wh):
+        H_mat = h.reshape(..., n, q)      # R^{n×q}
+        Z_mat = B @ H_mat @ A.T           # R^{m×p}
+        z     = Z_mat.reshape(..., m*p)   # R^V
+
+    Both A and B are 2-D and routed to Muon by the default ndim==2 rule.
+    Avoids rank suppression during back-prop by keeping the two factors independent.
+    """
+
+    def __init__(self, d_model: int, vocab_size: int):
+        super().__init__()
+        self.p, self.m = _get_factors(vocab_size)
+        self.q, self.n = _get_factors(d_model)
+        self.A = nn.Parameter(torch.empty(self.p, self.q))  # vocab-outer × hidden-outer
+        self.B = nn.Parameter(torch.empty(self.m, self.n))  # vocab-inner × hidden-inner
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        # Var(A)*Var(B) = 1/H so that A⊗B has Kaiming-uniform variance.
+        bound = 1.0 / math.sqrt(self.q * self.n)
+        factor_bound = math.sqrt(bound)
+        nn.init.uniform_(self.A, -factor_bound, factor_bound)
+        nn.init.uniform_(self.B, -factor_bound, factor_bound)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        *batch, _ = x.shape
+        H_mat = x.reshape(*batch, self.n, self.q)      # (..., n, q)
+        Z_mat = self.B @ H_mat @ self.A.T              # (..., m, p)
+        return Z_mat.reshape(*batch, self.m * self.p)  # (..., V)
+
+    def extra_repr(self) -> str:
+        return (f'd_model={self.q * self.n}, vocab_size={self.p * self.m}, '
+                f'factors=(vocab:{self.p}x{self.m}, hidden:{self.q}x{self.n})')
+
+
 class KroneckerDeltaLinear(nn.Module):
     """
     Drop-in replacement for nn.Linear using a Kronecker-factored core

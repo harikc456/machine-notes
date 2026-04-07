@@ -29,13 +29,6 @@ _CACHE_DIR = Path(__file__).parent.parent / "rbf_ffn" / "data_cache"
 _VOCAB_SIZE = 65536
 
 
-def _load_wikitext_train_texts() -> list[str]:
-    """Download WikiText-103 train split and return non-empty text rows."""
-    from datasets import load_dataset
-    dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
-    return [row["text"] for row in dataset if row["text"].strip()]
-
-
 def _load_wikitext_split_texts(split: str) -> list[str]:
     """Download a WikiText-103 split and return non-empty text rows."""
     from datasets import load_dataset
@@ -58,7 +51,7 @@ def _build_tokenizer(cache_dir: Path) -> ByteLevelBPETokenizer:
         return ByteLevelBPETokenizer(str(vocab_file), str(merges_file))
 
     print("Training BPE tokenizer (vocab_size=65536) on WikiText-103 train split…")
-    texts = _load_wikitext_train_texts()
+    texts = _load_wikitext_split_texts("train")
     tokenizer = ByteLevelBPETokenizer()
     tokenizer.train_from_iterator(
         texts,
@@ -78,10 +71,8 @@ def _load_split(split: str, seq_len: int, tokenizer: ByteLevelBPETokenizer) -> t
 
     Builds and caches to _CACHE_DIR/{split}_bpe65536_{seq_len}.pt on first call.
     """
-    import sigreg.data as _mod
-    cache_dir = _mod._CACHE_DIR
-    cache_dir.mkdir(exist_ok=True)
-    cache_file = cache_dir / f"{split}_bpe65536_{seq_len}.pt"
+    _CACHE_DIR.mkdir(exist_ok=True)
+    cache_file = _CACHE_DIR / f"{split}_bpe65536_{seq_len}.pt"
 
     if cache_file.exists():
         return torch.load(cache_file, weights_only=True)

@@ -35,7 +35,7 @@ def test_build_tokenizer_trains_and_saves_when_no_cache(tmp_path):
     mock_tok = MagicMock()
 
     with patch("sigreg.data.ByteLevelBPETokenizer", return_value=mock_tok) as MockTok, \
-         patch("sigreg.data._load_wikitext_train_texts", return_value=["hello world", "foo bar"]):
+         patch("sigreg.data._load_wikitext_split_texts", return_value=["hello world", "foo bar"]):
         from sigreg.data import _build_tokenizer
         result = _build_tokenizer(tmp_path)
 

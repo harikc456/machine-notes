@@ -90,12 +90,15 @@ Experiment outputs (metrics, config copy, checkpoints) are written to `sigreg/ex
 ```
 sigreg/
 ├── config.py           # SIGRegConfig dataclass and YAML loader
+├── data.py             # BPE-65536 tokenizer (lazy build) + WikiText-103 dataloaders
 ├── losses.py           # sigreg_strong_loss, sigreg_weak_loss, sigreg_loss
 ├── train.py            # Training loop
 ├── models/
 │   ├── block.py        # PlainBlock (CausalSelfAttention + SwiGLUFFN, no residual/norm)
 │   └── model.py        # SIGRegCausalLM, build_optimizer_groups
-└── configs/
-    ├── baseline.yaml   # Strong loss, λ=0.1
-    └── weak_loss.yaml  # Weak loss, λ=0.01
+├── configs/
+│   ├── baseline.yaml   # Strong loss, λ=0.1
+│   └── weak_loss.yaml  # Weak loss, λ=0.01
+└── tests/
+    └── test_data.py    # Unit tests for data.py (offline, no network)
 ```

@@ -4,7 +4,7 @@ Experiments with transformers trained under an auxiliary **SIGReg** (Signature R
 
 ## Architecture
 
-Unlike the Llama-style blocks in `rbf_ffn`, these transformers have **no residual connections and no normalisation layers**:
+Unlike the Llama-style blocks in `rbf_ffn`, these transformers have **no residual connections and no normalisation layers by default**:
 
 ```
 token_embedding → [attn → ffn] × N → lm_head
@@ -65,6 +65,8 @@ Experiment outputs (metrics, config copy, checkpoints) are written to `sigreg/ex
 | `ffn_hidden` | 688 | SwiGLU hidden dimension |
 | `dropout` | 0.0 | Dropout probability (typically 0 — no norms to pair with) |
 | `qk_norm` | `true` | QK normalisation (prevents attention entropy collapse without LayerNorm) |
+| `use_residual` | `false` | Add skip connections around attn and ffn |
+| `norm_type` | `"none"` | Norm layer: `"none"` \| `"rmsnorm"` \| `"layernorm"` |
 | `seq_len` | 512 | Sequence length |
 | `vocab_size` | 65536 | Vocabulary size — matches the custom BPE-65536 tokeniser trained in `sigreg/data.py` |
 | `tie_embeddings` | `true` | Tie lm_head weights to token embedding |
@@ -94,7 +96,7 @@ sigreg/
 ├── losses.py           # sigreg_strong_loss, sigreg_weak_loss, sigreg_loss
 ├── train.py            # Training loop
 ├── models/
-│   ├── block.py        # PlainBlock (CausalSelfAttention + SwiGLUFFN, no residual/norm)
+│   ├── block.py        # TransformerBlock (CausalSelfAttention + SwiGLUFFN, optional residual/norm)
 │   └── model.py        # SIGRegCausalLM, build_optimizer_groups
 ├── configs/
 │   ├── baseline.yaml   # Strong loss, λ=0.1

@@ -5,8 +5,8 @@ Causal language model for SIGReg experiments.
 Architecture:
     token_embedding → N × TransformerBlock → lm_head
 
-No residual connections. No RMSNorm. No pre-norm, no post-norm.
-Each TransformerBlock fully transforms its input: x = ffn(attn(x)).
+Residual connections and normalisation are controlled by cfg.use_residual
+and cfg.norm_type (default: no residuals, no norm).
 
 forward() returns (logits, hidden_states):
     logits:        (B, N, vocab_size)
@@ -45,7 +45,7 @@ class SIGRegCausalLM(nn.Module):
         self.cfg = cfg
         self.token_embedding = nn.Embedding(cfg.vocab_size, cfg.d_model)
         self.blocks = nn.ModuleList([TransformerBlock(cfg) for _ in range(cfg.n_layers)])
-        # No final normalisation — consistent with no-norm philosophy.
+        # No final normalisation layer after the last block.
         # lm_head projects features → logits.
         self.lm_head = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)
         if cfg.tie_embeddings:

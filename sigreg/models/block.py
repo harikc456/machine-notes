@@ -1,13 +1,14 @@
 # sigreg/models/block.py
 """
-Plain transformer block — no residual connections, no normalisation layers.
+Transformer block with optional residual connections and normalisation layers.
 
-Architecture per block:
-    x = ffn(attn(x))
+Architecture is controlled by cfg.use_residual and cfg.norm_type:
+    use_residual=False, norm_type="none"  →  x = ffn(attn(x))
+    use_residual=True,  norm_type="none"  →  x = x + attn(x); x = x + ffn(x)
+    use_residual=False, norm_type=*       →  x = ffn(attn(norm(x)))
+    use_residual=True,  norm_type=*       →  x = x + attn(norm(x)); x = x + ffn(norm(x))
 
-This is intentionally minimal: removing residual streams and norms forces the
-network to learn through its weights alone, making hidden-state distributions
-more tractable targets for SIGReg regularisation.
+See TransformerBlock for full details.
 """
 import torch
 import torch.nn as nn

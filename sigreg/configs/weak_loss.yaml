@@ -1,0 +1,29 @@
+# Plain transformer + SIGReg weak loss (covariance → identity).
+# Isolates the effect of second-moment spherical regularisation only.
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.0
+qk_norm: true
+vocab_size: 65536
+seq_len: 512
+tie_embeddings: true
+use_residual: false
+norm_type: "none"
+
+# SIGReg
+sigreg_loss_type: weak
+sigreg_weight: 0.01        # weak loss is larger in magnitude than strong; use smaller weight
+sigreg_sketch_dim: 64
+sigreg_layers: all
+
+# Training
+seed: 42
+n_epochs: 3
+batch_size: 16
+lr: 0.0003
+weight_decay: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+grad_accum_steps: 1

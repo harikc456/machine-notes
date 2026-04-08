@@ -1,0 +1,29 @@
+# Plain transformer (no residual, no RMSNorm) + SIGReg strong loss.
+# Baseline for studying ECF-based Gaussian regularisation of hidden states.
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.0
+qk_norm: true
+vocab_size: 65536
+seq_len: 512
+tie_embeddings: false
+use_residual: false
+norm_type: "none"
+
+# SIGReg
+sigreg_loss_type: strong   # "strong" | "weak" | "both"
+sigreg_weight: 0.1
+sigreg_sketch_dim: 64
+sigreg_layers: all         # "all" | "last"
+
+# Training
+seed: 42
+n_epochs: 3
+batch_size: 16
+lr: 0.0003
+weight_decay: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+grad_accum_steps: 1

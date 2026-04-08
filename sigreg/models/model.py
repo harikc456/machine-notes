@@ -3,10 +3,10 @@
 Causal language model for SIGReg experiments.
 
 Architecture:
-    token_embedding → N × PlainBlock → lm_head
+    token_embedding → N × TransformerBlock → lm_head
 
 No residual connections. No RMSNorm. No pre-norm, no post-norm.
-Each PlainBlock fully transforms its input: x = ffn(attn(x)).
+Each TransformerBlock fully transforms its input: x = ffn(attn(x)).
 
 forward() returns (logits, hidden_states):
     logits:        (B, N, vocab_size)

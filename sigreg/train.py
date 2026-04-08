@@ -160,7 +160,7 @@ def train(
 
             torch.compiler.cudagraph_mark_step_begin()
             with torch.autocast("cuda", dtype=torch.bfloat16, enabled=(device.type == "cuda")):
-                logits, hidden_states = model(inputs, collect_hidden=True)
+                logits, hidden_states = model(inputs, collect_hidden=(cfg.sigreg_weight > 0.0))
 
                 ce_loss = F.cross_entropy(
                     logits.reshape(-1, logits.size(-1)),

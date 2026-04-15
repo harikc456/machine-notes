@@ -270,3 +270,10 @@ class CausalSelfAttention(nn.Module):
             out = F.scaled_dot_product_attention(q, k, v, dropout_p=dp, is_causal=True)
         out = out.transpose(1, 2).contiguous().view(B, N, D)
         return self.o_proj(out)
+
+
+ATTN_REGISTRY: dict[str, type] = {
+    "standard": CausalSelfAttention,
+    "polar":    PolarAttention,
+    "xsa":      ExclusiveSelfAttention,
+}

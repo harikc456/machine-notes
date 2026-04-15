@@ -86,3 +86,23 @@ def test_attn_flash_flag_matches_hardware(cfg):
     attn = CausalSelfAttention(cfg)
     expected = torch.cuda.is_available() and torch.backends.cuda.flash_sdp_enabled()
     assert attn._use_flash == expected
+
+
+# ── ATTN_REGISTRY ─────────────────────────────────────────────────────────────
+
+def test_attn_registry_keys():
+    from rbf_ffn.models.attention import ATTN_REGISTRY
+    assert set(ATTN_REGISTRY.keys()) == {"standard", "polar", "xsa"}
+
+
+def test_attn_registry_standard_is_causal_self_attention():
+    from rbf_ffn.models.attention import ATTN_REGISTRY
+    assert ATTN_REGISTRY["standard"] is CausalSelfAttention
+
+
+def test_attn_registry_instantiates(cfg):
+    from rbf_ffn.models.attention import ATTN_REGISTRY
+    for key, cls in ATTN_REGISTRY.items():
+        attn = cls(cfg)
+        x = torch.randn(B, N, D)
+        assert attn(x).shape == (B, N, D), f"Registry key '{key}' produced wrong shape"

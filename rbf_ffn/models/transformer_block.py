@@ -2,16 +2,30 @@
 import torch
 import torch.nn as nn
 from rbf_ffn.config import ModelConfig
-from rbf_ffn.models.attention import CausalSelfAttention, ExclusiveSelfAttention, PolarAttention
+from rbf_ffn.models.attention import ATTN_REGISTRY
 from rbf_ffn.models.llama_ffn import SwiGLUFFN
 from rbf_ffn.models.rational_ffn import RationalFFN, RationalGatedFFN, PFDRationalFFN, PFDRationalGatedFFN, FirstOrderPFDRationalFFN
 from rbf_ffn.models.polar_ffn import AdaptivePolarMLP
 from rbf_ffn.models.head_mixer import KromHCHeadMixer
 
+FFN_REGISTRY: dict[str, type] = {
+    "swiglu":                  SwiGLUFFN,
+    "rational":                RationalFFN,
+    "rationalglu":             RationalGatedFFN,
+    "pfd_rational":            PFDRationalFFN,
+    "pfd_rationalglu":         PFDRationalGatedFFN,
+    "first_order_pfd_rational": FirstOrderPFDRationalFFN,
+    "polar":                   AdaptivePolarMLP,
+}
 
-class LlamaBlock(nn.Module):
+
+class TransformerBlock(nn.Module):
     """
-    Llama-style transformer block with SwiGLU FFN.
+    Composable causal transformer block.
+
+    Builds attention and FFN from registries keyed by cfg.attn_type and
+    cfg.ffn_type, so any attention variant can be paired with any FFN variant
+    without additional block subclasses.
 
         x = x + attn(norm1(x))
         x = x + ffn(norm2(x))
@@ -21,224 +35,18 @@ class LlamaBlock(nn.Module):
 
     def __init__(self, cfg: ModelConfig):
         super().__init__()
+        if cfg.attn_type not in ATTN_REGISTRY:
+            raise ValueError(
+                f"Unknown attn_type '{cfg.attn_type}'. Valid: {sorted(ATTN_REGISTRY)}"
+            )
+        if cfg.ffn_type not in FFN_REGISTRY:
+            raise ValueError(
+                f"Unknown ffn_type '{cfg.ffn_type}'. Valid: {sorted(FFN_REGISTRY)}"
+            )
         self.norm1 = nn.RMSNorm(cfg.d_model)
-        self.attn  = CausalSelfAttention(cfg)
+        self.attn  = ATTN_REGISTRY[cfg.attn_type](cfg)
         self.norm2 = nn.RMSNorm(cfg.d_model)
-        self.ffn   = SwiGLUFFN(cfg)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.norm1(x))
-        x = x + self.ffn(self.norm2(x))
-        return x
-
-
-class RationalBlock(nn.Module):
-    """
-    Transformer block with RationalFFN replacing the MLP.
-
-        x = x + attn(norm1(x))
-        x = x + ffn(norm2(x))    ← ffn is RationalFFN
-
-    Pre-norm with RMSNorm. No bias anywhere.
-    """
-
-    def __init__(self, cfg: ModelConfig):
-        super().__init__()
-        self.norm1 = nn.RMSNorm(cfg.d_model)
-        self.attn  = CausalSelfAttention(cfg)
-        self.norm2 = nn.RMSNorm(cfg.d_model)
-        self.ffn   = RationalFFN(cfg)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.norm1(x))
-        x = x + self.ffn(self.norm2(x))
-        return x
-
-
-class RationalGLUBlock(nn.Module):
-    """
-    Transformer block with RationalGatedFFN replacing the MLP.
-
-        x = x + attn(norm1(x))
-        x = x + ffn(norm2(x))    ← ffn is RationalGatedFFN
-
-    Pre-norm with RMSNorm. No bias anywhere.
-    """
-
-    def __init__(self, cfg: ModelConfig):
-        super().__init__()
-        self.norm1 = nn.RMSNorm(cfg.d_model)
-        self.attn  = CausalSelfAttention(cfg)
-        self.norm2 = nn.RMSNorm(cfg.d_model)
-        self.ffn   = RationalGatedFFN(cfg)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.norm1(x))
-        x = x + self.ffn(self.norm2(x))
-        return x
-
-
-class PFDRationalBlock(nn.Module):
-    """
-    Transformer block with PFDRationalFFN replacing the MLP.
-
-        x = x + attn(norm1(x))
-        x = x + ffn(norm2(x))    ← ffn is PFDRationalFFN
-
-    Pre-norm with RMSNorm. No bias anywhere.
-    """
-
-    def __init__(self, cfg: ModelConfig):
-        super().__init__()
-        self.norm1 = nn.RMSNorm(cfg.d_model)
-        self.attn  = CausalSelfAttention(cfg)
-        self.norm2 = nn.RMSNorm(cfg.d_model)
-        self.ffn   = PFDRationalFFN(cfg, n=cfg.pfd_n)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.norm1(x))
-        x = x + self.ffn(self.norm2(x))
-        return x
-
-
-class PFDRationalGLUBlock(nn.Module):
-    """
-    Transformer block with PFDRationalGatedFFN replacing the MLP.
-
-        x = x + attn(norm1(x))
-        x = x + ffn(norm2(x))    ← ffn is PFDRationalGatedFFN
-
-    Pre-norm with RMSNorm. No bias anywhere.
-    """
-
-    def __init__(self, cfg: ModelConfig):
-        super().__init__()
-        self.norm1 = nn.RMSNorm(cfg.d_model)
-        self.attn  = CausalSelfAttention(cfg)
-        self.norm2 = nn.RMSNorm(cfg.d_model)
-        self.ffn   = PFDRationalGatedFFN(cfg, n=cfg.pfd_n)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.norm1(x))
-        x = x + self.ffn(self.norm2(x))
-        return x
-
-
-class FirstOrderPFDRationalBlock(nn.Module):
-    """
-    Transformer block with FirstOrderPFDRationalFFN replacing the MLP.
-
-        x = x + attn(norm1(x))
-        x = x + ffn(norm2(x))    ← ffn is FirstOrderPFDRationalFFN
-
-    Pre-norm with RMSNorm. No bias anywhere.
-    """
-
-    def __init__(self, cfg: ModelConfig):
-        super().__init__()
-        self.norm1 = nn.RMSNorm(cfg.d_model)
-        self.attn  = CausalSelfAttention(cfg)
-        self.norm2 = nn.RMSNorm(cfg.d_model)
-        self.ffn   = FirstOrderPFDRationalFFN(cfg, n=cfg.pfd_n)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.norm1(x))
-        x = x + self.ffn(self.norm2(x))
-        return x
-
-
-class ExclusiveAttnBlock(nn.Module):
-    """
-    Ablation block: ExclusiveSelfAttention + SwiGLU FFN.
-
-    Replaces CausalSelfAttention with ExclusiveSelfAttention, keeping the FFN
-    unchanged so that the effect of the XSA mechanism can be isolated.
-
-        x = x + attn(norm1(x))   ← ExclusiveSelfAttention
-        x = x + ffn(norm2(x))    ← SwiGLUFFN
-
-    Pre-norm with RMSNorm. No bias anywhere.
-    """
-
-    def __init__(self, cfg: ModelConfig):
-        super().__init__()
-        self.norm1 = nn.RMSNorm(cfg.d_model)
-        self.attn  = ExclusiveSelfAttention(cfg)
-        self.norm2 = nn.RMSNorm(cfg.d_model)
-        self.ffn   = SwiGLUFFN(cfg)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.norm1(x))
-        x = x + self.ffn(self.norm2(x))
-        return x
-
-
-class PolarAttnBlock(nn.Module):
-    """
-    Ablation block: PolarAttention + SwiGLU FFN.
-
-    Replaces the standard CausalSelfAttention with PolarAttention while
-    keeping the SwiGLU FFN unchanged, isolating the effect of the polar
-    attention mechanism.
-
-        x = x + attn(norm1(x))   ← attn is PolarAttention
-        x = x + ffn(norm2(x))    ← ffn is SwiGLUFFN
-
-    Pre-norm with RMSNorm. No bias anywhere.
-    """
-
-    def __init__(self, cfg: ModelConfig):
-        super().__init__()
-        self.norm1 = nn.RMSNorm(cfg.d_model)
-        self.attn  = PolarAttention(cfg)
-        self.norm2 = nn.RMSNorm(cfg.d_model)
-        self.ffn   = SwiGLUFFN(cfg)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.norm1(x))
-        x = x + self.ffn(self.norm2(x))
-        return x
-
-
-class PolarFullBlock(nn.Module):
-    """
-    Fully polar transformer block: PolarAttention + AdaptivePolarMLP.
-
-        x = x + attn(norm1(x))   ← PolarAttention
-        x = x + ffn(norm2(x))    ← AdaptivePolarMLP
-
-    Pre-norm with RMSNorm. No bias anywhere.
-    """
-
-    def __init__(self, cfg: ModelConfig):
-        super().__init__()
-        self.norm1 = nn.RMSNorm(cfg.d_model)
-        self.attn  = PolarAttention(cfg)
-        self.norm2 = nn.RMSNorm(cfg.d_model)
-        self.ffn   = AdaptivePolarMLP(cfg)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.norm1(x))
-        x = x + self.ffn(self.norm2(x))
-        return x
-
-
-class PolarMLPBlock(nn.Module):
-    """
-    Transformer block with AdaptivePolarMLP replacing the FFN.
-
-        x = x + attn(norm1(x))
-        x = x + ffn(norm2(x))    ← ffn is AdaptivePolarMLP
-
-    Pre-norm with RMSNorm. No bias anywhere.
-    """
-
-    def __init__(self, cfg: ModelConfig):
-        super().__init__()
-        self.norm1 = nn.RMSNorm(cfg.d_model)
-        self.attn  = CausalSelfAttention(cfg)
-        self.norm2 = nn.RMSNorm(cfg.d_model)
-        self.ffn   = AdaptivePolarMLP(cfg)
+        self.ffn   = FFN_REGISTRY[cfg.ffn_type](cfg)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x + self.attn(self.norm1(x))

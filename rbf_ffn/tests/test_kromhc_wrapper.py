@@ -2,14 +2,14 @@
 import torch
 import pytest
 from rbf_ffn.config import ModelConfig
-from rbf_ffn.models.transformer_block import LlamaBlock, KromHCWrapper
+from rbf_ffn.models.transformer_block import TransformerBlock, KromHCWrapper
 
 D, H, B, N = 32, 4, 2, 16
 
 
 def make_wrapper() -> KromHCWrapper:
     cfg = ModelConfig(d_model=D, n_heads=H, dropout=0.0)
-    inner = LlamaBlock(cfg)
+    inner = TransformerBlock(cfg)
     return KromHCWrapper(inner, cfg)
 
 
@@ -49,7 +49,7 @@ def test_zero_mixer_proj_is_identity_of_inner_block():
     """When mixer_proj weights are zero, wrapper output == inner_block output.
     dropout=0.0 is required for the deterministic equality assertion to hold."""
     cfg = ModelConfig(d_model=D, n_heads=H, dropout=0.0)
-    inner = LlamaBlock(cfg)
+    inner = TransformerBlock(cfg)
     wrapper = KromHCWrapper(inner, cfg)
     with torch.no_grad():
         wrapper.mixer_proj.weight.zero_()

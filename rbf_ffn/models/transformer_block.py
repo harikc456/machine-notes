@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 from rbf_ffn.config import ModelConfig
-from rbf_ffn.models.attention import CausalSelfAttention, PolarAttention
+from rbf_ffn.models.attention import CausalSelfAttention, ExclusiveSelfAttention, PolarAttention
 from rbf_ffn.models.llama_ffn import SwiGLUFFN
 from rbf_ffn.models.rational_ffn import RationalFFN, RationalGatedFFN, PFDRationalFFN, PFDRationalGatedFFN, FirstOrderPFDRationalFFN
 from rbf_ffn.models.polar_ffn import AdaptivePolarMLP
@@ -140,6 +140,32 @@ class FirstOrderPFDRationalBlock(nn.Module):
         self.attn  = CausalSelfAttention(cfg)
         self.norm2 = nn.RMSNorm(cfg.d_model)
         self.ffn   = FirstOrderPFDRationalFFN(cfg, n=cfg.pfd_n)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x + self.attn(self.norm1(x))
+        x = x + self.ffn(self.norm2(x))
+        return x
+
+
+class ExclusiveAttnBlock(nn.Module):
+    """
+    Ablation block: ExclusiveSelfAttention + SwiGLU FFN.
+
+    Replaces CausalSelfAttention with ExclusiveSelfAttention, keeping the FFN
+    unchanged so that the effect of the XSA mechanism can be isolated.
+
+        x = x + attn(norm1(x))   ← ExclusiveSelfAttention
+        x = x + ffn(norm2(x))    ← SwiGLUFFN
+
+    Pre-norm with RMSNorm. No bias anywhere.
+    """
+
+    def __init__(self, cfg: ModelConfig):
+        super().__init__()
+        self.norm1 = nn.RMSNorm(cfg.d_model)
+        self.attn  = ExclusiveSelfAttention(cfg)
+        self.norm2 = nn.RMSNorm(cfg.d_model)
+        self.ffn   = SwiGLUFFN(cfg)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x + self.attn(self.norm1(x))

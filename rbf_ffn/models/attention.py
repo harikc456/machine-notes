@@ -136,6 +136,84 @@ class PolarAttention(nn.Module):
         return self.o_proj(out)
 
 
+class ExclusiveSelfAttention(nn.Module):
+    """
+    Exclusive Self-Attention (XSA).
+
+    Runs standard causal multi-head attention to produce Y, then projects each
+    output vector onto the subspace orthogonal to the corresponding normalised
+    value vector:
+
+        Vn = V / ||V||          (per head, per position)
+        Z  = Y - (Y · Vn) Vn   (Gram-Schmidt step)
+
+    The subtraction removes the component of the attention output that lies in
+    the direction of the value, so each head's output is "exclusive" of its own
+    value direction.  The output projection is then applied to Z.
+
+    Supports RoPE, QK-norm, and optional SiLU on projections — same flags as
+    CausalSelfAttention.
+
+    Input/output: (B, N, d_model)
+    """
+
+    def __init__(self, cfg: ModelConfig):
+        super().__init__()
+        D, H = cfg.d_model, cfg.n_heads
+        assert D % H == 0, f"d_model ({D}) must be divisible by n_heads ({H})"
+        self.n_heads  = H
+        self.head_dim = D // H
+        self.q_proj = nn.Linear(D, D, bias=False)
+        self.k_proj = nn.Linear(D, D, bias=False)
+        self.v_proj = nn.Linear(D, D, bias=False)
+        self.o_proj = nn.Linear(D, D, bias=False)
+        self.rope = RotaryEmbedding(self.head_dim)
+        self._dropout  = cfg.dropout
+        self._use_flash = _flash_available()
+        self._qk_norm  = cfg.qk_norm
+        self._qkv_silu = cfg.qkv_silu
+        if self._qk_norm:
+            self.q_norm = nn.RMSNorm(self.head_dim)
+            self.k_norm = nn.RMSNorm(self.head_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """x: (B, N, d_model)"""
+        B, N, D = x.shape
+
+        def split_heads(t: torch.Tensor) -> torch.Tensor:
+            return t.view(B, N, self.n_heads, self.head_dim).transpose(1, 2)
+
+        q_raw = self.q_proj(x)
+        k_raw = self.k_proj(x)
+        v_raw = self.v_proj(x)
+        if self._qkv_silu:
+            q_raw = F.silu(q_raw)
+            k_raw = F.silu(k_raw)
+            v_raw = F.silu(v_raw)
+
+        q = self.rope(split_heads(q_raw))   # (B, H, N, head_dim)
+        k = self.rope(split_heads(k_raw))
+        v = split_heads(v_raw)
+
+        if self._qk_norm:
+            q = self.q_norm(q)
+            k = self.k_norm(k)
+
+        dp = self._dropout if self.training else 0.0
+        if self._use_flash:
+            with sdpa_kernel(_FLASH_BACKENDS):
+                Y = F.scaled_dot_product_attention(q, k, v, dropout_p=dp, is_causal=True)
+        else:
+            Y = F.scaled_dot_product_attention(q, k, v, dropout_p=dp, is_causal=True)
+
+        # XSA: subtract the component of Y along the normalised value direction
+        Vn = F.normalize(v, dim=-1)                                  # (B, H, N, head_dim)
+        Z  = Y - (Y * Vn).sum(dim=-1, keepdim=True) * Vn            # (B, H, N, head_dim)
+
+        out = Z.transpose(1, 2).contiguous().view(B, N, D)
+        return self.o_proj(out)
+
+
 class CausalSelfAttention(nn.Module):
     """
     Multi-head causal self-attention with RoPE.

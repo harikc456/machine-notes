@@ -7,6 +7,7 @@ from rbf_ffn.models.transformer_block import (
     LlamaBlock, RationalBlock, RationalGLUBlock,
     PFDRationalBlock, PFDRationalGLUBlock, FirstOrderPFDRationalBlock,
     PolarMLPBlock, PolarAttnBlock, PolarFullBlock,
+    ExclusiveAttnBlock,
     KromHCWrapper,
 )
 from rbf_ffn.models.kronecker_linear import KroneckerLMHead
@@ -79,6 +80,7 @@ class CausalLM(nn.Module):
         "polar_mlp"      → PolarMLPBlock       (AdaptivePolarMLP)
         "polar_attn"     → PolarAttnBlock      (PolarAttention + SwiGLU)
         "polar_full"     → PolarFullBlock      (PolarAttention + AdaptivePolarMLP)
+        "xsa"            → ExclusiveAttnBlock  (ExclusiveSelfAttention + SwiGLU)
 
     If cfg.use_kromhc=True, each block is wrapped in KromHCWrapper.
 
@@ -99,6 +101,7 @@ class CausalLM(nn.Module):
             "polar_mlp":       PolarMLPBlock,
             "polar_attn":      PolarAttnBlock,
             "polar_full":      PolarFullBlock,
+            "xsa":             ExclusiveAttnBlock,
         }[cfg.model_type]
 
         def make_block():

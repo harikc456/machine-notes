@@ -3,13 +3,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 from rbf_ffn.config import ModelConfig
-from rbf_ffn.models.transformer_block import (
-    LlamaBlock, RationalBlock, RationalGLUBlock,
-    PFDRationalBlock, PFDRationalGLUBlock, FirstOrderPFDRationalBlock,
-    PolarMLPBlock, PolarAttnBlock, PolarFullBlock,
-    ExclusiveAttnBlock,
-    KromHCWrapper,
-)
+from rbf_ffn.models.transformer_block import TransformerBlock, KromHCWrapper
 from rbf_ffn.models.kronecker_linear import KroneckerLMHead
 
 
@@ -63,26 +57,15 @@ class CausalLM(nn.Module):
     """
     Causal language model.
 
-        token_embedding → N × Block → RMSNorm → lm_head
+        token_embedding → N × TransformerBlock → RMSNorm → lm_head
+
+    Block type is controlled by cfg.attn_type and cfg.ffn_type (see ATTN_REGISTRY
+    and FFN_REGISTRY). If cfg.use_kromhc=True, each block is wrapped in KromHCWrapper.
 
     lm_head variants (selected by cfg):
         default (tie_embeddings=True)  → nn.Linear, weight tied to token_embedding
         tie_embeddings=False           → nn.Linear, independent weight (Muon-trained)
         lm_head_kronecker=True         → KroneckerLMHead; tie_embeddings is ignored
-
-    Block type is selected by cfg.model_type:
-        "baseline"       → LlamaBlock          (SwiGLU FFN)
-        "rational"       → RationalBlock       (RationalFFN)
-        "rationalglu"    → RationalGLUBlock    (RationalGatedFFN)
-        "pfd_rational"   → PFDRationalBlock    (PFDRationalFFN)
-        "pfd_rationalglu"→ PFDRationalGLUBlock (PFDRationalGatedFFN)
-        "first_order_pfd_rational" → FirstOrderPFDRationalBlock (FirstOrderPFDRationalFFN)
-        "polar_mlp"      → PolarMLPBlock       (AdaptivePolarMLP)
-        "polar_attn"     → PolarAttnBlock      (PolarAttention + SwiGLU)
-        "polar_full"     → PolarFullBlock      (PolarAttention + AdaptivePolarMLP)
-        "xsa"            → ExclusiveAttnBlock  (ExclusiveSelfAttention + SwiGLU)
-
-    If cfg.use_kromhc=True, each block is wrapped in KromHCWrapper.
 
     forward() always returns (logits, hs):
         logits: (B, N, vocab_size)
@@ -91,21 +74,9 @@ class CausalLM(nn.Module):
 
     def __init__(self, cfg: ModelConfig):
         super().__init__()
-        BlockClass = {
-            "baseline":        LlamaBlock,
-            "rational":        RationalBlock,
-            "rationalglu":     RationalGLUBlock,
-            "pfd_rational":    PFDRationalBlock,
-            "pfd_rationalglu": PFDRationalGLUBlock,
-            "first_order_pfd_rational": FirstOrderPFDRationalBlock,
-            "polar_mlp":       PolarMLPBlock,
-            "polar_attn":      PolarAttnBlock,
-            "polar_full":      PolarFullBlock,
-            "xsa":             ExclusiveAttnBlock,
-        }[cfg.model_type]
 
         def make_block():
-            block = BlockClass(cfg)
+            block = TransformerBlock(cfg)
             if cfg.use_kromhc:
                 return KromHCWrapper(block, cfg)
             return block

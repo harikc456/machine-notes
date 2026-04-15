@@ -37,7 +37,9 @@ class ModelConfig:
 
     # Composable block type
     attn_type: str = "standard"    # "standard" | "polar" | "xsa"
-    ffn_type: str = "swiglu"       # "swiglu" | "rational" | "rationalglu" | "pfd_rational" | "pfd_rationalglu" | "first_order_pfd_rational" | "polar"
+    ffn_type: str = "swiglu"       # "swiglu" | "leaky_relu_sq" | "rational" | "rationalglu" | "pfd_rational" | "pfd_rationalglu" | "first_order_pfd_rational" | "polar"
+    orthogonal_ffn: bool = False        # Wrap FFN output to be orthogonal to input x
+    orthogonal_ffn_eps: float = 1e-8    # Epsilon for orthogonal projection stability
 
     # Deprecated: use attn_type + ffn_type instead.
     # If set, translated to attn_type + ffn_type in __post_init__.

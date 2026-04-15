@@ -3,13 +3,15 @@ import torch
 import torch.nn as nn
 from rbf_ffn.config import ModelConfig
 from rbf_ffn.models.attention import ATTN_REGISTRY
-from rbf_ffn.models.llama_ffn import SwiGLUFFN
+from rbf_ffn.models.llama_ffn import SwiGLUFFN, LeakyReLUSquaredFFN
 from rbf_ffn.models.rational_ffn import RationalFFN, RationalGatedFFN, PFDRationalFFN, PFDRationalGatedFFN, FirstOrderPFDRationalFFN
 from rbf_ffn.models.polar_ffn import AdaptivePolarMLP
 from rbf_ffn.models.head_mixer import KromHCHeadMixer
+from rbf_ffn.models.orthogonal_ffn import OrthogonalMLPWrapper
 
 FFN_REGISTRY: dict[str, type] = {
     "swiglu":                  SwiGLUFFN,
+    "leaky_relu_sq":           LeakyReLUSquaredFFN,
     "rational":                RationalFFN,
     "rationalglu":             RationalGatedFFN,
     "pfd_rational":            PFDRationalFFN,
@@ -46,7 +48,8 @@ class TransformerBlock(nn.Module):
         self.norm1 = nn.RMSNorm(cfg.d_model)
         self.attn  = ATTN_REGISTRY[cfg.attn_type](cfg)
         self.norm2 = nn.RMSNorm(cfg.d_model)
-        self.ffn   = FFN_REGISTRY[cfg.ffn_type](cfg)
+        ffn = FFN_REGISTRY[cfg.ffn_type](cfg)
+        self.ffn = OrthogonalMLPWrapper(ffn, eps=cfg.orthogonal_ffn_eps) if cfg.orthogonal_ffn else ffn
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x + self.attn(self.norm1(x))

@@ -4,7 +4,8 @@
 # Forward: reshape h → H_mat ∈ R^{n×q}, compute Z_mat = B H_mat A^T, flatten to logits.
 # Avoids rank suppression during back-prop by keeping the two factors independent.
 # tie_embeddings must be false — Kronecker lm_head has no single weight to tie.
-model_type: baseline
+attn_type: standard
+ffn_type: swiglu
 d_model: 256
 n_heads: 8
 n_layers: 6
@@ -19,7 +20,7 @@ linear_weight_norm_max_only: false
 tie_embeddings: false
 lm_head_kronecker: true
 seed: 42
-n_epochs: 10
+n_epochs: 3
 batch_size: 16
 muon_lr: 0.02
 adamw_lr: 0.0003

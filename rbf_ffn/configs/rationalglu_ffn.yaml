@@ -1,5 +1,6 @@
 # but present for a uniform config schema across all runs.
-model_type: rationalglu
+attn_type: standard
+ffn_type: rationalglu
 d_model: 256
 n_heads: 8
 n_layers: 6

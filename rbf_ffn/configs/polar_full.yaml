@@ -1,4 +1,5 @@
-model_type: polar_full
+attn_type: polar
+ffn_type: polar
 d_model: 256
 n_heads: 8
 n_layers: 6

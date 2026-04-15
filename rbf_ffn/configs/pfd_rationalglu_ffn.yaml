@@ -1,5 +1,6 @@
 # but present for a uniform config schema across all runs.
-model_type: pfd_rationalglu
+attn_type: standard
+ffn_type: pfd_rationalglu
 pfd_n: 4
 d_model: 256
 n_heads: 8

@@ -2,7 +2,8 @@
 # lm_head uses its own weight matrix instead of reusing token_embedding.weight.
 # Doubles the parameters at the embedding/output boundary; tests whether
 # weight tying is helping or hurting this model size.
-model_type: baseline
+attn_type: standard
+ffn_type: swiglu
 d_model: 256
 n_heads: 8
 n_layers: 6
@@ -16,7 +17,7 @@ linear_weight_norm_value: 2.0
 linear_weight_norm_max_only: false
 tie_embeddings: false
 seed: 42
-n_epochs: 10
+n_epochs: 3
 batch_size: 16
 muon_lr: 0.02
 adamw_lr: 0.0003

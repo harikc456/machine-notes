@@ -1,4 +1,5 @@
-model_type: first_order_pfd_rational
+attn_type: standard
+ffn_type: first_order_pfd_rational
 pfd_n: 4
 d_model: 256
 n_heads: 8

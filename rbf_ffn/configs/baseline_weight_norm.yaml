@@ -1,7 +1,8 @@
 # Llama SwiGLU baseline with linear weight normalisation (target norm = 2.0).
 # All linear layer weight rows are projected to L2 norm 2.0 after every
 # optimizer step. The lm_head (weight-tied to the token embedding) is excluded.
-model_type: baseline
+attn_type: standard
+ffn_type: swiglu
 d_model: 256
 n_heads: 8
 n_layers: 6

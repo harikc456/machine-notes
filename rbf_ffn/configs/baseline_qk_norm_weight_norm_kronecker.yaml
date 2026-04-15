@@ -1,6 +1,7 @@
 # Llama SwiGLU baseline with QK norm, linear weight normalisation, and
 # Kronecker-factored MLP projections.
-model_type: baseline
+attn_type: standard
+ffn_type: swiglu
 d_model: 256
 n_heads: 8
 n_layers: 6

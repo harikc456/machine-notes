@@ -3,7 +3,8 @@
 # adaptive_norm_late (layer L-1). A phase-aware derivative correction
 # tightens late layers when the generalization gap is actively growing.
 # Row norm floor of 1.0 is always enforced.
-model_type: baseline
+attn_type: standard
+ffn_type: swiglu
 d_model: 256
 n_heads: 8
 n_layers: 6

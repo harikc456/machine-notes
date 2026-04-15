@@ -1,5 +1,6 @@
 # Best FFN variant (PFDRationalGLU + QK norm + weight norm) combined with KromHC head mixing.
-model_type: pfd_rationalglu
+attn_type: standard
+ffn_type: pfd_rationalglu
 d_model: 256
 n_heads: 8
 n_layers: 6

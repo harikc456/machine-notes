@@ -162,7 +162,8 @@ def test_baseline_adaptive_weight_norm_yaml_loads():
     assert cfg.adaptive_norm_gamma == pytest.approx(0.3)
     assert cfg.adaptive_norm_beta  == pytest.approx(5.0)
     assert cfg.adaptive_norm_alpha == pytest.approx(0.9)
-    assert cfg.model_type == "baseline"
+    assert cfg.attn_type == "standard"
+    assert cfg.ffn_type == "swiglu"
     assert cfg.n_layers == 6
 
 

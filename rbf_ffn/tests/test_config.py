@@ -43,7 +43,9 @@ def test_load_config_empty_yaml_uses_defaults(tmp_path):
 
 def test_new_fields_have_correct_defaults():
     cfg = ModelConfig()
-    assert cfg.model_type == "baseline"
+    assert cfg.model_type is None
+    assert cfg.attn_type == "standard"
+    assert cfg.ffn_type == "swiglu"
     assert cfg.ffn_hidden == 688
     assert cfg.seed == 42
     assert cfg.n_epochs == 10
@@ -203,3 +205,69 @@ def test_use_kromhc_loads_from_yaml(tmp_path):
     cfg = load_config(path)
     assert cfg.use_kromhc is True
     assert cfg.kromhc_mixer_hidden == 64
+
+
+# ── attn_type + ffn_type composable fields ────────────────────────────────────
+
+def test_attn_type_default():
+    cfg = ModelConfig()
+    assert cfg.attn_type == "standard"
+
+
+def test_ffn_type_default():
+    cfg = ModelConfig()
+    assert cfg.ffn_type == "swiglu"
+
+
+def test_model_type_compat_baseline():
+    """model_type='baseline' must translate to attn_type='standard', ffn_type='swiglu'."""
+    cfg = ModelConfig(model_type="baseline")
+    assert cfg.attn_type == "standard"
+    assert cfg.ffn_type == "swiglu"
+
+
+def test_model_type_compat_rationalglu():
+    cfg = ModelConfig(model_type="rationalglu")
+    assert cfg.attn_type == "standard"
+    assert cfg.ffn_type == "rationalglu"
+
+
+def test_model_type_compat_polar_attn():
+    cfg = ModelConfig(model_type="polar_attn")
+    assert cfg.attn_type == "polar"
+    assert cfg.ffn_type == "swiglu"
+
+
+def test_model_type_compat_polar_full():
+    cfg = ModelConfig(model_type="polar_full")
+    assert cfg.attn_type == "polar"
+    assert cfg.ffn_type == "polar"
+
+
+def test_model_type_compat_polar_mlp():
+    cfg = ModelConfig(model_type="polar_mlp")
+    assert cfg.attn_type == "standard"
+    assert cfg.ffn_type == "polar"
+
+
+def test_model_type_compat_xsa():
+    cfg = ModelConfig(model_type="xsa")
+    assert cfg.attn_type == "xsa"
+    assert cfg.ffn_type == "swiglu"
+
+
+def test_explicit_attn_ffn_type_no_model_type():
+    """attn_type + ffn_type set directly, no model_type needed."""
+    cfg = ModelConfig(attn_type="xsa", ffn_type="pfd_rationalglu")
+    assert cfg.attn_type == "xsa"
+    assert cfg.ffn_type == "pfd_rationalglu"
+    assert cfg.model_type is None
+
+
+def test_load_config_attn_ffn_type(tmp_path):
+    """YAML with attn_type + ffn_type loads correctly."""
+    yaml_path = tmp_path / "test.yaml"
+    yaml_path.write_text("attn_type: xsa\nffn_type: pfd_rationalglu\n")
+    cfg = load_config(yaml_path)
+    assert cfg.attn_type == "xsa"
+    assert cfg.ffn_type == "pfd_rationalglu"

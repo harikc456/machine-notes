@@ -4,6 +4,21 @@ from pathlib import Path
 import yaml
 
 
+# Maps deprecated model_type → (attn_type, ffn_type)
+_MODEL_TYPE_MAP: dict[str, tuple[str, str]] = {
+    "baseline":                 ("standard", "swiglu"),
+    "rational":                 ("standard", "rational"),
+    "rationalglu":              ("standard", "rationalglu"),
+    "pfd_rational":             ("standard", "pfd_rational"),
+    "pfd_rationalglu":          ("standard", "pfd_rationalglu"),
+    "first_order_pfd_rational": ("standard", "first_order_pfd_rational"),
+    "polar_mlp":                ("standard", "polar"),
+    "polar_attn":               ("polar",    "swiglu"),
+    "polar_full":               ("polar",    "polar"),
+    "xsa":                      ("xsa",      "swiglu"),
+}
+
+
 @dataclass
 class ModelConfig:
     # Model dimensions
@@ -20,8 +35,14 @@ class ModelConfig:
     seq_len: int = 512
     vocab_size: int = 50257
 
-    # Model type
-    model_type: str = "baseline"   # "baseline" | "rational" | "rationalglu" | "pfd_rational" | "pfd_rationalglu" | "first_order_pfd_rational" | "polar_mlp" | "polar_attn" | "polar_full" | "xsa"
+    # Composable block type
+    attn_type: str = "standard"    # "standard" | "polar" | "xsa"
+    ffn_type: str = "swiglu"       # "swiglu" | "rational" | "rationalglu" | "pfd_rational" | "pfd_rationalglu" | "first_order_pfd_rational" | "polar"
+
+    # Deprecated: use attn_type + ffn_type instead.
+    # If set, translated to attn_type + ffn_type in __post_init__.
+    model_type: str | None = None
+
     ffn_hidden: int = 688          # FFN hidden dim (SwiGLU / RationalFFN)
     pfd_n: int = 4                 # Number of partial fraction terms for PFDRational* models
     pre_lm_head_silu: bool = False # Apply SiLU activation before lm_head
@@ -30,11 +51,6 @@ class ModelConfig:
     tie_embeddings: bool = True        # If False, lm_head gets its own weight matrix (not shared with token_embedding)
 
     # Kronecker-factored LM head
-    # Replaces lm_head dense weight W ∈ R^{V×H} with an implicit A⊗B.
-    # Factor dimensions are derived automatically: find the most balanced factor
-    # pair (p, m) of vocab_size (p ≈ m ≈ √V) and (q, n) of d_model (q ≈ n ≈ √H).
-    # Forward: reshape h → H_mat ∈ R^{n×q}, compute Z_mat = B H_mat A^T, flatten.
-    # W never materialises in memory; avoids rank suppression during back-prop.
     lm_head_kronecker: bool = False    # Replace lm_head with Kronecker-factored projection
 
     # Kronecker-factored MLP projections
@@ -74,6 +90,15 @@ class ModelConfig:
     grad_accum_steps: int = 1      # mini-batches per optimizer step; 1 = no accumulation
 
     def __post_init__(self) -> None:
+        if self.model_type is not None:
+            if self.model_type not in _MODEL_TYPE_MAP:
+                raise ValueError(
+                    f"Unknown model_type '{self.model_type}'. "
+                    f"Valid values: {sorted(_MODEL_TYPE_MAP)}. "
+                    f"Prefer attn_type + ffn_type directly."
+                )
+            self.attn_type, self.ffn_type = _MODEL_TYPE_MAP[self.model_type]
+
         if self.adaptive_weight_norm:
             if self.adaptive_norm_late < 1.0:
                 raise ValueError(
@@ -87,7 +112,7 @@ class ModelConfig:
 
 
 def load_config(path: str | Path) -> ModelConfig:
-    """Load an ModelConfig from a YAML file.
+    """Load a ModelConfig from a YAML file.
 
     The YAML file may specify any subset of ModelConfig fields; unspecified
     fields take their dataclass defaults. Unknown keys raise ValueError.

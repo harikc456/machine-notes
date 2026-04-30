@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 from rbf_ffn.config import ModelConfig
-from rbf_ffn.models.transformer_block import TransformerBlock, KromHCWrapper
+from rbf_ffn.models.transformer_block import TransformerBlock, KromHCWrapper, LoopBlock
 from rbf_ffn.models.kronecker_linear import KroneckerLMHead
 
 
@@ -83,7 +83,15 @@ class CausalLM(nn.Module):
 
         self.use_kromhc = cfg.use_kromhc
         self.token_embedding = nn.Embedding(cfg.vocab_size, cfg.d_model)
-        self.blocks = nn.ModuleList([make_block() for _ in range(cfg.n_layers)])
+
+        if cfg.use_loop:
+            # Layout: loop_n_fixed fixed blocks → 1 shared LoopBlock → loop_n_fixed fixed blocks
+            head = [make_block() for _ in range(cfg.loop_n_fixed)]
+            shared = LoopBlock(TransformerBlock(cfg), cfg.loop_n_repeats, cfg.d_model, start_layer=cfg.loop_n_fixed)
+            tail = [make_block() for _ in range(cfg.loop_n_fixed)]
+            self.blocks = nn.ModuleList(head + [shared] + tail)
+        else:
+            self.blocks = nn.ModuleList([make_block() for _ in range(cfg.n_layers)])
         self.norm = nn.RMSNorm(cfg.d_model)
         self.pre_lm_head_silu = cfg.pre_lm_head_silu
         if cfg.lm_head_kronecker:

@@ -1,0 +1,22 @@
+attn_type: xsa
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+# Looped transformer: 2 fixed head + 8 shared middle passes + 2 fixed tail
+# Effective depth: 12 layers, parameter blocks: 5 (vs 12 independent)
+use_loop: true
+loop_n_repeats: 8
+loop_n_fixed: 2

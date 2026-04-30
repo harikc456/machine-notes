@@ -40,6 +40,8 @@ class ModelConfig:
     ffn_type: str = "swiglu"       # "swiglu" | "leaky_relu_sq" | "rational" | "rationalglu" | "pfd_rational" | "pfd_rationalglu" | "first_order_pfd_rational" | "polar"
     orthogonal_ffn: bool = False        # Wrap FFN output to be orthogonal to input x
     orthogonal_ffn_eps: float = 1e-8    # Epsilon for orthogonal projection stability
+    gated_orthogonal_ffn: bool = False              # Wrap FFN with GatedOrthogonalMLPWrapper (orthogonal novelty + gated amplification)
+    gated_orthogonal_ffn_gate_activation: str = "tanh"  # Gate activation: "tanh" | "softsign" | "identity"
 
     # Deprecated: use attn_type + ffn_type instead.
     # If set, translated to attn_type + ffn_type in __post_init__.
@@ -63,6 +65,11 @@ class ModelConfig:
     # KromHC head mixing
     use_kromhc: bool = False           # wrap any block with KromHC head mixing
     kromhc_mixer_hidden: int = 32      # hidden dim of per-factor weight MLP
+
+    # Looped transformer (weight-shared middle block)
+    use_loop: bool = False             # repeat a single shared middle block N times
+    loop_n_repeats: int = 4            # how many times to repeat the shared middle block
+    loop_n_fixed: int = 2              # fixed layers at each end (head + tail)
 
     # Weight normalization
     linear_weight_norm: bool = False   # Normalise each linear layer's weight rows after every optimizer step
@@ -100,6 +107,11 @@ class ModelConfig:
                     f"Prefer attn_type + ffn_type directly."
                 )
             self.attn_type, self.ffn_type = _MODEL_TYPE_MAP[self.model_type]
+
+        if self.use_loop and self.use_kromhc:
+            raise ValueError("use_loop and use_kromhc cannot be used together")
+        if self.use_loop and self.loop_n_fixed < 1:
+            raise ValueError("loop_n_fixed must be >= 1")
 
         if self.adaptive_weight_norm:
             if self.adaptive_norm_late < 1.0:

@@ -316,6 +316,112 @@ def test_no_duplicate_params_delta_model():
     assert len(all_ids) == len(set(all_ids)), "Duplicate parameters in optimizer groups"
 
 
+def _make_looped_model(n_repeats: int = 4, n_fixed: int = 2) -> CausalLM:
+    cfg = ModelConfig(
+        d_model=D, n_heads=H,
+        vocab_size=VOCAB, seq_len=N,
+        attn_type="standard", ffn_type="swiglu",
+        ffn_hidden=86,
+        dropout=0.0,
+        use_loop=True,
+        loop_n_repeats=n_repeats,
+        loop_n_fixed=n_fixed,
+    )
+    return CausalLM(cfg)
+
+
+def test_looped_output_shape():
+    model = _make_looped_model()
+    tokens = torch.randint(0, VOCAB, (B, N))
+    logits, hs = model(tokens)
+    assert logits.shape == (B, N, VOCAB)
+    assert hs == []
+
+
+def test_looped_block_count():
+    """blocks list = loop_n_fixed head + 1 LoopBlock + loop_n_fixed tail."""
+    from rbf_ffn.models.transformer_block import LoopBlock
+    model = _make_looped_model(n_repeats=4, n_fixed=2)
+    assert len(model.blocks) == 2 + 1 + 2  # 5 entries
+    loop_blocks = [b for b in model.blocks if isinstance(b, LoopBlock)]
+    assert len(loop_blocks) == 1
+    assert loop_blocks[0].n_repeats == 4
+
+
+def test_looped_layer_enc_shape():
+    """layer_enc buffer must have shape (n_repeats, d_model)."""
+    from rbf_ffn.models.transformer_block import LoopBlock
+    model = _make_looped_model()
+    loop_block = next(b for b in model.blocks if isinstance(b, LoopBlock))
+    assert loop_block.layer_enc.shape == (4, D)
+
+
+def test_looped_layer_enc_count():
+    """layer_enc must have exactly loop_n_repeats rows."""
+    from rbf_ffn.models.transformer_block import LoopBlock
+    model = _make_looped_model(n_repeats=6)
+    loop_block = next(b for b in model.blocks if isinstance(b, LoopBlock))
+    assert loop_block.layer_enc.shape[0] == 6
+
+
+def test_looped_layer_enc_is_not_parameter():
+    """layer_enc must be a buffer, not a learnable parameter."""
+    from rbf_ffn.models.transformer_block import LoopBlock
+    model = _make_looped_model()
+    loop_block = next(b for b in model.blocks if isinstance(b, LoopBlock))
+    param_names = {n for n, _ in loop_block.named_parameters()}
+    assert "layer_enc" not in param_names
+    buffer_names = {n for n, _ in loop_block.named_buffers()}
+    assert "layer_enc" in buffer_names
+
+
+def test_looped_layer_enc_absolute_positions():
+    """layer_enc rows must encode absolute positions starting at loop_n_fixed."""
+    import math
+    from rbf_ffn.models.transformer_block import LoopBlock, _sinusoidal_layer_encoding
+    model = _make_looped_model(n_fixed=2, n_repeats=4)
+    loop_block = next(b for b in model.blocks if isinstance(b, LoopBlock))
+    expected = _sinusoidal_layer_encoding(start=2, n=4, d_model=D)
+    assert torch.allclose(loop_block.layer_enc.cpu(), expected)
+
+
+def test_looped_gradient_flows():
+    model = _make_looped_model()
+    tokens = torch.randint(0, VOCAB, (B, N))
+    logits, _ = model(tokens)
+    logits.sum().backward()
+    assert model.token_embedding.weight.grad is not None
+    from rbf_ffn.models.transformer_block import LoopBlock
+    loop_block = next(b for b in model.blocks if isinstance(b, LoopBlock))
+    # layer_enc is a non-trainable buffer; check the shared block's params instead
+    for p in loop_block.inner_block.parameters():
+        assert p.grad is not None
+
+
+def test_looped_layer_enc_differentiates_steps():
+    """Each loop step must have a distinct encoding (sinusoidal positions are unique)."""
+    from rbf_ffn.models.transformer_block import LoopBlock
+    model = _make_looped_model(n_repeats=4)
+    loop_block = next(b for b in model.blocks if isinstance(b, LoopBlock))
+    enc = loop_block.layer_enc
+    for i in range(enc.shape[0]):
+        for j in range(i + 1, enc.shape[0]):
+            assert not torch.allclose(enc[i], enc[j])
+
+
+def test_looped_no_duplicate_params():
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = _make_looped_model()
+    muon_params, adamw_params = build_optimizer_groups(model)
+    all_ids = [id(p) for p in muon_params] + [id(p) for p in adamw_params]
+    assert len(all_ids) == len(set(all_ids))
+
+
+def test_looped_and_kromhc_raises():
+    with pytest.raises(ValueError, match="use_loop and use_kromhc"):
+        ModelConfig(use_loop=True, use_kromhc=True)
+
+
 def _make_kromhc_model() -> CausalLM:
     cfg = ModelConfig(
         d_model=D, n_heads=H, n_layers=L,

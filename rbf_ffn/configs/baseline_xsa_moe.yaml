@@ -1,5 +1,5 @@
 attn_type: xsa
-ffn_type: swiglu
+ffn_type: moe
 d_model: 256
 n_heads: 8
 n_layers: 6
@@ -8,9 +8,8 @@ dropout: 0.1
 vocab_size: 50257
 seq_len: 512
 qk_norm: true
-linear_weight_norm: true
-linear_weight_norm_value: 2.0
-orthogonal_ffn: true
+moe_n_experts: 4
+moe_top_k: 2
 seed: 42
 n_epochs: 3
 batch_size: 16

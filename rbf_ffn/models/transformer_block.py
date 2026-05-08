@@ -9,6 +9,28 @@ from rbf_ffn.models.rational_ffn import RationalFFN, RationalGatedFFN, PFDRation
 from rbf_ffn.models.polar_ffn import AdaptivePolarMLP
 from rbf_ffn.models.head_mixer import KromHCHeadMixer
 from rbf_ffn.models.orthogonal_ffn import OrthogonalMLPWrapper, GatedOrthogonalMLPWrapper
+from rbf_ffn.models.moe_ffn import SparseMoEFFN
+
+
+class DynamicERF(nn.Module):
+    """Element-wise learnable ERF transform: y = gamma * erf(alpha * x + s) + beta."""
+
+    def __init__(self, d_model: int):
+        super().__init__()
+        self.gamma = nn.Parameter(torch.ones(d_model))
+        self.alpha = nn.Parameter(torch.ones(d_model))
+        self.s     = nn.Parameter(torch.zeros(d_model))
+        self.beta  = nn.Parameter(torch.zeros(d_model))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.gamma * torch.erf(self.alpha * x + self.s) + self.beta
+
+
+def _build_norm(norm_type: str, d_model: int) -> nn.Module:
+    if norm_type == "dynamic_erf":
+        return DynamicERF(d_model)
+    return nn.RMSNorm(d_model)
+
 
 FFN_REGISTRY: dict[str, type] = {
     "swiglu":                  SwiGLUFFN,
@@ -19,6 +41,7 @@ FFN_REGISTRY: dict[str, type] = {
     "pfd_rationalglu":         PFDRationalGatedFFN,
     "first_order_pfd_rational": FirstOrderPFDRationalFFN,
     "polar":                   AdaptivePolarMLP,
+    "moe":                     SparseMoEFFN,
 }
 
 
@@ -46,9 +69,9 @@ class TransformerBlock(nn.Module):
             raise ValueError(
                 f"Unknown ffn_type '{cfg.ffn_type}'. Valid: {sorted(FFN_REGISTRY)}"
             )
-        self.norm1 = nn.RMSNorm(cfg.d_model)
+        self.norm1 = _build_norm(cfg.norm_type, cfg.d_model)
         self.attn  = ATTN_REGISTRY[cfg.attn_type](cfg)
-        self.norm2 = nn.RMSNorm(cfg.d_model)
+        self.norm2 = _build_norm(cfg.norm_type, cfg.d_model)
         ffn = FFN_REGISTRY[cfg.ffn_type](cfg)
         if cfg.gated_orthogonal_ffn:
             self.ffn = GatedOrthogonalMLPWrapper(ffn, eps=cfg.orthogonal_ffn_eps, gate_activation=cfg.gated_orthogonal_ffn_gate_activation)

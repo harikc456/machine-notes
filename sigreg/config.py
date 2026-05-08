@@ -23,7 +23,7 @@ class SIGRegConfig:
 
     # ── Block architecture ────────────────────────────────────────────────────
     use_residual: bool = False      # add skip connections around attn and ffn
-    norm_type: str = "none"         # "none" | "rmsnorm" | "layernorm"
+    norm_type: str = "none"         # "none" | "rmsnorm" | "layernorm" | "dynamic_erf"
 
     # ── SIGReg auxiliary loss ─────────────────────────────────────────────────
     # loss_type: which regulariser to apply at each collected layer
@@ -49,8 +49,8 @@ class SIGRegConfig:
     grad_accum_steps: int = 1
 
     def __post_init__(self) -> None:
-        assert self.norm_type in ("none", "rmsnorm", "layernorm"), (
-            f"norm_type must be 'none', 'rmsnorm', or 'layernorm', got '{self.norm_type}'"
+        assert self.norm_type in ("none", "rmsnorm", "layernorm", "dynamic_erf"), (
+            f"norm_type must be 'none', 'rmsnorm', 'layernorm', or 'dynamic_erf', got '{self.norm_type}'"
         )
         assert self.sigreg_loss_type in ("strong", "weak", "both"), (
             f"sigreg_loss_type must be 'strong', 'weak', or 'both', got '{self.sigreg_loss_type}'"

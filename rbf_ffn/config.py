@@ -38,6 +38,7 @@ class ModelConfig:
     # Composable block type
     attn_type: str = "standard"    # "standard" | "polar" | "xsa"
     ffn_type: str = "swiglu"       # "swiglu" | "leaky_relu_sq" | "rational" | "rationalglu" | "pfd_rational" | "pfd_rationalglu" | "first_order_pfd_rational" | "polar"
+    norm_type: str = "rmsnorm"     # "rmsnorm" | "dynamic_erf"
     orthogonal_ffn: bool = False        # Wrap FFN output to be orthogonal to input x
     orthogonal_ffn_eps: float = 1e-8    # Epsilon for orthogonal projection stability
     gated_orthogonal_ffn: bool = False              # Wrap FFN with GatedOrthogonalMLPWrapper (orthogonal novelty + gated amplification)
@@ -49,6 +50,10 @@ class ModelConfig:
 
     ffn_hidden: int = 688          # FFN hidden dim (SwiGLU / RationalFFN)
     pfd_n: int = 4                 # Number of partial fraction terms for PFDRational* models
+
+    # Mixture of Experts
+    moe_n_experts: int = 8        # Total number of experts (used when ffn_type="moe")
+    moe_top_k: int = 2            # Experts activated per token
     pre_lm_head_silu: bool = False # Apply SiLU activation before lm_head
 
     # Embedding / LM head
@@ -107,6 +112,11 @@ class ModelConfig:
                     f"Prefer attn_type + ffn_type directly."
                 )
             self.attn_type, self.ffn_type = _MODEL_TYPE_MAP[self.model_type]
+
+        if self.norm_type not in ("rmsnorm", "dynamic_erf"):
+            raise ValueError(
+                f"norm_type must be 'rmsnorm' or 'dynamic_erf', got '{self.norm_type}'"
+            )
 
         if self.use_loop and self.use_kromhc:
             raise ValueError("use_loop and use_kromhc cannot be used together")

@@ -24,6 +24,7 @@ class LorentzMultiheadAttention(nn.Module):
         n_heads: int,
         dropout: float = 0.1,
         return_attn_weights: bool = False,
+        causal: bool = False,
     ):
         super().__init__()
         assert d_model % n_heads == 0, "d_model must be divisible by n_heads"
@@ -31,6 +32,7 @@ class LorentzMultiheadAttention(nn.Module):
         self.n_heads  = n_heads
         self.d_head   = d_model // n_heads
         self.return_attn_weights = return_attn_weights
+        self.causal   = causal
 
         self.W_q = LorentzLinear(d_model, d_model)
         self.W_k = LorentzLinear(d_model, d_model)
@@ -79,6 +81,12 @@ class LorentzMultiheadAttention(nn.Module):
 
         # Lorentz similarity: score = -⟨q, k⟩_L   (B, H, N, N)
         scores = -lorentz_inner_pairwise(Q, K) / self.scale
+        if self.causal:
+            N = scores.shape[-1]
+            mask = torch.triu(
+                torch.ones(N, N, device=scores.device, dtype=torch.bool), diagonal=1
+            )
+            scores = scores.masked_fill(mask, float("-inf"))
         attn_w = F.softmax(scores, dim=-1)                             # (B, H, N, N)
         attn_w = self.dropout(attn_w)
 

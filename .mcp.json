@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "context-engine": {
+      "command": "/home/harikrishnan-c/.local/bin/cce",
+      "args": [
+        "serve",
+        "--project-dir",
+        "/home/harikrishnan-c/projects/machine-notes"
+      ]
+    }
+  }
+}

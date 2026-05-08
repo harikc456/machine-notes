@@ -18,6 +18,22 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 from sigreg.config import SIGRegConfig
 
 
+# ── DynamicERF ────────────────────────────────────────────────────────────────
+
+class DynamicERF(nn.Module):
+    """Element-wise learnable ERF transform: y = gamma * erf(alpha * x + s) + beta."""
+
+    def __init__(self, d_model: int):
+        super().__init__()
+        self.gamma = nn.Parameter(torch.ones(d_model))
+        self.alpha = nn.Parameter(torch.ones(d_model))
+        self.s     = nn.Parameter(torch.zeros(d_model))
+        self.beta  = nn.Parameter(torch.zeros(d_model))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.gamma * torch.erf(self.alpha * x + self.s) + self.beta
+
+
 # ── Attention ─────────────────────────────────────────────────────────────────
 
 def _rotate_half(x: torch.Tensor) -> torch.Tensor:
@@ -148,6 +164,9 @@ class TransformerBlock(nn.Module):
         elif cfg.norm_type == "layernorm":
             self.norm_attn = nn.LayerNorm(cfg.d_model)
             self.norm_ffn  = nn.LayerNorm(cfg.d_model)
+        elif cfg.norm_type == "dynamic_erf":
+            self.norm_attn = DynamicERF(cfg.d_model)
+            self.norm_ffn  = DynamicERF(cfg.d_model)
         else:
             self.norm_attn = None
             self.norm_ffn  = None

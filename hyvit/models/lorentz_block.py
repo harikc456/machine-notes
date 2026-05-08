@@ -50,10 +50,11 @@ class LorentzFFN(nn.Module):
 
 
 class LorentzTransformerBlock(nn.Module):
-    def __init__(self, d_model: int, n_heads: int, mlp_ratio: int = 4, dropout: float = 0.1):
+    def __init__(self, d_model: int, n_heads: int, mlp_ratio: int = 4, dropout: float = 0.1,
+                 causal: bool = False):
         super().__init__()
         self.norm1 = LorentzLayerNorm(d_model)
-        self.attn  = LorentzMultiheadAttention(d_model, n_heads, dropout)
+        self.attn  = LorentzMultiheadAttention(d_model, n_heads, dropout, causal=causal)
         self.norm2 = LorentzLayerNorm(d_model)
         self.ffn   = LorentzFFN(d_model, mlp_ratio, dropout)
 

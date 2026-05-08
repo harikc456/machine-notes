@@ -57,3 +57,57 @@ class HyViTSmallConfig:
 
     data_root: str       = "data/cifar10"
     checkpoint_dir: str  = "checkpoints/hyvit_small"
+
+
+@dataclass
+class HypLMConfig:
+    """HypLM: hyperbolic causal language model on WikiText-103."""
+    # Vocabulary / sequence
+    vocab_size: int      = 50304   # r50k_base (50257) padded to multiple of 64
+    seq_len: int         = 256
+
+    # Model (Euclidean dim; Lorentz dim is d_model+1)
+    d_model: int         = 256
+    n_heads: int         = 4
+    n_blocks: int        = 6
+    mlp_ratio: int       = 4
+    dropout: float       = 0.1
+    embed_dropout: float = 0.1
+
+    # Training
+    batch_size: int       = 16    # physical batch per step
+    grad_accum_steps: int = 4     # effective batch = batch_size * grad_accum_steps = 64
+    lr: float             = 3e-4
+    weight_decay: float   = 0.1
+    n_epochs: int         = 10
+    warmup_ratio: float   = 0.05
+    grad_clip: float      = 1.0
+    seed: int             = 42
+
+    # Paths
+    checkpoint_dir: str  = "checkpoints/hyplm"
+
+
+@dataclass
+class EucLMConfig:
+    """EucLM: Euclidean causal LM baseline, matched size to HypLMConfig."""
+    vocab_size: int      = 50304
+    seq_len: int         = 256
+
+    d_model: int         = 256
+    n_heads: int         = 4
+    n_blocks: int        = 6
+    mlp_ratio: int       = 4
+    dropout: float       = 0.1
+    embed_dropout: float = 0.1
+
+    batch_size: int       = 16
+    grad_accum_steps: int = 4
+    lr: float             = 3e-4
+    weight_decay: float   = 0.1
+    n_epochs: int         = 10
+    warmup_ratio: float   = 0.05
+    grad_clip: float      = 1.0
+    seed: int             = 42
+
+    checkpoint_dir: str  = "checkpoints/euclm"

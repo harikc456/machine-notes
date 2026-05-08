@@ -71,15 +71,37 @@ def _load_split(split: str, seq_len: int, tokenizer: ByteLevelBPETokenizer) -> t
 
     Builds and caches to _CACHE_DIR/{split}_bpe65536_{seq_len}.pt on first call.
     """
+    print(f"DEBUG: _load_split({split})...")
+    import sys; sys.stdout.flush()
     _CACHE_DIR.mkdir(exist_ok=True)
     cache_file = _CACHE_DIR / f"{split}_bpe65536_{seq_len}.pt"
 
     if cache_file.exists():
+        print(f"DEBUG: Loading cached {split} from {cache_file}")
+        sys.stdout.flush()
         return torch.load(cache_file, weights_only=True)
 
+    print(f"DEBUG: Loading raw texts for {split}...")
+    import sys; sys.stdout.flush()
     texts = _load_wikitext_split_texts(split)
-    full_text = "\n".join(texts)
-    tokens = tokenizer.encode(full_text).ids
+    print(f"DEBUG: Encoding {len(texts)} texts in batches...")
+    sys.stdout.flush()
+
+    # Encode in batches to avoid memory issues with 16M texts
+    all_tokens = []
+    batch_size = 10000
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i:i + batch_size]
+        batch_text = "\n".join(batch)
+        batch_tokens = tokenizer.encode(batch_text).ids
+        all_tokens.extend(batch_tokens)
+        if (i // batch_size + 1) % 10 == 0:
+            print(f"  Encoded {i + len(batch):,}/{len(texts)} texts → {len(all_tokens):,} tokens")
+            sys.stdout.flush()
+
+    tokens = all_tokens
+    print(f"DEBUG: Encoded to {len(tokens)} tokens, chunking...")
+    sys.stdout.flush()
 
     chunks = chunk_tokens(tokens, seq_len)
     torch.save(chunks, cache_file)
@@ -104,6 +126,7 @@ def get_dataloaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
         drop_last: bool,
         persistent_workers: bool = False,
         prefetch_factor: int | None = None,
+        num_workers: int = 0,
     ) -> DataLoader:
         data = _load_split(split, cfg.seq_len, tokenizer)
         ds = TokenDataset(data)
@@ -112,7 +135,7 @@ def get_dataloaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
             batch_size=cfg.batch_size,
             shuffle=shuffle,
             drop_last=drop_last,
-            num_workers=4,
+            num_workers=num_workers,
             pin_memory=True,
             generator=g if shuffle else None,
             persistent_workers=persistent_workers,
@@ -120,7 +143,7 @@ def get_dataloaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
         )
 
     train_loader = _make_loader("train", shuffle=True, drop_last=True,
-                                persistent_workers=True, prefetch_factor=2)
+                                num_workers=0)
     val_loader   = _make_loader("validation", shuffle=False, drop_last=False)
     test_loader  = _make_loader("test",       shuffle=False, drop_last=False)
     return train_loader, val_loader, test_loader

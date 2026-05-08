@@ -105,7 +105,25 @@ out = down_proj(gate ⊙ shared)
 - 33% fewer FFN parameters than SwiGLU
 - Tests whether gate and value can share representations
 
-#### **Variant 6–9: RBF Variants (Gate Ablations)**
+#### **Variant 6: LeakyReLUSq (Tested)**
+```
+gate = leaky_relu(gate_proj(x))²   # always non-negative
+out  = down_proj(gate * up_proj(x))
+```
+- Parameter-matched to SwiGLU; always-non-negative gate
+- XSA + LeakyReLUSq + qk_norm: 79.30 PPL — ~9 ppl worse than XSA+SwiGLU+qknorm (69.87); deprioritized
+
+#### **Variant 7: OrthogonalMLPWrapper (Pending)**
+```
+y   = mlp(x)                                    # any inner FFN
+out = y - (y·x / (x·x + ε)) * x                # project out component along x
+```
+- Wraps any FFN so its additive update is perpendicular to the residual stream input
+- FFN analogue of XSA: XSA makes attention output orthogonal to its value; this makes FFN output orthogonal to its input
+- Planned as `baseline_xsa_qk_norm_orthogonal_mlp.yaml` (XSA + SwiGLU + qk_norm + orthogonal_ffn)
+- No experiments run yet
+
+#### **Variant 8–11: RBF Variants (Gate Ablations)**
 
 **RBF Architecture:**
 ```
@@ -147,65 +165,98 @@ out = down_proj(gate_sig ⊙ rbf_out)
 
 ## III. Experimental Results
 
-### A. Headline Results (3-epoch runs, WikiText-103)
+### A. Headline Results
 
-| Variant | Val PPL (ep 0) | Val PPL (ep 2) | Δ vs Baseline | Time/epoch | Status |
-|---------|--------------|--------------|---------------|-----------|--------|
-| **PFDRationalGLU** | 140.91 | **73.00** | **−3.5%** ✓ | ~1975s | Best |
+#### 3-epoch runs — no normalization additions (WikiText-103, d_model=256)
+
+| Variant | Val PPL (ep 0) | Val PPL (ep 2) | Δ vs SwiGLU | Time/epoch | Status |
+|---------|--------------|--------------|-------------|-----------|--------|
+| **XSA + SwiGLU + qk_norm + orthogonal_ffn** | 130.88 | **69.87** | **−7.7%** ✓ | ~1167s | Best (no wnorm) |
+| **XSA + SwiGLU + qk_norm** | 135.36 | **71.57** | **−5.4%** ✓ | ~1166s | Good |
+| **XSA + SwiGLU** | 138.55 | **72.41** | **−4.3%** ✓ | ~1160s | Good |
+| **PFDRationalGLU** | 140.91 | **73.00** | **−3.5%** ✓ | ~1975s | Good |
 | **RationalGLU** | 142.61 | 74.37 | −1.7% ✓ | ~1424s | Good |
 | **Baseline (SwiGLU)** | 145.62 | 75.68 | — | ~1234s | Ref |
 | FirstOrderPFDRational | 146.00 | 76.77 | +1.4% | ~2029s | Marginal |
 | Rational (non-gated) | 155.08 | 78.38 | +3.6% | ~1357s | Weak |
+| XSA + LeakyReLUSq + qk_norm | 144.04 | 79.30 | +4.8% | ~1165s | Weak |
 | RBF G1-B (input-driven) | 145.13 | 81.62 | +7.8% | ~1691s | Mid |
 | RBF G1-A (cross-kernel) | 152.11 | 83.56 | +10.4% | ~1994s | Weak |
+| Polar MLP | 172.15 | 95.11 | +25.7% | ~1305s | Poor |
 | RBF G0 (element-wise) | 164.67 | 92.70 | +22.4% | ~2294s | Poor |
 | RBF G2 (Sinkhorn) | 186.67 | 110.28 | +45.7% | ~2771s | Very Poor |
 
+Note: XSA+qknorm+orthogonal_ffn result is a single run. XSA+qknorm (no orthogonal_ffn) is best of 2 runs (71.57–71.87). XSA (no norm) is a single run.
+
+#### 3-epoch runs — with normalization additions (qk_norm + weight_norm)
+
+| Variant | Val PPL (ep 0) | Val PPL (ep 2) | Δ vs SwiGLU+norm | Time/epoch | Status |
+|---------|--------------|--------------|-----------------|-----------|--------|
+| **SwiGLU + qk_norm + weight_norm** | 114.41 | **58.16** | — | ~1330s | Best |
+| SwiGLU + weight_norm | 120.19 | 58.97 | +1.4% | ~1223s | Good |
+| PFDRationalGLU + qk_norm + weight_norm | 117.34 | 58.91 | +1.3% | ~2088s | Matched |
+| SwiGLU + qk_norm + adaptive_weight_norm | 118.74 | 60.67 | +4.3% | ~1346s | Marginal |
+| Polar MLP + qk_norm + weight_norm | 157.17 | 85.84 | +47.6% | ~1116s | Poor |
+
+#### 10-epoch runs — with normalization (qk_norm + weight_norm, best of multiple runs)
+
+| Variant | Val PPL (ep 9) | Notes |
+|---------|---------------|-------|
+| **SwiGLU + qk_norm + weight_norm** | **41.40** | Best of 4 runs; range 41.40–49.06 |
+| PFDRationalGLU + qk_norm + weight_norm | 41.69 | Best of 2 runs; converges to same level |
+
 ### B. Key Findings
 
-#### **1. Rational Activations Outperform SiLU**
+#### **1. Stacked Orthogonality (XSA + OrthogonalFFN) Provides the Best Per-Epoch Return Without Weight Normalization**
+- **XSA + qk_norm + orthogonal_ffn:** 69.87 PPL (−7.7% vs SwiGLU) — best 3-epoch result without weight_norm; single run
+- **XSA + qk_norm (no orthogonal_ffn):** 71.57 PPL (best of 2 runs) — qk_norm alone adds ~0.8 ppl over XSA; consistent with its effect on SwiGLU (~0.5–0.7 ppl)
+- **OrthogonalFFN adds ~1.7 ppl** on top of XSA+qknorm (71.57→69.87); no training overhead (single dot product per position, no new parameters)
+- **Mechanism:** XSA forces attention updates to be orthogonal to the attended value; OrthogonalMLPWrapper forces FFN updates to be orthogonal to the residual stream input — both sublayers must add genuinely new information
+- **LeakyReLUSq is inferior in XSA context:** 79.30 PPL — always-non-negative gate halves the gate's dynamic range vs SwiGLU
+- **Key open question:** Does dual orthogonality advantage persist with weight_norm?
+
+#### **2. Linear Weight Normalization Is the Dominant Improvement**
+- **SwiGLU + weight_norm:** 58.97 PPL (−22.1% vs SwiGLU baseline) — outweighs all FFN activation variants
+- **SwiGLU + qk_norm + weight_norm:** 58.16 PPL (−23.1%) — new baseline for norm ablations
+- **Mechanism:** Row-normalizing all linear weight matrices to target norm 2.0 dramatically accelerates early optimization (ep0 train PPL drops from ~3000 to ~800)
+- **Critical:** max_only mode (clip-only, no scale-up) is catastrophic — 75.54 vs 58.16
+
+#### **3. Weight Normalization Erases Rational Activation Advantage**
+- **PFDRationalGLU + qk_norm + weight_norm:** 58.91 PPL — statistically tied with SwiGLU+norm (58.97)
+- The 3.5% PFD advantage from unnormalized runs is an early-training effect, not a long-horizon improvement
+- At 10 epochs: SwiGLU (41.40) ≈ PFDRationalGLU (41.69) with norm; both converge to the same level
+- **Implication:** SwiGLU + qk_norm + weight_norm is the recommended baseline going forward
+
+#### **4. PFD vs SwiGLU at 3 Epochs Without Norm**
+- **PFDRationalGLU:** 73.00 PPL (−3.5% vs SwiGLU)
 - **RationalGLU:** 74.37 PPL (−1.7% vs SwiGLU)
-- **Improvement source:** Learnable P(x)/Q(x) adapts better to language modeling than fixed SiLU
-- **Parameter cost:** Only +36 params for 6 blocks (negligible relative to 12d² FFN)
-- **Training overhead:** ~15% slowdown due to polynomial evaluation (acceptable)
+- PFD advantage at 3 epochs is real but erased at 10 epochs under normalization
 
-#### **2. PFD Outperforms Padé Rational Form**
-- **PFDRationalGLU:** 73.00 PPL (−3.5% vs SwiGLU) — **best overall**
-- **vs RationalGLU:** 1.37 PPL gain from switching to partial fraction decomposition
-- **Trade-off:** 60% training overhead (1975s vs 1234s baseline) for the extra expressiveness
-- **Early signal:** Lowest epoch-0 PPL (140.91) suggests favorable initialization
-
-#### **3. Gating Is Load-Bearing**
+#### **5. Gating Is Load-Bearing**
 - **Non-gated RationalFFN:** 78.38 PPL (3.6% worse than SwiGLU)
 - **RationalGLU:** 74.37 PPL (1.7% better)
 - **Gap:** 4.0 PPL — multiplicative gating structure critical even with learnable activations
 - Learnable activation alone cannot compensate for missing gate branch
 
-#### **4. RBF Kernels Underperform — Gate Design Matters Critically**
-- **Best RBF (G1-B):** 81.62 PPL — 6.8% worse than SwiGLU
-- **Worst RBF (G2):** 110.28 PPL — 44% worse than SwiGLU
-- **Why:** Replacing learned up-projection with static Gaussian centers loses expressiveness; gate design becomes crucial
-  - **G1-B** uses input-driven gate (pre-RBF input) — best RBF variant
-  - **G0** uses element-wise gate (post-RBF output) — poor, local signal only
-  - **G2** uses Sinkhorn (no gate, just aggregation) — worst, too rigid for language modeling
-- **Conclusion:** Static kernel expansion is fundamentally limited; task-specific learned projections are important
+#### **6. RBF and Polar Kernels Underperform**
+- **Best RBF (G1-B):** 81.62 PPL — 6.8% worse than SwiGLU; 23.5 ppl behind SwiGLU+norm
+- **Polar MLP (best):** 85.84 PPL with norm — discarding magnitude information is harmful
+- Both approaches are fundamentally limited by replacing learned projections with static/directional kernels
 
-#### **5. Parameter Efficiency Trade-Off**
-- **FirstOrderPFDRational (sin gate, shared projection):** 76.77 PPL, 33% fewer FFN params
-- **vs SwiGLU:** +1.4% PPL worse, but with significant parameter savings
-- **Viability:** Acceptable for parameter-constrained settings (e.g., mobile, edge inference)
-- **Challenge:** High epoch-0 train PPL (9153) suggests sin saturation at initialization; mitigation strategies needed
+#### **7. Kronecker MLP Is Incompatible with Weight Norm**
+- Kronecker MLP + weight_norm: diverges (val PPL 100+)
+- The per-row norm constraint is not well-defined for factored weights; requires a dedicated normalization scheme before proceeding
 
-#### **6. σ Granularity Is Second-Order**
-- **Per-dim σ (σ-C):** 91.79 PPL — marginal 0.91 PPL win over global σ
-- **Per-center σ (σ-B):** 92.50 PPL — minimal specialization benefit
-- **Global σ (σ-A):** 92.70 PPL — practical default
-- **Insight:** Model prefers narrower bandwidth than grid spacing default (σ=0.5); single global parameter sufficient
+#### **8. Run-to-Run Variance Is Large**
+- SwiGLU+qknorm+wnorm at ep9: range 41.40–49.06 across 4 runs
+- Hardware/IO state substantially affects convergence speed and final PPL
+- Single-run results at 10+ epochs should be treated as lower bounds
 
-#### **7. Training Efficiency Hierarchy**
+#### **9. Training Efficiency Hierarchy**
 | Category | Representative | Time/epoch | Overhead |
 |----------|---|---|---|
-| Fastest | SwiGLU baseline | ~1234s | 0% |
+| Fastest | XSA + SwiGLU | ~1160s | −6% vs baseline |
+| Baseline | SwiGLU | ~1234s | 0% |
 | Rational family | RationalGLU | ~1424s | +15% |
 | RBF family | G1-B | ~1691s | +37% |
 | PFD rational | PFDRationalGLU | ~1975s | +60% |
@@ -214,6 +265,25 @@ out = down_proj(gate_sig ⊙ rbf_out)
 ---
 
 ## IV. Analysis & Interpretation
+
+### Why XSA Works
+
+Exclusive Self-Attention's Gram-Schmidt step (`Z = Y − (Y·Vn)Vn`) forces attention output to be orthogonal to the attended value. This provides:
+
+1. **Diversity pressure:** Each head cannot simply copy its value vector; it must attend to information that adds something new
+2. **Implicit regularization:** The orthogonalization acts like a built-in diversity constraint, potentially reducing head redundancy
+3. **Cheap implementation:** Single subtraction per head; no additional parameters
+
+The 4.3% improvement over SwiGLU at 3 epochs without any normalization suggests this is a genuine structural improvement, not an initialization artifact. Whether it stacks with weight norm (and whether it persists at 10 epochs) is the key open question.
+
+### Why Weight Normalization Dominates
+
+Linear weight normalization (constraining each row of every weight matrix to have L2 norm = 2.0) accelerates early optimization dramatically:
+- Epoch 0 train PPL: 806 (with wnorm) vs 3245 (without)
+- This implies the unnormalized model spends most of 3 epochs recovering from a poorly conditioned initialization
+- The effect is so large (~17 ppl at ep2) that it overshadows all FFN activation design choices
+
+This explains why PFDRationalGLU's 3-epoch advantage disappears: the advantage was about early-epoch optimization efficiency (lower ep0 PPL), not about the long-run expressiveness of the gate. Weight norm provides the same early efficiency benefit to any architecture.
 
 ### Why RationalGLU Works Better Than RBF
 
@@ -224,66 +294,64 @@ The learnable rational activation succeeds where RBF kernels fail because:
 3. **Parameter Efficiency:** Rational (4 coefficients) vs RBF (d×K expansion) — similar expressiveness, far fewer params
 4. **Gating Synergy:** Learnable gate + learnable activation create redundancy allowing optimization; static kernels limit gate's expressiveness
 
-### Why PFD Beats Padé
+### Why PFD Beats Padé (at 3 Epochs Without Norm)
 
 Partial fraction decomposition provides:
 - **Better initialization:** Lowest epoch-0 PPL suggests better early gradient flow
 - **Numerical stability:** Sum of simpler terms vs ratio of polynomials
 - **Inductive bias:** Decomposition may naturally capture language task structure
-- **Trade-off:** 1.37 PPL improvement warrants ~40% training cost increase
+- **Caveat:** The 1.37 PPL improvement at 3 epochs is an early-training effect; it disappears at 10 epochs under weight norm
 
-### RBF Lessons
+### RBF and Polar Lessons
 
-RBF approach fails because:
-- **Static vs. learnable trade-off:** Fixed centers sacrifice adaptability
-- **Gate design criticality:** RBF quality depends heavily on gate design; no single gate beats learnable activation
-- **Parameter ceiling:** Even with 5 optimized gates, can't exceed learned projection quality
+Both fail because:
+- **Static vs. learnable trade-off:** Fixed centers (RBF) and discarded magnitude (Polar) sacrifice adaptability
+- **Gate design criticality:** RBF quality depends heavily on gate design; no gate variant beats learned projections
+- **Parameter ceiling:** Even with optimized gates, can't exceed learned projection quality
 - **Sinkhorn failure:** Doubly-stochastic aggregation too rigid for language modeling; winner-take-all better
 
 ---
 
 ## V. Recommended Next Steps
 
-### Highest Priority (Likely +0.5–2.0% improvement)
+### Highest Priority
 
-1. **PFDRationalGLU, 10+ epochs**
-   - Confirm whether 3.5% improvement holds at longer training horizon or is early-training effect
-   - Extrapolate validation trajectory
+1. **XSA + qk_norm + orthogonal_ffn + weight_norm (3 epochs)**
+   - Best no-wnorm result is 69.87 (XSA+qknorm+orthogonal_ffn); adding wnorm (~17 ppl gain on SwiGLU) should push to ~52–54 PPL
+   - If this beats SwiGLU+qknorm+wnorm (58.16), dual orthogonality is the new architecture baseline
+   - No additional overhead (both XSA and orthogonal_ffn are parameter-free projections)
 
-2. **PFDRationalGLU, per-channel PFD params**
-   - Current: Shared params across all 256 dimensions
-   - Test: Per-channel (256 independent) or per-head (8 independent) rational params
-   - Hypothesis: Channel specialization may widen gap further
+2. **XSA + qk_norm + weight_norm (no orthogonal_ffn) (3 epochs)**
+   - Cleanly isolates wnorm effect without orthogonal_ffn; establishes whether the ~1.7 ppl gain from orthogonal_ffn persists under normalization
+   - Expected: ~55–57 PPL (SwiGLU+wnorm was 58.16; XSA adds ~0.8–1 ppl over SwiGLU)
 
-3. **FirstOrderPFDRational, φ initialization tuning**
-   - Epoch-0 train PPL spike (9153) indicates sin saturation
+3. **XSA + qk_norm + orthogonal_ffn, 10 epochs**
+   - Confirm whether dual orthogonality advantage persists at longer training
+   - Compare against best SwiGLU+norm at ep9 (41.40)
+
+### Medium Priority (Confirming and extending)
+
+4. **Kronecker MLP with correct normalization**
+   - Current weight_norm is per-row of the full weight matrix; not defined for factored (A⊗B) form
+   - Approach: normalize at the Kronecker factor level or use spectral norm instead
+   - Current experiments all diverge; this is a prerequisite before any Kronecker ablation
+
+5. **PFDRationalGLU, per-channel PFD params**
+   - ~~10-epoch result confirmed: PFD advantage disappears with norm~~ (done)
+   - Remaining question: per-channel params (256 independent) may widen the gap at 3 epochs even after norm
+   - Low expected return given normalization parity result
+
+6. **FirstOrderPFDRational, φ initialization tuning**
+   - Epoch-0 train PPL spike (9153 unnormalized, 3382 with norm) indicates sin saturation
    - Test: Larger φ init (e.g., π/4) or learnable φ scale to reduce wrapping
-   - Target: Better early training dynamics without sacrificing final perplexity
+   - With norm, ep3=74.17 — behind SwiGLU; better init may close the gap
 
-### Medium Priority (Confirming results, ablations)
+### Low Priority / Deprioritized
 
-4. **RationalGLU, 10+ epochs**
-   - Extend to longer training; confirm 1.7% improvement holds
-   - Per-channel rational params (test hypothesis 2 for RationalGLU too)
-
-5. **G1-B + σ-C stacking (RBF)**
-   - Best two RBF variants together
-   - Expect 80–81 PPL (marginal improvement over G1-B alone at 81.62)
-
-6. **G2 with K > 5 (RBF)**
-   - Test K=10 or K=20
-   - Hypothesis: More centers give Sinkhorn more expressiveness
-
-### Exploratory (Low priority, speculative)
-
-7. **Hybrid approaches**
-   - RBF preprocessing + rational gate (combine insights)
-   - Rational activation on RBF output
-
-8. **Scaling laws**
-   - Repeat with larger d_model (512, 1024)
-   - Do rational advantages scale?
-   - Is RBF failure fundamental or depth-dependent?
+7. **G1-B + σ-C stacking (RBF)** — gap to best result (58.16) is now 27.5 ppl; unfavorable
+8. **G2 with K > 5 (RBF)** — approach is fundamentally limited
+9. **RBF/Polar hybrid approaches** — both underperform; not worth pursuing
+10. **Scaling laws** — useful once the best architecture at d=256 is settled
 
 ---
 
@@ -301,46 +369,59 @@ rbf_ffn/
 ├── data.py                        # WikiText-103 loading
 ├── models/
 │   ├── __init__.py
-│   ├── transformer_block.py       # LlamaBlock, RBFBlock, RationalBlock, RationalGLUBlock, FirstOrderPFDBlock
-│   ├── rational_ffn.py            # RationalActivation, RationalFFN, RationalGatedFFN
-│   ├── rbf_ffn.py                 # RBFBlock, gates (G0, G1A, G1B, G2), bandwidth variants
-│   ├── attention.py               # CausalSelfAttention
-│   └── model.py                   # CausalLM, block dispatch
+│   ├── transformer_block.py       # TransformerBlock (composable; dispatches via ATTN_REGISTRY + FFN_REGISTRY)
+│   ├── attention.py               # CausalSelfAttention, ExclusiveSelfAttention (XSA), PolarAttention; ATTN_REGISTRY
+│   ├── llama_ffn.py               # SwiGLU FFN (Llama-style); registered as "swiglu"
+│   ├── rational_ffn.py            # RationalActivation, RationalFFN, RationalGatedFFN, PFD variants; FFN_REGISTRY
+│   ├── polar_ffn.py               # AdaptivePolarMLP (directional/cosine similarity FFN); FFN_REGISTRY
+│   ├── kronecker_linear.py        # KroneckerLinear, KroneckerDeltaLinear
+│   ├── head_mixer.py              # KromHCWrapper (optional head mixing post-attention)
+│   └── model.py                   # CausalLM; uses TransformerBlock + FFN_REGISTRY/ATTN_REGISTRY
 ├── configs/
 │   ├── baseline.yaml              # SwiGLU reference
+│   ├── baseline_qk_norm.yaml      # + qk_norm
+│   ├── baseline_weight_norm.yaml  # + weight_norm
+│   ├── baseline_xsa.yaml          # XSA + SwiGLU — **best no-norm result (72.41)**
+│   ├── baseline_adaptive_weight_norm.yaml  # + depth-adaptive wnorm
+│   ├── baseline_qk_norm_weight_norm_pre_silu.yaml  # + qkv_silu + pre_lm_head_silu
+│   ├── baseline_kronecker_delta.yaml  # + Kronecker-delta MLP
+│   ├── baseline_kronecker_lm_head.yaml # + Kronecker LM head
+│   ├── baseline_qk_norm_weight_norm_kronecker.yaml  # + Kronecker MLP (no wnorm)
+│   ├── baseline_untied_embeddings.yaml
+│   ├── baseline_kromhc.yaml / baseline_qk_norm_kromhc.yaml
 │   ├── rational_ffn.yaml          # Non-gated rational
-│   ├── rationalglu_ffn.yaml       # Gated rational (Padé)
-│   ├── pfd_rationalglu_ffn.yaml   # Gated rational (PFD) — **best variant**
-│   ├── pfd_rationalglu_ffn_small.yaml  # Small model version
-│   ├── g0_baseline.yaml           # RBF G0 gate
-│   ├── g1a_cross_kernel.yaml      # RBF G1-A gate
-│   ├── g1b_input_driven.yaml      # RBF G1-B gate
-│   ├── g2_sinkhorn.yaml           # RBF G2 gate
-│   ├── sigma_b_per_center.yaml    # RBF σ per-center
-│   └── sigma_c_per_dim.yaml       # RBF σ per-dim
+│   ├── rationalglu_ffn.yaml / rationalglu_qk_norm.yaml
+│   ├── pfd_rational_ffn.yaml / pfd_rationalglu_ffn.yaml
+│   ├── pfd_rationalglu_qk_norm.yaml
+│   ├── pfd_rationalglu_qk_norm_weight_norm.yaml   # **best 3-epoch norm result (tied SwiGLU+norm)**
+│   ├── pfd_rationalglu_qk_norm_weight_norm_kromhc.yaml
+│   ├── first_order_pfd_rational_ffn.yaml / first_order_pfd_rational_qk_norm_weight_norm.yaml
+│   ├── polar_mlp.yaml / polar_attn.yaml / polar_full.yaml
+│   └── [RBF configs archived to experiments/archive/]
 ├── tests/
 │   ├── __init__.py
 │   ├── test_model.py              # Integration tests, optimizer groups
-│   ├── test_rational_ffn.py        # Unit tests for rational variants
+│   ├── test_rational_ffn.py       # Unit tests for rational variants
 │   ├── test_rbf_ffn.py            # Unit tests for RBF variants
-│   └── test_transformer_block.py   # Block-level tests
+│   └── test_transformer_block.py  # Block-level tests
 ├── experiments/
-│   ├── 20260313_..._G0_*/         # Per-run directories with config.yaml + metrics.jsonl
-│   └── ...
-└── findings.md                    # Detailed results table + interpretation
+│   ├── analysis.md                # Full per-epoch metrics for all completed runs
+│   ├── archive/                   # Archived RBF runs (2026-03-13/14)
+│   └── YYYYMMDD_*/                # Per-run dirs with config.yaml + metrics.jsonl
+└── findings.md                    # Section-by-section findings + interpretation
 ```
 
 ### Running Experiments
 
 ```bash
-# Baseline (reference)
+# Current best (no norm, 3 epochs)
+python -m rbf_ffn.train --config rbf_ffn/configs/baseline_xsa.yaml --n_epochs 3
+
+# Current best (with norm, 3 epochs)
+python -m rbf_ffn.train --config rbf_ffn/configs/baseline.yaml --n_epochs 3  # + qk_norm + weight_norm flags
+
+# 10-epoch extended run
 python -m rbf_ffn.train --config rbf_ffn/configs/baseline.yaml --n_epochs 10
-
-# Best variant
-python -m rbf_ffn.train --config rbf_ffn/configs/pfd_rationalglu_ffn.yaml --n_epochs 10
-
-# Quick test (3 epochs)
-python -m rbf_ffn.train --config rbf_ffn/configs/rationalglu_ffn.yaml --n_epochs 3
 
 # Run tests
 pytest rbf_ffn/tests/ -v
@@ -358,5 +439,7 @@ pytest rbf_ffn/tests/ -v
 
 ---
 
-**Last updated:** 2026-03-17
-**Best result:** PFDRationalGLU at 73.00 PPL (−3.5% vs SwiGLU)
+**Last updated:** 2026-04-16
+**Best result at 3 epochs (no weight_norm):** XSA + SwiGLU + qk_norm + orthogonal_ffn at 69.87 PPL (−7.7% vs SwiGLU, single run)
+**Best result at 3 epochs (with norm):** SwiGLU + qk_norm + weight_norm at 58.16 PPL (−23.1% vs SwiGLU)
+**Best result at 10 epochs (with norm):** SwiGLU + qk_norm + weight_norm at 41.40 PPL

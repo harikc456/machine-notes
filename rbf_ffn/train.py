@@ -41,6 +41,10 @@ def get_experiment_dir(cfg: ModelConfig) -> Path:
         norm_tags += "_actnorm"
     if cfg.use_kromhc:
         norm_tags += "_kromhc"
+    if cfg.orthogonal_ffn:
+        norm_tags += "_orthogonal"
+    if cfg.gated_orthogonal_ffn:
+        norm_tags += "_gated_orthogonal"
     name = f"{stamp}_{cfg.attn_type}_{cfg.ffn_type}{norm_tags}_d{cfg.d_model}"
     path = Path(__file__).parent / "experiments" / name
     path.mkdir(parents=True, exist_ok=True)
@@ -445,7 +449,7 @@ def parse_args():
     p.add_argument("--n_epochs",    type=int, default=None, help="Override n_epochs")
     p.add_argument("--resume",      type=str, default=None,
                    help="Experiment directory to resume training from")
-    p.add_argument("--resume_from", choices=["best", "final", "latest"], default="best",
+    p.add_argument("--resume_from", choices=["best", "final", "latest"], default=None,
                    help="Which checkpoint to load when resuming (default: best)")
     args = p.parse_args()
     if args.resume is None and args.config is None:
@@ -463,7 +467,7 @@ if __name__ == "__main__":
         resume_dir        = Path(args.resume)
         path              = resume_dir / "config.yaml"
         cfg               = load_config(path)
-        resume_checkpoint = resume_dir / f"checkpoint_{args.resume_from}.pt"
+        resume_checkpoint = resume_dir / f"checkpoint_{args.resume_from or 'best'}.pt"
     else:
         path = Path(args.config)
         cfg  = load_config(path)

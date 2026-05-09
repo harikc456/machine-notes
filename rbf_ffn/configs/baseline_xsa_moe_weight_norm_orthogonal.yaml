@@ -1,0 +1,42 @@
+# XSA + Sparse MoE FFN + weight norm + Gram-Schmidt orthogonal experts.
+# Parameter-matched to SwiGLU baseline (1× FFN params).
+#
+# Extends baseline_xsa_moe_param_matched_weight_norm.yaml with moe_orthogonal=true:
+# active expert outputs are Gram-Schmidt orthogonalised in descending
+# router-score order before the weighted sum. Each expert is forced to
+# write a direction orthogonal to all higher-confidence experts, maximising
+# independent information written to the residual stream per MechInterp
+# key-value memory view.
+#
+#   4 experts × 3 projections × 256 × 172 = 528,384  ≈  3 × 256 × 688 = 528,384
+#
+# Baselines to beat:
+#   §9.3 param-matched MoE (no orthogonal): 60.99 ep2
+#   §8.8 XSA + wnorm (dense SwiGLU):        56.88 ep2
+#   §8.9 XSA + wnorm + orthogonal_ffn:      55.57 ep2
+#
+# Cosine similarity probe on §9.2 (4× MoE) showed mean=0.355 (range 0.17–0.61),
+# confirming substantial inter-expert redundancy that Gram-Schmidt should remove.
+attn_type: xsa
+ffn_type: moe
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 172
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+moe_n_experts: 4
+moe_top_k: 2
+moe_orthogonal: true
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0

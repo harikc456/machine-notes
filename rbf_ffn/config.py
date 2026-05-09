@@ -54,6 +54,7 @@ class ModelConfig:
     # Mixture of Experts
     moe_n_experts: int = 8        # Total number of experts (used when ffn_type="moe")
     moe_top_k: int = 2            # Experts activated per token
+    moe_orthogonal: bool = False  # Apply Gram-Schmidt to active expert outputs (router-score order)
     pre_lm_head_silu: bool = False # Apply SiLU activation before lm_head
 
     # Embedding / LM head

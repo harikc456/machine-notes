@@ -88,13 +88,16 @@ All three σ variants perform within ~1 perplexity point of each other. Per-dim 
 
 | Experiment | Hypothesis | Status |
 |------------|-----------|--------|
-| XSA + qk_norm (no wnorm) | Whether qknorm improves XSA | **Done** — 71.57 (§8.2) |
+| XSA + qk_norm (no wnorm) | Whether qknorm improves XSA | **Done** — 71.05 (§8.2, best of 3) |
 | XSA + qk_norm + orthogonal_ffn | Whether FFN orthogonalization stacks with XSA | **Done** — 69.87 (§8.5); ~1.7 ppl gain; single run, confirm |
 | XSA + qk_norm + orthogonal_ffn + weight_norm | Whether dual orthogonality stacks with wnorm | **Done** — 55.57 ep2, 49.91 ep9 (§8.9) |
 | XSA + qk_norm + weight_norm (no orthogonal_ffn) | Isolate XSA+wnorm without orthogonal_ffn | **Done** — 56.88 (§8.8) |
 | XSA + MoE + qk_norm + weight_norm | Whether sparse MoE FFN improves over SwiGLU | **Done** — 47.31 ep2 (§9.2); new best at 3 epochs, but 4× FFN params |
 | XSA + PFDRationalGLU + qk_norm + orthogonal_ffn | Stack best attention + best FFN + orthogonality | Priority 1 |
-| MoE parameter-matched ablation | Isolate MoE structural gain from param count | Priority 2 — run SwiGLU at 4× FFN width (ffn_hidden=2752) |
+| MoE + Gram-Schmidt orthogonal experts (param-matched) | Whether forcing expert output orthogonality recovers the structural benefit of sparse routing | Priority 2 — see §9.6 |
+| MoE parameter-matched ablation | Isolate MoE structural gain from param count | **Done** — 60.99 ep2 (§9.3); gain was parameter count, not routing |
+| MoE + dynamic_erf norm | Whether dynamic ERF norm helps MoE | **Done** — 53.86 ep2 (§9.4); underperforms standard RMSNorm |
+| SwiGLU at 4× FFN width (ffn_hidden=2752) | Complete the parameter-matched comparison with dense baseline | **Done** — 44.33 ep2 (§9.5); beats MoE at equal budget, sparse routing adds no structural benefit |
 | PFDRationalGLU, 10+ epochs | Confirm whether PFD advantage over RationalGLU holds or is an early-training effect | Done (§7) — advantage disappears |
 | PFDRationalGLU, per-channel PFD params | Current params are shared; per-channel or per-head may widen the gap further | Low priority |
 | FirstOrderPFDRational, phi initialization | ep0 train PPL spike (9153) suggests sin saturation; test larger phi init or learnable scale | Low priority |
@@ -230,13 +233,14 @@ Two runs of XSA + SwiGLU with `qk_norm: true`, `orthogonal_ffn: false`:
 | Run | Val PPL (ep 0) | Val PPL (ep 1) | Val PPL (ep 2) | Time/epoch |
 |-----|----------------|----------------|----------------|------------|
 | 20260415_135856 | 134.90 | 90.72 | 71.87 | ~1161s |
-| 20260415_145723 | 135.36 | 90.62 | **71.57** | ~1166s |
+| 20260415_145723 | 135.36 | 90.62 | 71.57 | ~1166s |
+| 20260506_130221 | 131.75 | 88.66 | **71.05** | ~1187s |
 
 **Key conclusions:**
 
-- **QK norm adds ~0.5–1 ppl improvement over XSA without qk_norm** (72.41 → 71.57–71.87). Modest effect, consistent with qk_norm's ~0.5 ppl gain on SwiGLU (§6.1).
-- **Run-to-run variance is low** (71.57–71.87, spread of 0.3 ppl) — tighter than longer runs; these two runs are a reliable estimate.
-- The XSA + qk_norm baseline (no orthogonal_ffn) is **71.57 PPL** (best of 2).
+- **QK norm adds ~0.5–1 ppl improvement over XSA without qk_norm** (72.41 → 71.05–71.87). Modest effect, consistent with qk_norm's ~0.5 ppl gain on SwiGLU (§6.1).
+- **Run-to-run variance is low** (71.05–71.87, spread of 0.82 ppl across 3 runs) — a reliable estimate.
+- The XSA + qk_norm baseline (no orthogonal_ffn) is **71.05 PPL** (best of 3).
 
 ### §8.3 XSA + LeakyReLUSq + QK Norm (2026-04-15)
 
@@ -466,4 +470,119 @@ Run `20260508_085651_652695_xsa_moe_qknorm_wnorm_d256`:
 2. **Gain is not parameter-free.** MoE uses ~4× the FFN parameters and ~30% more time/epoch. The correct null comparison is SwiGLU at equivalent parameter budget (ffn_hidden≈2752), which has not been run.
 3. **Weight normalization works well with MoE.** Epoch 0 val PPL (102.68) is lower than SwiGLU+wnorm (114.41); the router appears to benefit from normalized expert weights.
 4. **Router load balance not yet monitored.** Expert collapse (tokens concentrating on 1–2 experts) is a known MoE failure mode. Monitoring router entropy is a priority before drawing strong conclusions.
-5. **Priority next: parameter-matched ablation.** Run SwiGLU at ffn_hidden=2752 (4× budget) and MoE with smaller experts (n_experts=4, ffn_hidden=172 ≈ 1× budget) to isolate the structural benefit of sparse routing from raw parameter count.
+5. **Priority next: parameter-matched ablation.** Run SwiGLU at ffn_hidden=2752 (4× budget) and MoE with smaller experts (n_experts=4, ffn_hidden=172 ≈ 1× budget) to isolate the structural benefit of sparse routing from raw parameter count. Results in §9.3.
+
+### §9.3 MoE Parameter-Matched Ablation (2026-05-09)
+
+Run `20260508_133927_264144_xsa_moe_qknorm_wnorm_d256` — XSA + MoE + qknorm + wnorm with `ffn_hidden=172` so total FFN params match SwiGLU baseline:
+
+```
+4 experts × 3 projections × 256 × 172 = 528,384 ≈ 3 × 256 × 688 = 528,384
+```
+
+| Epoch | Val PPL | Time (s) |
+|-------|---------|----------|
+| 0 | 116.20 | 2467† |
+| 1 | 75.52 | 1619 |
+| 2 | **60.99** | 1608 |
+
+† ep0 time anomalously high (hardware/IO state); ep1–2 times are representative at ~1613s/epoch.
+
+**Comparison table:**
+
+| Variant | Val PPL (ep 2) | FFN params | Time/epoch |
+|---------|----------------|------------|------------|
+| XSA + MoE + qknorm + wnorm (full, §9.2) | **47.31** | ~4× SwiGLU | ~1732s |
+| XSA + MoE + qknorm + wnorm (param-matched) | 60.99 | 1× SwiGLU | ~1613s |
+| XSA + qknorm + wnorm + orthogonal_ffn (§8.9) | 55.57 | 1× SwiGLU | ~1197s |
+| XSA + qknorm + wnorm (§8.8) | 56.88 | 1× SwiGLU | ~1373s |
+| SwiGLU + qknorm + wnorm (§6.1) | 58.16 | 1× SwiGLU | ~1330s |
+
+**Key conclusions:**
+
+1. **The §9.2 MoE gain was primarily parameter count, not sparse routing.** At equal parameter budget (ffn_hidden=172), MoE achieves 60.99 — 13.68 ppl worse than full MoE (47.31) and only 2.83 ppl better than dense SwiGLU+wnorm (58.16). Sparse routing over 4 experts with small hidden dimension contributes negligible structural benefit.
+2. **Parameter-matched MoE underperforms XSA+orthogonal_ffn+wnorm** (60.99 vs 55.57 at 1× FFN params). The routing overhead consumes capacity without adding representational gain at this scale.
+3. **Dense SwiGLU + orthogonal_ffn is more parameter-efficient than sparse MoE** at equal parameter budget: 55.57 vs 60.99 ppl, with lower per-epoch time (~1197s vs ~1613s). Orthogonal wrapping is a strictly better use of the 1× FFN budget than routing 4 small experts.
+4. **The dense SwiGLU at 4× FFN width (ffn_hidden=2752) has not been run.** This would complete the parameter-matched comparison from the other direction — confirming whether the full-MoE result (47.31) is matched by a plain wide FFN.
+
+### §9.4 MoE + Dynamic ERF Normalization (2026-05-08)
+
+Run `20260508_120315_709553_xsa_moe_qknorm_wnorm_dynamic_erf_d256` — full MoE (`ffn_hidden=688`, 4× params) with `norm_type: dynamic_erf` replacing the default RMSNorm:
+
+| Epoch | Val PPL | Time (s) |
+|-------|---------|----------|
+| 0 | 119.29 | 1742 |
+| 1 | 70.24 | 1629 |
+| 2 | **53.86** | 1653 |
+
+**Comparison to full MoE + wnorm with standard RMSNorm (§9.2):**
+
+| Variant | Val PPL (ep 0) | Val PPL (ep 2) | Δ vs §9.2 |
+|---------|----------------|----------------|-----------|
+| XSA + MoE + wnorm (RMSNorm, §9.2) | 102.68 | **47.31** | — |
+| XSA + MoE + wnorm + dynamic_erf | 119.29 | 53.86 | +6.55 |
+
+**Key conclusions:**
+
+1. **Dynamic ERF normalization hurts MoE performance** (53.86 vs 47.31, +6.55 ppl). The dynamic_erf norm type is not beneficial in this setting.
+2. **Epoch 0 val PPL is higher** (119.29 vs 102.68), suggesting dynamic_erf norm degrades initialization quality or slows early optimization relative to RMSNorm.
+3. **Dynamic ERF norm is deprioritized.** RMSNorm remains the default normalization for all subsequent experiments.
+
+### §9.5 Wide Dense SwiGLU vs MoE (Parameter Budget Closed, 2026-05-09)
+
+Run `20260509_090930_507143_xsa_swiglu_qknorm_wnorm_d256` — XSA + SwiGLU + qknorm + wnorm with `ffn_hidden=2752` (4× standard width), matching the full MoE's parameter budget:
+
+```
+SwiGLU FFN params: 3 × 256 × 2752 = 2,113,536 ≈ 4 × 3 × 256 × 688 = 2,113,536
+```
+
+| Epoch | Val PPL | Time (s) |
+|-------|---------|----------|
+| 0 | 100.58 | 1370 |
+| 1 | 60.49 | 1338 |
+| 2 | **44.33** | 1339 |
+
+**Full parameter-matched comparison (ep2):**
+
+| Variant | Val PPL (ep 2) | FFN params | Time/epoch |
+|---------|----------------|------------|------------|
+| **XSA + SwiGLU wide + qknorm + wnorm** | **44.33** | ~4× SwiGLU | ~1339s |
+| XSA + MoE + qknorm + wnorm (§9.2) | 47.31 | ~4× SwiGLU | ~1732s |
+| XSA + MoE + qknorm + wnorm + dynamic_erf (§9.4) | 53.86 | ~4× SwiGLU | ~1653s |
+| XSA + MoE + qknorm + wnorm (param-matched, §9.3) | 60.99 | 1× SwiGLU | ~1613s |
+| XSA + qknorm + wnorm + orthogonal_ffn (§8.9) | 55.57 | 1× SwiGLU | ~1197s |
+| SwiGLU + qknorm + wnorm (§6.1) | 58.16 | 1× SwiGLU | ~1330s |
+
+**Key conclusions:**
+
+1. **Wide dense SwiGLU (44.33) beats full MoE (47.31) by 2.98 ppl at equal parameter budget.** Sparse routing over 4 experts provides no structural advantage over a wider dense FFN — it is strictly inferior in both quality and training speed at this scale.
+2. **MoE is also 29% slower per epoch** (~1732s vs ~1339s). A wide SwiGLU is faster because it avoids routing overhead, gating, and the scatter/gather operations of top-k selection.
+3. **The §9.2 MoE gain over 1× SwiGLU was entirely parameter count.** At d_model=256 / seq_len=512 / WikiText-103, sparse routing is not beneficial — the model is too small for experts to specialize meaningfully.
+4. **Wide SwiGLU (44.33) is the new best 3-epoch result**, edging out even the best 10-epoch SwiGLU+wnorm run (41.40 at ep9 — but that is 10 epochs vs 3, with 1× FFN width).
+5. **Quality comparison favors dense, but MoE has orthogonal practical advantages.** Sparse routing means only `top_k` experts activate per token — at top_k=2, n_experts=4, inference FLOPs and active parameters are half the total budget, while a wide dense SwiGLU always activates all parameters. MoE also enables expert-parallel sharding across devices: experts reside on separate devices and only the routed experts are invoked, keeping per-device memory proportional to 1× FFN size regardless of total expert count. These benefits are irrelevant at single-GPU research scale but become the primary motivation for MoE at deployment scale.
+6. **Recommended default for capacity scaling at this scale:** increase `ffn_hidden` in a dense SwiGLU. At large-scale deployment where inference cost and device memory dominate, MoE remains well-motivated despite the quality gap.
+
+### §9.6 Expert Output Cosine Similarity Probe (2026-05-09)
+
+Before concluding that sparse routing adds no structural benefit, `probe_moe_cosine.py` was run against the §9.2 checkpoint (`20260508_085651_652695_xsa_moe_qknorm_wnorm_d256`, full MoE, 4× params) to measure inter-expert redundancy directly.
+
+**Method:** For each MoE layer, 50 validation batches were passed through the model with probe hooks installed. For each token, the cosine similarity between the two top-k active experts' raw outputs was recorded. The probe runs the original routing path (correct forward output) and collects expert outputs as a side channel.
+
+**Results across 6 layers:**
+
+| Layer | Mean cos sim | Std | Min | Max |
+|-------|-------------|-----|-----|-----|
+| All layers (aggregate) | **0.355** | — | 0.17 | 0.61 |
+
+**Key conclusions:**
+
+1. **Inter-expert redundancy is substantial.** Mean cosine similarity of 0.355 between the two active experts' outputs per token means each expert pair is significantly correlated — roughly 35% of directional information is shared. This is not near-zero (independent experts) or near-1 (collapsed experts), but in a regime where Gram-Schmidt orthogonalization could meaningfully redirect the redundant component.
+2. **Layer-to-layer variance is high** (range 0.17–0.61), suggesting some layers have already specialized while others have not. A per-layer analysis (not yet run) would reveal whether the redundancy is concentrated in specific positions in the network.
+3. **The redundancy motivates `moe_orthogonal`.** If the router assigns two correlated experts, their weighted sum wastes capacity writing similar information to the residual stream. Gram-Schmidt in router-score order (dominant expert unchanged; second expert projected to be orthogonal to the first) forces each expert to contribute maximally independent information. This is the FFN-MoE analogue of XSA and `OrthogonalMLPWrapper`.
+4. **Comparison to OSS MoE models is pending.** `probe_oss_moe_cosine.py` was written to run the same probe on OLMoE (64 experts, top_k=8) and Mixtral (8 experts, top_k=2) checkpoints for context. These at-scale results would clarify whether 0.355 is typical of small undertrained MoE or a property of the architecture.
+
+**Implementation (`moe_orthogonal=true`):** `SparseMoEFFN._gram_schmidt` collects active expert outputs as `(T, top_k, D)` in descending router-score order and applies sequential Gram-Schmidt projection. Row 0 (highest-confidence expert) is unchanged; each subsequent expert has all projections onto prior orthogonalized experts subtracted. The re-normalized weighted sum is then taken as usual. No new parameters; negligible overhead at top_k=2.
+
+**Planned experiment** (`baseline_xsa_moe_weight_norm_orthogonal.yaml`): XSA + MoE + wnorm + `moe_orthogonal=true`, parameter-matched (ffn_hidden=172, 1× FFN params). Baselines to beat:
+- §9.3 param-matched MoE (no orthogonal): 60.99 ep2
+- §8.9 XSA + wnorm + orthogonal_ffn: 55.57 ep2

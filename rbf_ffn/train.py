@@ -45,6 +45,10 @@ def get_experiment_dir(cfg: ModelConfig) -> Path:
         norm_tags += "_orthogonal"
     if cfg.gated_orthogonal_ffn:
         norm_tags += "_gated_orthogonal"
+    if cfg.norm_type != "rmsnorm":
+        norm_tags += f"_{cfg.norm_type}"
+    if cfg.moe_orthogonal:
+        norm_tags += "_orthogonal"
     name = f"{stamp}_{cfg.attn_type}_{cfg.ffn_type}{norm_tags}_d{cfg.d_model}"
     path = Path(__file__).parent / "experiments" / name
     path.mkdir(parents=True, exist_ok=True)

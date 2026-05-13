@@ -3,8 +3,11 @@
 
 import argparse
 import html as html_module
+import sys
 from datetime import datetime
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from rbf_ffn._leaderboard_data import load_all_experiments, fmt, fmt_params
 

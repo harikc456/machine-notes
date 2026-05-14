@@ -1,0 +1,214 @@
+{
+  "main": {
+    "id": "550cd01a1305b16f",
+    "type": "split",
+    "children": [
+      {
+        "id": "24732edadc26b671",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "e9b13fca0049dfc7",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "SCHEMA.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "SCHEMA"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "44a1354a6913b046",
+    "type": "split",
+    "children": [
+      {
+        "id": "2df668705e759647",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "e3e3ba69bb95fef6",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "ad3edba6fa8bbdbc",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "22d74b34b183eff2",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "b65e6a980a38ce01",
+    "type": "split",
+    "children": [
+      {
+        "id": "87f39368f8ba9ba6",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "8f91ec35898b99bf",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "SCHEMA.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for SCHEMA"
+            }
+          },
+          {
+            "id": "3f31d01cbba733cd",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "SCHEMA.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from SCHEMA"
+            }
+          },
+          {
+            "id": "bd1a1c56f1eee992",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "02f6b2289de3ae82",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "67445735098b5a77",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "SCHEMA.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of SCHEMA"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "e9b13fca0049dfc7",
+  "lastOpenFiles": [
+    "log.md.tmp.7657.dc27b8600024",
+    "concepts/jepa.md.tmp.7657.caeab5c00b29",
+    "log.md.tmp.7657.689f44173a6a",
+    "index.md.tmp.7657.62b6bdb8f5be",
+    "index.md.tmp.7657.b795a38da115",
+    "index.md.tmp.7657.7b64d98085ab",
+    "concepts/jepa.md",
+    "concepts/jepa.md.tmp.7657.11b14c27a48e",
+    "concepts/normalization-free-transformers.md",
+    "concepts/normalization-free-transformers.md.tmp.7657.158f109dc468",
+    "entities/lewm.md",
+    "entities/lewm.md.tmp.7657.0b852d936bb5",
+    "entities/lejepa.md",
+    "entities/lejepa.md.tmp.7657.bfc448055d71",
+    "entities/derf.md",
+    "entities/derf.md.tmp.7657.0b9559a6bcea",
+    "concepts/weight-norm-training.md",
+    "concepts/orthogonal-residual-streams.md",
+    "concepts/grokking.md",
+    "entities/xsa.md",
+    "entities/qknorm.md",
+    "entities/clip-to-grok.md",
+    "entities/weight-normalization.md",
+    "entities/deepseek-v4.md",
+    "entities/deepseek-v3-2.md"
+  ]
+}

@@ -70,6 +70,9 @@ hyberbolic_embeddings/experiments/results/
 hyberbolic_embeddings/experiments/*/data/
 hyberbolic_embeddings/checkpoints/
 
+# Papers (PDFs, never commit)
+papers/
+
 # CCE (code-context-engine)
 # CCE local cache (per-machine, not for version control)
 .cce/

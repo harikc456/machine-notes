@@ -26,11 +26,11 @@ Structural changes that reduce the KV cache footprint or compute per token at th
 
 ### MLA + CSA/HCA (DeepSeek)
 
-[[deepseek-v3-2]] introduced **DSA (Decomposed Self-Attention / MLA)** — compresses K/V into low-rank latent vectors, then reconstructs per-layer. Trades compute for memory.
+[[deepseek-v3-2]] introduced **DSA (DeepSeek Sparse Attention)** — highly efficient attention mechanism reducing computational complexity for long-context scenarios.
 
 [[deepseek-v4]] pushed further with **CSA/HCA hybrid**:
-- CSA (Chunked Self-Attention): handles short-range context efficiently
-- HCA (Hybrid Chunked Attention): handles long-range context at 1M tokens
+- CSA (Compressed Sparse Attention): reduces long-context compute complexity
+- HCA (Heavily Compressed Attention): further compresses attention at extreme context lengths
 - Result: **27% FLOPs reduction, 10% KV cache** vs V3.2 at 1M-token context
 
 ### Sparse MoE
@@ -258,7 +258,7 @@ Gain depends on task difficulty distribution: summarization and code completion 
 
 | Technique | What it trades | Gain |
 |---|---|---|
-| GQA/MLA/CSA+HCA | Model quality (marginal) | KV cache ↓ 10–90% |
+| GQA/DSA/CSA+HCA | Model quality (marginal) | KV cache ↓ 10–90% |
 | MoE | Memory (all experts must load) | FLOPs/token ↓ |
 | INT4 weights | Quality (marginal at INT8, moderate at INT4) | Memory ↓ 2–4× |
 | H₂O pruning | Retrieval quality | Throughput ↑ 29× |

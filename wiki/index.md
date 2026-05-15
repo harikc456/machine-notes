@@ -2,7 +2,7 @@
 
 > Content catalog. Every wiki page listed under its type with a one-line summary.
 > Read this first to find relevant pages for any query.
-> Last updated: 2026-05-14 | Total pages: 37
+> Last updated: 2026-05-15 | Total pages: 38
 
 ## Entities
 
@@ -51,3 +51,4 @@
 ## Queries
 
 - [[inference-improvements-summary]] — LLM inference efficiency survey: architecture (GQA/MLA/MoE), weight quantization, KV cache pruning (H₂O) and compression (PolarQuant/TurboQuant), speculative decoding
+- [[memory-reduction-survey]] — Comprehensive survey of memory reduction techniques for LLM training (ZeRO, gradient checkpointing, LoRA, Flash Attention, MoE) and inference (KV compression, weight quantization, MQA/GQA/MLA, PagedAttention)

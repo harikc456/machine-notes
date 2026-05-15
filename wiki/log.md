@@ -126,3 +126,11 @@
 - Added self-speculative decoding subsection to §4
 - Updated cross-cutting themes table with 5 new rows
 - Updated See Also with 6 new wikilinks
+
+## [2026-05-15] query | Memory reduction techniques survey (training + inference)
+- Synthesized 15 techniques across training and inference phases
+- Training: mixed precision, gradient checkpointing, ZeRO, gradient accumulation, LoRA/QLoRA, Flash Attention, MoE, 8-bit Adam/Muon/Adafactor
+- Inference: weight quantization (PTQ), KV eviction (H₂O), KV quantization (PolarQuant/TurboQuant), MQA/GQA/MLA/CSA, PagedAttention, Flash Attention at inference, speculative decoding, early exit, expert offloading
+- Pages created:
+  - queries/memory-reduction-survey.md
+- index.md updated: total pages 37 → 38

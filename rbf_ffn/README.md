@@ -185,7 +185,66 @@ out = W_down · (gate ⊙ u)                  # same u used as value
 
 ---
 
-### Experiment 6 — Polar Coordinate FFN
+### Experiment 6 — ReLU Squared FFN
+
+**Goal:** Test a simpler, non-gated activation — ReLU² — as a drop-in FFN that avoids the complexity of a separate gate projection while retaining a smooth nonlinearity.
+
+**Math:**
+
+```
+h   = ReLU(W_up · x) ** 2
+out = W_down · h
+```
+
+No gate branch, no bias. Two projections instead of three.
+
+**Intuition:** ReLU² applies a hard floor at zero (sparse activations for negative inputs) and then squares the output, amplifying strong activations while suppressing weak ones. This creates a soft winner-takes-all dynamic without a separate learned gate. The activation is everywhere-nonnegative and strongly convex on (0, ∞), which gives the optimizer a clean gradient landscape. Compared to SwiGLU, it saves ≈33% of FFN parameters (2 projections vs 3) with a simpler compute graph.
+
+**Configs:** `baseline_xsa_relu_sq.yaml`, `baseline_xsa_relu_sq_lora_lm_head.yaml`
+
+---
+
+### Experiment 7 — LoRA LM Head
+
+**Goal:** Replace the tied-embedding LM head with a base tied weight plus a low-rank adapter (A, B), reducing the LM head's trainable parameter footprint while still allowing the projection to diverge from the embedding matrix.
+
+**Math:**
+
+```
+logits = x @ W.T + (x @ A) @ B
+```
+
+Where `W` is the token embedding weight (frozen in this module), `A ∈ R^{d×r}`, `B ∈ R^{r×V}`. `B` is zero-initialised (LoRA convention), so the adapter contributes nothing at step 0.
+
+**Parameter cost:** `r * (d_model + vocab_size)` vs `d_model * vocab_size` for a full untied head. With r=8, d=256, V=50257: ≈404K vs 12.9M learnable params in the head.
+
+**Optimizer routing:** A and B are 2D → routed to Muon. The embedding W continues under AdamW via the `emb_id` guard.
+
+**Configs:** `baseline_xsa_relu_sq_lora_lm_head.yaml`, `baseline_xsa_swiglu_lora_lm_head.yaml`
+
+---
+
+### Experiment 8 — Selective Orthogonal FFN (Per-Layer Control)
+
+**Goal:** Apply `OrthogonalMLPWrapper` to a selected subset of layers rather than all layers, testing whether specific layers benefit most from the orthogonal novelty constraint.
+
+**Mechanism:**
+
+The `orthogonal_ffn_layers` config field lists layer indices that receive orthogonal wrapping. Layers not in the list use a plain FFN. Overrides the global `orthogonal_ffn` bool when non-empty.
+
+```
+FFN_out = FFN(x) − (FFN(x) · x̂) x̂     (orthogonal projection)
+```
+
+Applied only to the listed layer indices. The remaining layers use standard SwiGLU.
+
+**Hypothesis:** If alignment is concentrated in specific layers (e.g. middle layers), selective orthogonalization recovers most of the quality gain from full orthogonal_ffn with weaker inductive constraint on the rest.
+
+**Config:** `baseline_xsa_qknorm_wnorm_orthogonal_alternating.yaml` (layers 1–4 orthogonal, 0 and 5 plain)
+
+---
+
+### Experiment 9 — Polar Coordinate FFN
 
 **Goal:** Operate entirely in directional (angular) space, discarding token magnitude. Test whether language model FFNs need magnitude at all.
 
@@ -209,7 +268,7 @@ out = W_down · (cos_sim ⊙ gate)
 
 ---
 
-### Experiment 7 — Polar Attention
+### Experiment 10 — Polar Attention
 
 **Goal:** Apply the same directional philosophy to attention: score attention by cosine similarity of queries and keys (geometric alignment), with learnable confidence scalars modulating each head's sensitivity.
 
@@ -231,7 +290,7 @@ Where `q_scale, k_scale ∈ R^{n_heads}` are learnable per-head confidence scala
 
 ---
 
-### Experiment 8 — Kronecker-Factored MLP Projections
+### Experiment 11 — Kronecker-Factored MLP Projections
 
 **Goal:** Replace each `nn.Linear` in FFN layers with a Kronecker-factored approximation. Reduce parameters by ~50% while preserving the full rank of the weight matrix.
 
@@ -265,7 +324,7 @@ out = out.reshape(..., out_features)
 
 ---
 
-### Experiment 9 — Normalization Strategies
+### Experiment 12 — Normalization Strategies
 
 Normalization proved to be the dominant factor — far more impactful than any FFN architecture change.
 
@@ -441,6 +500,11 @@ rbf_ffn/experiments/20260324_164546_baseline_qknorm_wnorm_d256/
 | `polar_mlp.yaml` | polar_mlp | qk_norm + weight_norm | Directional FFN |
 | `polar_attn.yaml` | polar_attn | — | Cosine-similarity attention |
 | `polar_full.yaml` | polar_full | — | Polar attention + polar FFN |
+| `baseline_xsa_relu_sq.yaml` | xsa + relu_sq | qk_norm + weight_norm | ReLU² FFN (2-projection, no gate) |
+| `baseline_xsa_relu_sq_lora_lm_head.yaml` | xsa + relu_sq | qk_norm + weight_norm | relu_sq + LoRA LM head (rank 8) |
+| `baseline_xsa_swiglu_lora_lm_head.yaml` | xsa + swiglu | qk_norm + weight_norm | SwiGLU + LoRA LM head (rank 8) |
+| `baseline_xsa_qknorm_wnorm_orthogonal_alternating.yaml` | xsa + swiglu | qk_norm + weight_norm | Orthogonal FFN on layers 1–4 only |
+| `xsa_baseline_qknorm_wnorm_tie_embeddings.yaml` | xsa + swiglu | qk_norm + weight_norm | Untied embeddings ablation |
 
 ---
 
@@ -463,6 +527,10 @@ rbf_ffn/experiments/20260324_164546_baseline_qknorm_wnorm_d256/
 | `qkv_silu` | `false` | SiLU after Q, K, V projections |
 | `pre_lm_head_silu` | `false` | SiLU before lm_head |
 | `kronecker_mlp` | `false` | Replace FFN `nn.Linear` with `KroneckerLinear` |
+| `lm_head_lora_rank` | `0` | 0 = disabled; >0 = LoRALMHead with this rank (`tie_embeddings` must be true) |
+| `orthogonal_ffn` | `false` | Wrap every FFN output to be orthogonal to input x |
+| `orthogonal_ffn_layers` | `[]` | If non-empty, apply orthogonal wrapping only to these layer indices (overrides `orthogonal_ffn`) |
+| `orthogonal_ffn_eps` | `1e-8` | Epsilon for orthogonal projection stability |
 
 ### Normalization
 

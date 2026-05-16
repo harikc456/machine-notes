@@ -1,9 +1,9 @@
 ---
 title: LLM Inference Improvements — Structured Survey
 created: 2026-05-14
-updated: 2026-05-14
+updated: 2026-05-16
 type: query
-tags: [inference, architecture, quantization, kv-cache, speculative, attention, survey]
+tags: [inference, architecture, quantization, kv-cache, speculative, attention, survey, training]
 sources: []
 confidence: high
 ---
@@ -111,7 +111,31 @@ See [[kv-cache-compression-comparison]] for side-by-side vs. quantization approa
 
 ---
 
-### 3b. KV Cache Compression (Quantization)
+### 3b. KV Cache Pruning — TriAttention (Pre-RoPE)
+
+[[triattention]] — MIT / NVIDIA / ZJU, Apr 2026
+
+**Problem with post-RoPE importance estimation**: RoPE rotates Q/K vectors by position, making only the most recent queries have up-to-date orientations. This creates a tiny, unstable observation window — H₂O's attention-accumulation signal is unreliable for long-context reasoning tasks (AIME, chain-of-thought).
+
+**Key insight**: In pre-RoPE space, Q/K vectors are **highly concentrated around fixed non-zero centers** that remain stable across positions and contexts. This concentration makes attention logits predictable as a trigonometric series in Q-K distance — usable as a stable importance score that sees the entire sequence, not just a recent window.
+
+**Scoring function**:
+- *S_trig(k, Δ)*: trigonometric series from Q/K centers — captures distance preference (which positions each head prefers to attend to)
+- *S_norm(k)*: norm-based complement — catches low-norm keys that distance-based scoring would miss
+- Weighted by Q/K concentration (Mean Resultant Length R_f): high concentration → trigonometric score dominates; low → norm complement matters more
+
+**Results on AIME25 (Qwen3-8B, 32K-token generation)**:
+- **2.5× throughput** at same accuracy as Full Attention
+- **10.7× KV memory reduction** at same accuracy as Full Attention
+- R-KV achieves only ~half the accuracy at the same efficiency point
+
+**Why it matters**: existing methods (H₂O, R-KV) effectively fail at long-context reasoning tasks. TriAttention makes aggressive KV compression viable for chain-of-thought and mathematical reasoning.
+
+See [[triattention]] for the full method; [[kv-cache-compression-comparison]] for H₂O vs TriAttention vs quantization.
+
+---
+
+### 3c. KV Cache Compression (Quantization)
 
 **Goal**: keep all tokens but represent K/V tensors at lower precision.
 
@@ -185,6 +209,28 @@ Variant that eliminates the separate draft model. See [[early-exit-inference]] f
 
 Trade-off: no extra model memory, but draft quality bounded by early-exit representation quality.
 
+### Speculative Speculative Decoding (SSD / Saguaro)
+
+[[saguaro]] — Kumar, Dao, May (Stanford / Princeton / Together AI), May 2026
+
+**The remaining bottleneck in standard SD**: drafting and verification are still sequential — the draft model must wait for verification to finish before generating the next speculation. This idle time is the limiting factor.
+
+**SSD eliminates this by running speculator and verifier on separate hardware in parallel**:
+1. Draft model sends speculated tokens to verifier
+2. While verification runs, the draft model **predicts the most likely verification outcomes** (k tokens accepted + which bonus token sampled)
+3. Pre-speculates for each predicted outcome — stores in a "speculation cache"
+4. When verification result arrives: cache hit → return pre-speculated tokens immediately (zero drafting latency); cache miss → synchronous fallback
+
+**Key challenge — predicting the bonus token**: The bonus token is sampled from the residual distribution max(p_target − p_draft, 0). Saguaro uses draft logits to predict the most likely bonus token with ~90% accuracy.
+
+**Results** (Llama-3.1-70B target, Llama-3.2-1B draft, TP=4 H100):
+- **30% faster than strongest SD baselines** (vLLM, SGLang)
+- **Up to 5× faster than autoregressive decoding**
+- Lossless — same output distribution as target model
+- Improves Pareto frontier across all batch sizes
+
+**Distinction from tree-based SD**: tree methods increase *verifier* compute; SSD scales *speculator* compute with no extra verification overhead. Orthogonal and combinable.
+
 ---
 
 ## 5. Serving Infrastructure (Algorithmic)
@@ -254,6 +300,42 @@ Gain depends on task difficulty distribution: summarization and code completion 
 
 ---
 
+## 7. Diffusion Language Models as an Inference Paradigm
+
+Diffusion language models (DLMs) offer **parallel token generation** — a fundamentally different inference mode vs. autoregressive decoding. Two recent systems bring DLMs to parity with AR quality while delivering real serving efficiency gains.
+
+See [[diffusion-language-models]] for the landscape; [[block-diffusion]] and [[i-dlm]] for entity pages.
+
+### Block Diffusion (BD3-LM)
+
+[[block-diffusion]] — Arriola et al., ICLR 2025
+
+Interpolates between AR and diffusion by being **autoregressive over blocks** and applying discrete diffusion **within each block**. Key inference properties restored vs. standard DLMs:
+- **KV caching**: block-causal attention means prior blocks' KV pairs are cached exactly like AR
+- **Variable-length generation**: block-AR structure supports arbitrary sequence lengths
+- **Within-block parallelism**: all L' tokens in a block denoised in parallel, with parallel token sampling
+
+Sets SOTA perplexity among discrete DLMs on LM1B; with tuned noise schedule matches AR perplexity.
+
+### I-DLM (Introspective Diffusion Language Model)
+
+[[i-dlm]] — Yu, Jian et al. (Together AI / UIUC / Princeton / Stanford), Apr 2026
+
+Converts pretrained AR models into DLMs using **introspective-consistency training** (causal attention + logit shift + all-masked objective). Key serving properties:
+
+- **AR-compatible inference**: strict causal attention enables direct integration into SGLang, continuous batching, paged KV cache — no special DLM serving stack needed
+- **Introspective Strided Decoding (ISD)**: single forward pass simultaneously generates N new tokens (masked positions) and verifies N prior tokens (introspection positions) against the causal anchor distribution
+- **Compute efficiency**: ISD is the only DLM decoding method above the efficiency break-even line at practical acceptance rates (p ≥ 0.83)
+
+**Results** vs. prior DLMs (8B model, concurrency=32):
+- 3.1× higher throughput than SDAR; 4× over LLaDA-2.1-mini (16B)
+- First DLM to match strong same-scale AR quality (matches Qwen3-8B on MATH-500)
+- TPS growth rate 549 (vs SDAR: 84) — batching efficiency scales with TPF
+
+**Why it matters for inference**: I-DLM reframes the AR-vs-diffusion tradeoff — rather than choosing between quality (AR) and parallelism (DLM), ISD delivers both via a single unified forward pass that generates and verifies simultaneously.
+
+---
+
 ## Cross-Cutting Themes
 
 | Technique | What it trades | Gain |
@@ -262,22 +344,31 @@ Gain depends on task difficulty distribution: summarization and code completion 
 | MoE | Memory (all experts must load) | FLOPs/token ↓ |
 | INT4 weights | Quality (marginal at INT8, moderate at INT4) | Memory ↓ 2–4× |
 | H₂O pruning | Retrieval quality | Throughput ↑ 29× |
+| TriAttention | Offline calibration; still eviction | Throughput ↑ 2.5× or KV ↓ 10.7× at matched accuracy (reasoning) |
 | PolarQuant / TurboQuant | Small quality loss | KV memory ↓ 3–4× |
 | Speculative decoding | Requires draft model | Latency ↓ 2–3× (lossless) |
+| Saguaro (SSD) | Separate speculator hardware; prediction overhead | Latency ↓ 5× vs AR, 30% over SD (lossless) |
 | Self-speculative (LayerSkip) | Draft quality vs separate model | Latency ↓ 1.3–2.2× (lossless, no extra memory) |
 | Flash Attention | Recomputes during backward pass | Attention IO ↓ 7.6×; memory O(N) |
 | PagedAttention | Block table indirection overhead | KV fragmentation ↓ ~0%; throughput ↑ 2–4× |
 | RadixAttention | Tree lookup overhead | Cross-request prefix reuse; throughput ↑ 2–4× over vLLM |
 | Continuous batching + chunked prefill | Scheduling complexity | Decode throughput ↑ 4–10× |
 | Early exit / layer skipping | Quality on hard tokens | Latency ↓ 1.3–2× per token |
+| BD3-LM (block diffusion) | Fixed block size hyperparameter | Parallel within-block generation + KV caching restored to DLMs |
+| I-DLM (introspective DLM) | Training on 4.5B extra tokens | 3.1× over SDAR; matches AR quality; AR-serving-stack compatible |
 
 ## See Also
 
 - [[kv-cache]] — KV cache fundamentals and bottleneck analysis
-- [[kv-cache-compression-comparison]] — H₂O vs PolarQuant vs TurboQuant head-to-head
-- [[speculative-decoding]] — detailed page with algorithm walkthrough and self-speculative section
+- [[kv-cache-compression-comparison]] — H₂O vs TriAttention vs PolarQuant vs TurboQuant head-to-head
+- [[triattention]] — pre-RoPE KV compression; best for long-context reasoning
+- [[speculative-decoding]] — detailed page with algorithm walkthrough, self-speculative, and SSD sections
+- [[saguaro]] — SSD: parallel drafting + verification on separate hardware
 - [[early-exit-inference]] — early exit and layer skipping (LayerSkip, SWIFT, DASH)
 - [[layerskip]] — Meta's self-speculative decoding via layer dropout
+- [[diffusion-language-models]] — DLM landscape: BD3-LM, I-DLM, quality gap
+- [[block-diffusion]] — BD3-LM: AR-over-blocks + within-block diffusion
+- [[i-dlm]] — introspective DLM: ISD decoding, AR-compatible serving
 - [[flash-attention]] — IO-aware tiled attention kernel
 - [[paged-attention]] — OS-style KV cache memory management
 - [[radix-attention]] — radix tree cross-request prefix caching (SGLang)

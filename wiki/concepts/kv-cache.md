@@ -1,10 +1,10 @@
 ---
 title: KV Cache
 created: 2026-05-14
-updated: 2026-05-14
+updated: 2026-05-16
 type: concept
 tags: [kv-cache, inference, attention, quantization]
-sources: [raw/papers/2306.14048v3.pdf, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf]
+sources: [raw/papers/2306.14048v3.pdf, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf, raw/papers/2604.04921v1.pdf]
 confidence: high
 ---
 
@@ -29,7 +29,8 @@ For a 30B-parameter model with batch=128 and seq_len=1024: ~180 GB of KV cache �
 ### Eviction (token-level compression)
 Keep only a subset of tokens' KV pairs:
 - [[h2o]]: retain "heavy hitter" tokens (high accumulated attention) + recency window
-- **Limitation**: irreversible eviction can miss critical tokens in retrieval tasks (needle-in-haystack)
+- [[triattention]]: score keys via trigonometric series in pre-RoPE space; avoids RoPE rotation instability that limits attention-based methods; 2.5× throughput or 10.7× KV reduction at matched accuracy on AIME25
+- **Limitation**: irreversible eviction can miss critical tokens in retrieval tasks — though scoring quality matters; TriAttention's trigonometric approach is more stable than post-RoPE methods
 
 ### Quantization (precision reduction)
 Reduce the bit-width of stored K and V tensors:
@@ -63,7 +64,8 @@ These are **complementary** — quantization + eviction can be combined.
 
 ## See Also
 
-- [[h2o]] — eviction approach
+- [[h2o]] — eviction approach (post-RoPE)
+- [[triattention]] — pre-RoPE eviction via trigonometric series; better for reasoning/long-context
 - [[polarquant]] — polar quantization
 - [[turboquant]] — vector quantization
 - [[kv-cache-compression-comparison]] — detailed comparison

@@ -2,10 +2,11 @@
 
 > Content catalog. Every wiki page listed under its type with a one-line summary.
 > Read this first to find relevant pages for any query.
-> Last updated: 2026-05-15 | Total pages: 38
+> Last updated: 2026-05-16 | Total pages: 43
 
 ## Entities
 
+- [[block-diffusion]] — BD3-LM (ICLR 2025): block-level AR + within-block discrete diffusion; variable-length generation, KV caching, SOTA diffusion LM perplexity
 - [[clip-to-grok]] — Clip to Grok: per-row weight norm clipping accelerates grokking 39–249× without weight decay
 - [[flash-attention]] — Flash Attention (Dao et al.): IO-aware tiled attention; 7.6× speedup on GPT-2; O(N) memory via online softmax
 - [[layerskip]] — LayerSkip (Meta): layer dropout training + early exit inference + self-speculative decoding; up to 2.16× speedup
@@ -18,11 +19,14 @@
 - [[deepseek-v3-2]] — DeepSeek-V3.2: DSA attention, scalable RL, agentic task synthesis, gold-medal IMO/IOI performance
 - [[engram]] — Conditional memory module using N-gram lookup; complement to MoE sparsity for static knowledge retrieval
 - [[h2o]] — H₂O Heavy-Hitter Oracle: KV cache eviction policy retaining "heavy hitter" tokens via attention score accumulation
+- [[i-dlm]] — I-DLM: introspective consistency training converts AR models to DLMs; ISD decoding; first DLM to match same-scale AR quality
 - [[kromhc]] — KromHC: Manifold-constrained HC via Kronecker-product residual matrices — exact doubly-stochastic, parameter-efficient
 - [[mhc]] — mHC (Manifold-Constrained Hyper-Connections): projects HC residual matrices onto Birkhoff polytope via Sinkhorn-Knopp
 - [[mhc-lite]] — mHC-lite: replaces SK iterations with convex combination of permutation matrices for exact doubly-stochastic residuals
 - [[polarquant]] — PolarQuant: KV cache quantization using polar coordinate transformation to eliminate normalization overhead
 - [[qknorm]] — QKNorm: cosine-similarity attention (ℓ₂-normalize Q and K) prevents softmax saturation; +0.7 ppl in LM experiments
+- [[saguaro]] — Saguaro (SSD): speculative speculative decoding — parallelizes drafting and verification on separate hardware; 30% faster than SD, up to 5× over AR
+- [[triattention]] — TriAttention: KV cache compression via trigonometric series in pre-RoPE space; 2.5× throughput or 10.7× KV reduction at matched accuracy on AIME25
 - [[turboquant]] — TurboQuant: near-optimal online vector quantization via random rotation + MSE quantizer + 1-bit QJL residual
 - [[weight-normalization]] — Weight Normalization (Salimans & Kingma 2016): decouple weight direction from magnitude; ~21 ppl gain in LM
 - [[xsa]] — XSA (Exclusive Self-Attention): subtracts own-value-direction from attention output, addressing attention similarity bias
@@ -30,6 +34,7 @@
 ## Concepts
 
 - [[conditional-memory]] — Conditional memory as a sparsity axis: static lookup vs. neural computation in LLMs
+- [[diffusion-language-models]] — Diffusion LM landscape: quality gap causes (gradient variance, introspective consistency), BD3-LM vs I-DLM
 - [[continuous-batching]] — Iteration-level scheduling + chunked prefill (SARATHI): zero padding waste, 1.25–10× decode throughput
 - [[early-exit-inference]] — Early exit and layer skipping: adaptive per-token compute via LayerSkip, SWIFT, DASH
 - [[grokking]] — Delayed generalization: training memorizes early, generalizes much later; weight norm dynamics are key (Power et al. 2022)

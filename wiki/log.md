@@ -134,3 +134,35 @@
 - Pages created:
   - queries/memory-reduction-survey.md
 - index.md updated: total pages 37 → 38
+
+## [2026-05-16] ingest | Batch ingest: 4 new papers
+- Sources ingested:
+  - 2503.09573v3.pdf → Block Diffusion / BD3-LM (Arriola et al., Cornell Tech/Stanford/Cohere, ICLR 2025)
+  - 2603.03251v3.pdf → Speculative Speculative Decoding / Saguaro (Kumar, Dao, May — Stanford/Princeton/Together AI, 2026)
+  - 2604.04921v1.pdf → TriAttention: KV compression via trigonometric series in pre-RoPE space (Mao et al., MIT/NVIDIA/ZJU, Apr 2026)
+  - 2604.11035v1.pdf → I-DLM: Introspective Diffusion Language Model (Yu, Jian et al., Together AI/UIUC/Princeton/Stanford, Apr 2026)
+- Pages created:
+  - entities/block-diffusion.md
+  - entities/saguaro.md
+  - entities/triattention.md
+  - entities/i-dlm.md
+  - concepts/diffusion-language-models.md
+- Pages updated:
+  - concepts/speculative-decoding.md — added SSD/Saguaro section + [[saguaro]] See Also link
+  - concepts/kv-cache.md — added TriAttention to eviction section + [[triattention]] See Also link
+  - comparisons/kv-cache-compression-comparison.md — added TriAttention column and section; updated Recommended Use
+- index.md updated: total pages 38 → 43
+
+## [2026-05-16] update | inference-improvements-summary.md + memory-reduction-survey.md
+- inference-improvements-summary.md:
+  - Added §3b TriAttention (pre-RoPE KV eviction for long-context reasoning)
+  - Renumbered prior §3b KV quantization → §3c
+  - Added SSD/Saguaro subsection to §4 (speculative decoding)
+  - Added §7 Diffusion Language Models (BD3-LM, I-DLM) as new inference paradigm
+  - Updated cross-cutting themes table: TriAttention, Saguaro, BD3-LM, I-DLM rows
+  - Updated See Also: 6 new wikilinks
+- memory-reduction-survey.md:
+  - Extended §10a to cover TriAttention alongside H₂O; explains pre-RoPE stability advantage
+  - Extended §13 (speculative decoding) to mention Saguaro and SSD memory model
+  - Updated summary table: TriAttention and Saguaro rows added
+  - Updated See Also: triattention, saguaro wikilinks added

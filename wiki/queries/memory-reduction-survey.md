@@ -1,7 +1,7 @@
 ---
 title: Memory Reduction Techniques for LLM Training and Inference
 created: 2026-05-15
-updated: 2026-05-15
+updated: 2026-05-16
 type: query
 tags: [survey, training, inference, quantization, kv-cache, optimization, sparsity, attention]
 sources: []
@@ -159,13 +159,21 @@ A 175B model in FP32 with Adam optimizer states requires ~2.8 TB total. With 64 
 
 The KV cache is often the dominant inference memory consumer at long sequence lengths or large batches (can exceed weight memory — see [[kv-cache]] for the formula).
 
-#### 10a. Eviction — H₂O
+#### 10a. Eviction — H₂O and TriAttention
 
 **Core idea ([[h2o]]):** Not all tokens are equally important for future attention. H₂O maintains a budget-bounded cache by evicting tokens with low accumulated attention scores while always keeping recent tokens (recency window).
 
 **Memory impact:** Reduces KV cache to a fixed fraction (e.g., 5–20%) of full sequence length. Memory bounded by budget size, independent of actual sequence length.
 
-**Limitation:** Eviction is irreversible — retrieving an evicted token is impossible. Needle-in-haystack retrieval tasks suffer.
+**Limitation:** Eviction is irreversible. H₂O's post-RoPE importance estimation is also unstable at long contexts: RoPE rotation means only recent queries have up-to-date orientations, creating a tiny observation window. This is why H₂O and similar methods fail on long reasoning chains (AIME, chain-of-thought).
+
+**TriAttention ([[triattention]], Apr 2026)** addresses the stability problem by working in **pre-RoPE space**, where Q/K vectors are concentrated around fixed centers that remain stable across all positions. Importance is scored via a trigonometric series in Q-K distance — derived from the stable Q/K centers — avoiding the rotation-induced instability:
+
+- Offline calibration: compute Q distribution centers once per model
+- At inference: score each key using S_trig (distance preference) + S_norm (magnitude complement), weighted by per-head Q/K concentration
+- Results on AIME25 (32K generation): **10.7× KV memory reduction** at matched accuracy vs Full Attention; competing methods achieve only ~half the accuracy at the same memory budget
+
+**Memory impact:** TriAttention achieves 10.7× KV compression for long-context reasoning tasks while preserving task accuracy — substantially better than H₂O for chain-of-thought workloads.
 
 #### 10b. Quantization — PolarQuant, TurboQuant
 
@@ -222,7 +230,9 @@ For the decode phase (one new token per step), attention memory is smaller and K
 
 **Self-speculative decoding ([[layerskip]]):** Uses the target model's own early layers as the draft — no extra model weights. Memory overhead is zero; the trade-off is lower draft quality bounded by early-layer representational power.
 
-**Memory-throughput trade-off:** Standard speculative decoding trades higher memory for higher throughput. At constrained memory budgets, self-speculative or no speculative decoding is preferred.
+**Speculative Speculative Decoding ([[saguaro]], May 2026):** Runs speculator and verifier on separate hardware simultaneously — the draft model predicts likely verification outcomes and pre-speculates for them in parallel. Memory impact: same as standard SD (draft + target), but speculator and verifier are on different devices so peak memory per device is lower. Throughput gain: 30% over SD baselines, up to 5× over AR. Lossless.
+
+**Memory-throughput trade-off:** Standard speculative decoding trades higher memory for higher throughput. At constrained memory budgets, self-speculative or no speculative decoding is preferred. SSD adds a hardware separation requirement but doesn't increase per-device memory.
 
 ---
 
@@ -262,11 +272,13 @@ For the decode phase (one new token per step), attention memory is smaller and K
 | MoE | Training + Inference | Active activations per token | Routing overhead, expert communication |
 | 8-bit Adam / Muon / Adafactor | Training | Optimizer states | Minor accuracy impact (8-bit Adam) |
 | Weight quantization (INT8/INT4) | Inference | Model weights | Accuracy degradation at very low bits |
-| KV eviction (H₂O) | Inference | KV cache | Irreversible; risky for retrieval tasks |
+| KV eviction (H₂O) | Inference | KV cache | Irreversible; risky for retrieval; unstable at long context |
+| KV eviction (TriAttention) | Inference | KV cache | Offline calibration; still irreversible; best for reasoning |
 | KV quantization (PolarQuant/TurboQuant) | Inference | KV cache | Transform compute overhead |
 | MQA / GQA / MLA / CSA | Inference | KV cache | Potential attention quality loss (MQA) |
 | PagedAttention | Inference | KV cache fragmentation | Minimal (OS paging is near-zero cost) |
 | Speculative decoding | Inference | — (increases memory) | Throughput gain, not memory gain |
+| Saguaro (SSD) | Inference | — (same as SD; split across devices) | Requires separate speculator hardware |
 | Self-speculative decoding | Inference | Draft model weights (zero extra) | Lower draft quality |
 | Early exit / layer skipping | Inference | Activation memory per token | Weight memory unchanged |
 | Expert offloading | Inference | Expert FFN weights | PCIe bandwidth bottleneck |
@@ -293,13 +305,15 @@ For the decode phase (one new token per step), attention memory is smaller and K
 - [[paged-attention]] — OS-style KV memory management
 - [[radix-attention]] — cross-request prefix sharing
 - [[mixture-of-experts]] — MoE architecture and infrastructure
-- [[h2o]] — KV eviction via heavy-hitter oracle
+- [[h2o]] — KV eviction via heavy-hitter oracle (post-RoPE)
+- [[triattention]] — KV eviction via trigonometric series in pre-RoPE space; best for long-context reasoning
 - [[polarquant]] — polar KV quantization
 - [[turboquant]] — vector KV quantization
-- [[kv-cache-compression-comparison]] — H₂O vs PolarQuant vs TurboQuant
-- [[speculative-decoding]] — draft-verify inference speedup
+- [[kv-cache-compression-comparison]] — H₂O vs TriAttention vs PolarQuant vs TurboQuant
+- [[speculative-decoding]] — draft-verify inference speedup; includes SSD/Saguaro section
+- [[saguaro]] — speculative speculative decoding; parallel draft+verify on separate hardware
 - [[layerskip]] — self-speculative decoding via early exit
 - [[early-exit-inference]] — early exit and layer skipping landscape
 - [[continuous-batching]] — serving scheduler that composes with memory reduction
 - [[deepseek-v4]] — CSA/HCA, MLA, FP8, Muon at frontier scale
-- [[inference-improvements-summary]] — prior inference-focused survey
+- [[inference-improvements-summary]] — broader inference-focused survey (includes DLM §7)

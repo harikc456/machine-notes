@@ -1,10 +1,10 @@
 ---
 title: Speculative Decoding
 created: 2026-05-14
-updated: 2026-05-14
+updated: 2026-05-16
 type: concept
 tags: [inference, speculative]
-sources: [raw/papers/2211.17192v2.pdf]
+sources: [raw/papers/2211.17192v2.pdf, raw/papers/2603.03251v3.pdf]
 confidence: high
 ---
 
@@ -61,11 +61,24 @@ See [[early-exit-inference]] for the broader early exit landscape.
 
 **Trade-off vs. standard speculative decoding**: self-speculative needs no extra model memory but draft quality is bounded by how good early layers are. Standard spec decoding with a purpose-trained sibling model typically achieves higher acceptance rates.
 
+## Speculative Speculative Decoding (SSD / Saguaro)
+
+Standard SD retains a sequential dependency: the draft model waits for verification before speculating the next round. **[[saguaro]]** (Kumar, Dao, May — Stanford/Princeton/Together AI, 2026) eliminates this by running speculator and verifier on **separate hardware in parallel**:
+
+1. Speculator predicts likely verification outcomes (which tokens were accepted, what bonus token was sampled)
+2. Pre-speculates token sequences for each likely outcome, storing them in a "speculation cache"
+3. When verification completes: cache hit → return pre-speculated tokens immediately (zero draft overhead); cache miss → fall back to synchronous speculation
+
+Results on Llama-3.1-70B (TP=4 H100) with Llama-3.2-1B draft: **30% faster than strongest SD baselines, up to 5× faster than AR**. Lossless — produces identical distribution to the target model.
+
+Key challenge: predicting the bonus token (sampled from residual distribution) with ~90% accuracy using draft logits. See [[saguaro]] for the three optimizations (outcome prediction, acceptance/speculation tradeoff, batch-adaptive fallback).
+
 ## Limitations
 
 - Requires a suitable draft model (additional memory footprint) — self-speculative eliminates this at some quality cost
 - Gains diminish if draft model is poor (acceptance rate drops)
 - Memory bandwidth savings only realized when compute is truly the free resource
+- SSD requires separate hardware for speculator and verifier
 
 ## See Also
 
@@ -74,4 +87,5 @@ See [[early-exit-inference]] for the broader early exit landscape.
 - [[early-exit-inference]] — concept page for early exit and layer skipping
 - [[continuous-batching]] — serving scheduler; composes with speculative decoding
 - [[deepseek-v3-2]] — uses scalable RL for improved reasoning, orthogonal to inference-time optimizations
+- [[saguaro]] — SSD: parallelizes drafting and verification across separate hardware; 30% faster than SD baselines
 - [[deepseek-v4]] — architectural KV reduction via CSA/HCA, complementary to speculative decoding

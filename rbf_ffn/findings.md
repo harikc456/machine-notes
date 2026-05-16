@@ -93,11 +93,13 @@ All three σ variants perform within ~1 perplexity point of each other. Per-dim 
 | XSA + qk_norm + orthogonal_ffn + weight_norm | Whether dual orthogonality stacks with wnorm | **Done** — 55.57 ep2, 49.91 ep9 (§8.9) |
 | XSA + qk_norm + weight_norm (no orthogonal_ffn) | Isolate XSA+wnorm without orthogonal_ffn | **Done** — 56.88 (§8.8) |
 | XSA + MoE + qk_norm + weight_norm | Whether sparse MoE FFN improves over SwiGLU | **Done** — 47.31 ep2 (§9.2); new best at 3 epochs, but 4× FFN params |
-| XSA + PFDRationalGLU + qk_norm + orthogonal_ffn | Stack best attention + best FFN + orthogonality | Priority 1 |
-| MoE + Gram-Schmidt orthogonal experts (param-matched) | Whether forcing expert output orthogonality recovers the structural benefit of sparse routing | Priority 2 — see §9.6 |
+| XSA + PFDRationalGLU + qk_norm + orthogonal_ffn | Stack best attention + best FFN + orthogonality | Deprioritized — §7 shows PFD advantage vanishes at 10 epochs; §6.1 shows wnorm erases it at 3 epochs |
+| SwiGLU at 4× FFN width (ffn_hidden=2752) | Complete the parameter-matched comparison with dense baseline | **Done** — 44.33 ep2 (§9.5); beats MoE at equal budget, sparse routing adds no structural benefit |
+| XSA + qknorm + wnorm + orthogonal_ffn on odd middle layers only (layers 1,3) | Whether alignment gain concentrates in specific layers; recover most of §8.9 gain with weaker global constraint | **Done** — 54.97 ep2 (§10.2); beats full orthogonal_ffn (55.57) |
+| XSA + qknorm + wnorm + orthogonal_ffn on layers 1,3,4 | Whether adding blocks.4 (next highest uncontrolled alignment per probe) compounds the gain | **Priority 1** — see §10.3 |
+| MoE + Gram-Schmidt orthogonal experts (param-matched) | Whether forcing expert output orthogonality recovers the structural benefit of sparse routing | **Done** — 61.17 ep2 (§9.7); no gain over non-orthogonal MoE (60.99) |
 | MoE parameter-matched ablation | Isolate MoE structural gain from param count | **Done** — 60.99 ep2 (§9.3); gain was parameter count, not routing |
 | MoE + dynamic_erf norm | Whether dynamic ERF norm helps MoE | **Done** — 53.86 ep2 (§9.4); underperforms standard RMSNorm |
-| SwiGLU at 4× FFN width (ffn_hidden=2752) | Complete the parameter-matched comparison with dense baseline | **Done** — 44.33 ep2 (§9.5); beats MoE at equal budget, sparse routing adds no structural benefit |
 | PFDRationalGLU, 10+ epochs | Confirm whether PFD advantage over RationalGLU holds or is an early-training effect | Done (§7) — advantage disappears |
 | PFDRationalGLU, per-channel PFD params | Current params are shared; per-channel or per-head may widen the gap further | Low priority |
 | FirstOrderPFDRational, phi initialization | ep0 train PPL spike (9153) suggests sin saturation; test larger phi init or learnable scale | Low priority |
@@ -586,3 +588,101 @@ Before concluding that sparse routing adds no structural benefit, `probe_moe_cos
 **Planned experiment** (`baseline_xsa_moe_weight_norm_orthogonal.yaml`): XSA + MoE + wnorm + `moe_orthogonal=true`, parameter-matched (ffn_hidden=172, 1× FFN params). Baselines to beat:
 - §9.3 param-matched MoE (no orthogonal): 60.99 ep2
 - §8.9 XSA + wnorm + orthogonal_ffn: 55.57 ep2
+
+### §9.7 MoE + Gram-Schmidt Orthogonal Experts (param-matched, 2026-05-09)
+
+Run `20260509_110833_209194_xsa_moe_qknorm_wnorm_orthogonal_d256` — XSA + MoE + qknorm + wnorm with `moe_orthogonal=true`, `ffn_hidden=172` (1× FFN params, same budget as §9.3):
+
+| Epoch | Val PPL | Time (s) |
+|-------|---------|----------|
+| 0 | 117.42 | 1654.8 |
+| 1 | 75.93 | 1630.6 |
+| 2 | **61.17** | 1674.2 |
+
+**Comparison table (ep2, param-matched):**
+
+| Variant | Val PPL (ep 2) | FFN params | Time/epoch |
+|---------|----------------|------------|------------|
+| XSA + qknorm + wnorm + orthogonal_ffn (§8.9) | **55.57** | 1× SwiGLU | ~1197s |
+| XSA + qknorm + wnorm (§8.8) | 56.88 | 1× SwiGLU | ~1373s |
+| SwiGLU + qknorm + wnorm (§6.1) | 58.16 | 1× SwiGLU | ~1330s |
+| MoE + wnorm (no orthogonal, §9.3) | 60.99 | 1× SwiGLU | ~1613s |
+| **MoE + wnorm + moe_orthogonal (§9.7)** | **61.17** | 1× SwiGLU | ~1653s |
+
+**Key conclusions:**
+
+1. **Gram-Schmidt orthogonalization of expert outputs provides no benefit.** MoE+orthogonal (61.17) is essentially tied with non-orthogonal MoE (60.99) — within noise, marginally worse. The inter-expert redundancy observed by the cosine probe (§9.6, mean=0.355) did not translate into a recoverable signal via post-hoc orthogonalization.
+2. **Routing itself is the bottleneck, not output correlation.** At this scale (d_model=256, ffn_hidden=172, n_experts=4), the experts are too small to specialize meaningfully regardless of whether their outputs are orthogonalized. Gram-Schmidt cannot add capacity that isn't there.
+3. **Both param-matched MoE variants are worse than dense alternatives at 1× budget.** Dense SwiGLU+wnorm (58.16), XSA+wnorm (56.88), and XSA+wnorm+orthogonal_ffn (55.57) all outperform param-matched MoE with or without Gram-Schmidt, while also being faster.
+4. **The moe_orthogonal hypothesis is closed.** Sparse routing with Gram-Schmidt inter-expert orthogonalization is not a viable path to structural improvement over dense FFNs at this scale.
+
+## §10 Selective Orthogonal FFN (2026-05-12)
+
+### §10.1 Motivation and setup
+
+`OrthogonalMLPWrapper` gives a consistent ~1.7 ppl gain over XSA+qknorm+wnorm (§8.9), but applies the same inductive constraint — project out the component of FFN output along the input — to every layer equally. If alignment between FFN output and input is concentrated in a subset of layers, applying the wrapper only there recovers most of the gain while leaving the other layers unconstrained.
+
+**`probe_ffn_alignment.py`** was written to measure this: for each `TransformerBlock`, it hooks the FFN forward (or `OrthogonalMLPWrapper`'s inner mlp), captures `y = mlp(norm2(x))` and `norm2(x)`, and reports per-layer cosine similarity and scalar projection magnitude. Ranking layers by mean cosine similarity identifies where the wrapper does the most work.
+
+**Implementation:** `orthogonal_ffn_layers: list[int]` was added to `ModelConfig`. When non-empty it overrides the `orthogonal_ffn` boolean and wraps only the specified layer indices. `TransformerBlock` takes `layer_idx: int` and selects the wrapper accordingly; `CausalLM` passes the index at construction. Fully backward-compatible: existing configs using `orthogonal_ffn: true` are unaffected.
+
+### §10.2 Alternating middle layers experiment
+
+Config `baseline_xsa_qknorm_wnorm_orthogonal_alternating.yaml` — XSA + SwiGLU + qknorm + wnorm with `orthogonal_ffn_layers: [1, 3]` (6-layer model):
+
+- Layer 0 (first): plain SwiGLU
+- Layer 1: `OrthogonalMLPWrapper`
+- Layer 2: plain SwiGLU
+- Layer 3: `OrthogonalMLPWrapper`
+- Layer 4: plain SwiGLU
+- Layer 5 (last): plain SwiGLU
+
+Run `20260512_190734_225960_xsa_swiglu_qknorm_wnorm_d256`:
+
+| Epoch | Val PPL | Time (s) |
+|-------|---------|----------|
+| 0 | 108.37 | 1125.4 |
+| 1 | 69.35 | 1093.2 |
+| 2 | **54.97** | 1093.5 |
+
+**Comparison:**
+
+| Variant | Val PPL (ep 2) | Orthogonal layers | Time/epoch |
+|---------|----------------|-------------------|------------|
+| **XSA + qknorm + wnorm + orthogonal_ffn (layers 1,3)** | **54.97** | 1,3 | ~1093s |
+| XSA + qknorm + wnorm + orthogonal_ffn (all, §8.9) | 55.57 | 0,1,2,3,4,5 | ~1197s |
+| XSA + qknorm + wnorm (none, §8.8) | 56.88 | — | ~1373s |
+
+**Key conclusions:**
+
+1. **Selective orthogonal_ffn (layers 1,3) beats full orthogonal_ffn by 0.60 ppl.** Applying `OrthogonalMLPWrapper` only to the odd middle layers outperforms both the all-layers constraint (55.57) and no constraint (56.88). The first and last layers are better left unconstrained.
+2. **Per-epoch time is the fastest of any wnorm variant** (~1093s vs ~1197s for full orthogonal, ~1373s for no orthogonal). The wrapper on only 2 of 6 layers adds negligible overhead, and the faster convergence itself speeds up effective wall-clock cost.
+3. **Epoch 0 PPL (108.37) is lower than full orthogonal_ffn (110.73)**, suggesting the relaxed constraint on layers 0 and 5 improves early gradient flow — the input embedding layer and the final pre-norm layer may need more freedom to initialise useful representations.
+4. **Implication: orthogonal constraint has a sweet spot.** Too few constrained layers (none) wastes the inductive bias; too many (all) over-constrains layers that benefit from writing along the residual stream. The boundary and first layers appear to be the ones that benefit from writing freely.
+
+### §10.3 FFN Alignment Probe Results (2026-05-12)
+
+`probe_ffn_alignment.py` run on the §10.2 checkpoint (`20260512_190734_225960_xsa_swiglu_qknorm_wnorm_d256`) over 50 val batches:
+
+| Layer | Wrapped | Mean cos | Std | p25 | p75 | p95 | Mean\|proj\| |
+|-------|---------|----------|-----|-----|-----|-----|-------------|
+| blocks.0 | no | 0.0396 | 0.1017 | −0.0346 | 0.1073 | 0.2126 | 0.1602 |
+| blocks.1 | **yes** | **0.4107** | 0.1889 | 0.3156 | 0.5531 | 0.6462 | 0.9819 |
+| blocks.2 | no | 0.1761 | 0.1368 | 0.0909 | 0.2514 | 0.4208 | 0.4231 |
+| blocks.3 | **yes** | 0.3202 | 0.2588 | 0.1644 | 0.5213 | 0.6242 | 1.1659 |
+| blocks.4 | no | 0.2917 | 0.1211 | 0.2170 | 0.3779 | 0.4666 | 0.7576 |
+| blocks.5 | no | 0.3628 | 0.1611 | 0.2949 | 0.4727 | 0.5591 | **4.8872** |
+
+**Key findings:**
+
+1. **blocks.0 has the lowest alignment (0.0396)** — the first layer naturally writes perpendicular updates. Wrapping it would have been nearly useless; this validates leaving layer 0 unwrapped.
+2. **blocks.1 is correctly the highest-alignment layer (0.4107)** — wrapping it is well-justified. The wrapper is removing the largest per-token parallel component among middle layers (mean|proj| = 0.98).
+3. **blocks.5 has high cosine alignment (0.3628) but anomalously large scalar projection magnitude (4.89)** — this is ~4× larger than any other layer. Yet the §10.2 result is *better* without the wrapper on layer 5 than with it (§8.9, full orthogonal). The last layer appears to perform intentional magnitude scaling along the residual stream direction before the LM head norm; removing this component is harmful.
+4. **blocks.4 is the highest-alignment unwrapped middle layer (0.2917, mean|proj| = 0.76)** — the natural next candidate to add to the wrapper set.
+5. **blocks.2 has the lowest alignment among middle layers (0.1761)** — least likely to benefit from wrapping.
+
+**Layer ranking (highest alignment):** blocks.1 > blocks.5 > blocks.3 > blocks.4 > blocks.2 > blocks.0
+
+**Interpretation:** blocks.5's large |proj| with beneficial unconstrained behavior suggests a qualitative role change in the last layer — it writes in the input direction by design, not by accident. The orthogonal constraint is valuable in middle layers where parallel-direction writes are redundant, but harmful in the last layer where they carry signal toward the LM head.
+
+**Priority next:** `orthogonal_ffn_layers: [1, 3, 4]` — add blocks.4 (next highest uncontrolled alignment) to the current set and test whether the gain compounds.

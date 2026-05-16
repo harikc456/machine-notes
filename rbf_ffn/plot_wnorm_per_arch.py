@@ -31,7 +31,9 @@ ARCHITECTURES = [
         "XSA + SwiGLU + QK Norm",
         [("no wnorm (run A)", "20260415_145723_799222_xsa_swiglu_qknorm_d256"),
          ("no wnorm (run B)", "20260506_130221_500343_xsa_swiglu_qknorm_d256")],
-        [("+ wnorm",          "20260430_132442_213125_xsa_swiglu_qknorm_wnorm_d256")],
+        [("+ wnorm (0430)",   "20260430_132442_213125_xsa_swiglu_qknorm_wnorm_d256"),
+         ("+ wnorm (0509)",   "20260509_090930_507143_xsa_swiglu_qknorm_wnorm_d256"),
+         ("+ wnorm (0513)",   "20260513_101900_905014_xsa_swiglu_qknorm_wnorm_d256")],
     ),
     (
         "XSA + QK Norm\n+ Orthogonal FFN",
@@ -40,17 +42,25 @@ ARCHITECTURES = [
     ),
     (
         "XSA + MoE\n+ QK Norm",
-        [("no wnorm", "20260504_225655_397364_xsa_moe_qknorm_d256")],
-        [("+ wnorm",  "20260508_085651_652695_xsa_moe_qknorm_wnorm_d256")],
+        [("no wnorm",        "20260504_225655_397364_xsa_moe_qknorm_d256")],
+        [("+ wnorm",         "20260508_085651_652695_xsa_moe_qknorm_wnorm_d256"),
+         ("+ wnorm dyn-erf", "20260508_120315_709553_xsa_moe_qknorm_wnorm_dynamic_erf_d256"),
+         ("+ wnorm orth",    "20260509_110833_209194_xsa_moe_qknorm_wnorm_orthogonal_d256")],
+    ),
+    (
+        "XSA + ReLU² + QK Norm",
+        [("leaky-relu² (run A)", "20260415_180252_016541_xsa_leaky_relu_sq_qknorm_d256"),
+         ("leaky-relu² (run B)", "20260415_190149_519409_xsa_leaky_relu_sq_qknorm_d256")],
+        [("+ relu² wnorm",       "20260515_155952_271445_xsa_relu_sq_qknorm_wnorm_d256")],
     ),
 ]
 
-BLUE_SHADES   = ["#1565C0", "#1E88E5", "#90CAF9"]   # wnorm  — solid
-ORANGE_SHADES = ["#E65100", "#FB8C00", "#FFCC80"]   # no wnorm — dashed
+BLUE_SHADES   = ["#1565C0", "#1E88E5", "#42A5F5", "#90CAF9"]   # wnorm  — solid
+ORANGE_SHADES = ["#E65100", "#FB8C00", "#FFCC80"]              # no wnorm — dashed
 
 N = len(ARCHITECTURES)
 
-fig = plt.figure(figsize=(20, 9))
+fig = plt.figure(figsize=(24, 9))
 fig.suptitle(
     "Effect of Weight Norm by Architecture — Train Loss & Validation PPL\n"
     "(WikiText-103, d_model=256)",
@@ -104,7 +114,7 @@ for col, (title, no_wn, wn) in enumerate(ARCHITECTURES):
         else:
             ax.set_ylim(30, 155)
 
-        if col == 4:  # MoE — add legend inside
+        if col == N - 1:  # last column — add legend inside
             if row == 0:
                 ax.legend(fontsize=6.5, loc="upper right", framealpha=0.8)
 

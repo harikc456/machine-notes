@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from rbf_ffn.config import ModelConfig
 from rbf_ffn.models.attention import ATTN_REGISTRY
-from rbf_ffn.models.llama_ffn import SwiGLUFFN, LeakyReLUSquaredFFN
+from rbf_ffn.models.llama_ffn import SwiGLUFFN, ReLUSquaredFFN, LeakyReLUSquaredFFN
 from rbf_ffn.models.rational_ffn import RationalFFN, RationalGatedFFN, PFDRationalFFN, PFDRationalGatedFFN, FirstOrderPFDRationalFFN
 from rbf_ffn.models.polar_ffn import AdaptivePolarMLP
 from rbf_ffn.models.head_mixer import KromHCHeadMixer
@@ -34,6 +34,7 @@ def _build_norm(norm_type: str, d_model: int) -> nn.Module:
 
 FFN_REGISTRY: dict[str, type] = {
     "swiglu":                  SwiGLUFFN,
+    "relu_sq":                 ReLUSquaredFFN,
     "leaky_relu_sq":           LeakyReLUSquaredFFN,
     "rational":                RationalFFN,
     "rationalglu":             RationalGatedFFN,
@@ -59,7 +60,7 @@ class TransformerBlock(nn.Module):
     Pre-norm with RMSNorm. No bias anywhere.
     """
 
-    def __init__(self, cfg: ModelConfig):
+    def __init__(self, cfg: ModelConfig, layer_idx: int = 0):
         super().__init__()
         if cfg.attn_type not in ATTN_REGISTRY:
             raise ValueError(
@@ -73,9 +74,14 @@ class TransformerBlock(nn.Module):
         self.attn  = ATTN_REGISTRY[cfg.attn_type](cfg)
         self.norm2 = _build_norm(cfg.norm_type, cfg.d_model)
         ffn = FFN_REGISTRY[cfg.ffn_type](cfg)
-        if cfg.gated_orthogonal_ffn:
+        use_orthogonal = (
+            layer_idx in cfg.orthogonal_ffn_layers
+            if cfg.orthogonal_ffn_layers
+            else cfg.orthogonal_ffn
+        )
+        if cfg.gated_orthogonal_ffn and use_orthogonal:
             self.ffn = GatedOrthogonalMLPWrapper(ffn, eps=cfg.orthogonal_ffn_eps, gate_activation=cfg.gated_orthogonal_ffn_gate_activation)
-        elif cfg.orthogonal_ffn:
+        elif use_orthogonal:
             self.ffn = OrthogonalMLPWrapper(ffn, eps=cfg.orthogonal_ffn_eps)
         else:
             self.ffn = ffn

@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from rbf_ffn.config import ModelConfig
 from rbf_ffn.models.transformer_block import TransformerBlock, KromHCWrapper, LoopBlock
-from rbf_ffn.models.kronecker_linear import KroneckerLMHead
+from rbf_ffn.models.kronecker_linear import KroneckerLMHead, LoRALMHead
 
 
 def build_optimizer_groups(
@@ -66,6 +66,7 @@ class CausalLM(nn.Module):
         default (tie_embeddings=True)  → nn.Linear, weight tied to token_embedding
         tie_embeddings=False           → nn.Linear, independent weight (Muon-trained)
         lm_head_kronecker=True         → KroneckerLMHead; tie_embeddings is ignored
+        lm_head_lora_rank>0            → LoRALMHead; tied base + low-rank adapter (A,B → Muon)
 
     forward() always returns (logits, hs):
         logits: (B, N, vocab_size)
@@ -75,8 +76,8 @@ class CausalLM(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
 
-        def make_block():
-            block = TransformerBlock(cfg)
+        def make_block(layer_idx: int):
+            block = TransformerBlock(cfg, layer_idx=layer_idx)
             if cfg.use_kromhc:
                 return KromHCWrapper(block, cfg)
             return block
@@ -86,16 +87,22 @@ class CausalLM(nn.Module):
 
         if cfg.use_loop:
             # Layout: loop_n_fixed fixed blocks → 1 shared LoopBlock → loop_n_fixed fixed blocks
-            head = [make_block() for _ in range(cfg.loop_n_fixed)]
-            shared = LoopBlock(TransformerBlock(cfg), cfg.loop_n_repeats, cfg.d_model, start_layer=cfg.loop_n_fixed)
-            tail = [make_block() for _ in range(cfg.loop_n_fixed)]
+            # The shared LoopBlock uses layer_idx=loop_n_fixed (its start position); orthogonal_ffn_layers
+            # does not apply meaningfully to a weight-shared block, so orthogonal_ffn bool governs it.
+            head = [make_block(i) for i in range(cfg.loop_n_fixed)]
+            shared = LoopBlock(TransformerBlock(cfg, layer_idx=cfg.loop_n_fixed), cfg.loop_n_repeats, cfg.d_model, start_layer=cfg.loop_n_fixed)
+            tail_start = cfg.loop_n_fixed + cfg.loop_n_repeats
+            tail = [make_block(tail_start + i) for i in range(cfg.loop_n_fixed)]
             self.blocks = nn.ModuleList(head + [shared] + tail)
         else:
-            self.blocks = nn.ModuleList([make_block() for _ in range(cfg.n_layers)])
+            self.blocks = nn.ModuleList([make_block(i) for i in range(cfg.n_layers)])
         self.norm = nn.RMSNorm(cfg.d_model)
         self.pre_lm_head_silu = cfg.pre_lm_head_silu
         if cfg.lm_head_kronecker:
             self.lm_head = KroneckerLMHead(cfg.d_model, cfg.vocab_size)
+        elif cfg.lm_head_lora_rank > 0:
+            self.lm_head = LoRALMHead(cfg.d_model, cfg.vocab_size, cfg.lm_head_lora_rank)
+            self.lm_head.weight = self.token_embedding.weight
         else:
             self.lm_head = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)
             if cfg.tie_embeddings:

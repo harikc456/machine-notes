@@ -117,6 +117,45 @@ class KroneckerLMHead(nn.Module):
                 f'factors=(vocab:{self.p}x{self.m}, hidden:{self.q}x{self.n})')
 
 
+class LoRALMHead(nn.Module):
+    """
+    Tied-embedding LM head with a low-rank adapter.
+
+    Computes:  logits = x @ W.T + (x @ A) @ B
+
+    where W is the token embedding weight (set externally via .weight, not a
+    Parameter of this module so it is not double-counted), A ∈ R^{d×r} and
+    B ∈ R^{r×V} are the adapter factors.
+
+    Parameter cost: r*(d_model + vocab_size) vs d_model*vocab_size for a full
+    untied head.  With r=8, d=256, V=50257 that is ≈404K vs 12.9M params.
+
+    Initialisation: B is zero-initialised so the adapter contributes nothing on
+    the first forward pass (LoRA convention).  A uses Kaiming uniform.
+
+    Optimizer routing: both A and B are 2-D → routed to Muon by the default
+    ndim==2 rule in build_optimizer_groups.  W continues to be handled by the
+    token_embedding module (routed to AdamW via the emb_id guard).
+    """
+
+    def __init__(self, d_model: int, vocab_size: int, rank: int):
+        super().__init__()
+        self.rank = rank
+        self.A = nn.Parameter(torch.empty(d_model, rank))
+        self.B = nn.Parameter(torch.zeros(rank, vocab_size))
+        self.weight: torch.Tensor | None = None  # set externally to token_embedding.weight
+        nn.init.kaiming_uniform_(self.A, a=math.sqrt(5))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        assert self.weight is not None, "LoRALMHead.weight must be set before forward()"
+        return torch.nn.functional.linear(x, self.weight) + (x @ self.A) @ self.B
+
+    def extra_repr(self) -> str:
+        d, r = self.A.shape
+        v = self.B.shape[1]
+        return f'd_model={d}, vocab_size={v}, rank={r}'
+
+
 class KroneckerDeltaLinear(nn.Module):
     """
     Drop-in replacement for nn.Linear using a Kronecker-factored core

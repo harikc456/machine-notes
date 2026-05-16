@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import yaml
 
@@ -39,7 +39,8 @@ class ModelConfig:
     attn_type: str = "standard"    # "standard" | "polar" | "xsa"
     ffn_type: str = "swiglu"       # "swiglu" | "leaky_relu_sq" | "rational" | "rationalglu" | "pfd_rational" | "pfd_rationalglu" | "first_order_pfd_rational" | "polar"
     norm_type: str = "rmsnorm"     # "rmsnorm" | "dynamic_erf"
-    orthogonal_ffn: bool = False        # Wrap FFN output to be orthogonal to input x
+    orthogonal_ffn: bool = False        # Wrap FFN output to be orthogonal to input x (all layers)
+    orthogonal_ffn_layers: list[int] = field(default_factory=list)  # If non-empty, wrap only these layer indices (overrides orthogonal_ffn)
     orthogonal_ffn_eps: float = 1e-8    # Epsilon for orthogonal projection stability
     gated_orthogonal_ffn: bool = False              # Wrap FFN with GatedOrthogonalMLPWrapper (orthogonal novelty + gated amplification)
     gated_orthogonal_ffn_gate_activation: str = "tanh"  # Gate activation: "tanh" | "softsign" | "identity"
@@ -62,6 +63,9 @@ class ModelConfig:
 
     # Kronecker-factored LM head
     lm_head_kronecker: bool = False    # Replace lm_head with Kronecker-factored projection
+
+    # Low-rank adapter on top of tied-embedding LM head
+    lm_head_lora_rank: int = 0         # 0 = disabled; >0 = LoRALMHead with this rank (tie_embeddings must be True)
 
     # Kronecker-factored MLP projections
     kronecker_mlp: bool = False        # Replace nn.Linear in MLP/FFN layers with KroneckerLinear

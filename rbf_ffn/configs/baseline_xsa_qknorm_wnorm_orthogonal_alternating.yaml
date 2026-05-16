@@ -1,0 +1,33 @@
+# XSA + SwiGLU + qk_norm + weight_norm + selective orthogonal FFN.
+#
+# OrthogonalMLPWrapper applied only to odd-indexed middle layers (1 and 3).
+# First (0) and last (5) layers use a plain SwiGLU FFN.
+# Even middle layers (2 and 4) also use plain SwiGLU.
+#
+# Hypothesis: if alignment is concentrated in specific layers, selective
+# orthogonalization recovers most of the quality gain from full orthogonal_ffn
+# (55.57 ep2, §8.9) with weaker inductive constraint on the remaining layers.
+#
+# Baseline to beat: §8.9 full orthogonal_ffn — 55.57 ep2, 49.91 ep9
+# Ablation reference: §8.8 no orthogonal_ffn — 56.88 ep2
+attn_type: xsa
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+orthogonal_ffn_layers: [1, 2, 3, 4]
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0

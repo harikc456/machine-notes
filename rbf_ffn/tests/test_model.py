@@ -256,6 +256,76 @@ def test_no_duplicate_params_kronecker_lm_head():
     assert len(all_ids) == len(set(all_ids)), "Duplicate parameters in optimizer groups"
 
 
+def _make_lora_lm_head_model(rank: int = 4) -> CausalLM:
+    cfg = ModelConfig(
+        d_model=D, n_heads=H, n_layers=L,
+        vocab_size=VOCAB, seq_len=N,
+        model_type="baseline",
+        ffn_hidden=86,
+        dropout=0.0,
+        lm_head_lora_rank=rank,
+    )
+    return CausalLM(cfg)
+
+
+def test_lora_lm_head_output_shape():
+    model = _make_lora_lm_head_model()
+    tokens = torch.randint(0, VOCAB, (B, N))
+    logits, _ = model(tokens)
+    assert logits.shape == (B, N, VOCAB)
+
+
+def test_lora_lm_head_weight_is_tied():
+    """LoRALMHead.weight must point to the same tensor as token_embedding.weight."""
+    model = _make_lora_lm_head_model()
+    assert model.lm_head.weight is model.token_embedding.weight
+
+
+def test_lora_lm_head_adapter_starts_silent():
+    """B is zero-init so the adapter contributes nothing on the first forward pass."""
+    model = _make_lora_lm_head_model()
+    assert (model.lm_head.B == 0).all()
+
+
+def test_lora_lm_head_gradient_flows():
+    model = _make_lora_lm_head_model()
+    tokens = torch.randint(0, VOCAB, (B, N))
+    logits, _ = model(tokens)
+    logits.sum().backward()
+    assert model.lm_head.A.grad is not None
+    assert model.lm_head.B.grad is not None
+
+
+def test_lora_lm_head_adapter_in_muon():
+    """LoRALMHead A and B are 2-D and must be routed to Muon."""
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = _make_lora_lm_head_model()
+    muon_params, adamw_params = build_optimizer_groups(model)
+    muon_ids  = {id(p) for p in muon_params}
+    adamw_ids = {id(p) for p in adamw_params}
+    assert id(model.lm_head.A) in muon_ids,      "lm_head.A should be in Muon"
+    assert id(model.lm_head.A) not in adamw_ids,  "lm_head.A should not be in AdamW"
+    assert id(model.lm_head.B) in muon_ids,      "lm_head.B should be in Muon"
+    assert id(model.lm_head.B) not in adamw_ids,  "lm_head.B should not be in AdamW"
+
+
+def test_lora_lm_head_embedding_in_adamw():
+    """The tied embedding weight must still go to AdamW, not Muon."""
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = _make_lora_lm_head_model()
+    muon_params, adamw_params = build_optimizer_groups(model)
+    adamw_ids = {id(p) for p in adamw_params}
+    assert id(model.token_embedding.weight) in adamw_ids
+
+
+def test_no_duplicate_params_lora_lm_head():
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = _make_lora_lm_head_model()
+    muon_params, adamw_params = build_optimizer_groups(model)
+    all_ids = [id(p) for p in muon_params] + [id(p) for p in adamw_params]
+    assert len(all_ids) == len(set(all_ids)), "Duplicate parameters in optimizer groups"
+
+
 def _make_delta_model() -> CausalLM:
     cfg = ModelConfig(
         d_model=D, n_heads=H, n_layers=L,

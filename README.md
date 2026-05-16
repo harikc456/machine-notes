@@ -32,18 +32,26 @@ Python 3.10+, CUDA-capable GPU recommended.
 
 ## rbf_ffn
 
-Systematic study of alternative FFN designs for causal language models: RBF kernels, learnable rational activations (Padé and PFD), polar-coordinate representations, Kronecker-factored projections, and normalization strategies.
+Systematic study of alternative FFN designs for causal language models: RBF kernels, learnable rational activations (Padé and PFD), polar-coordinate representations, Kronecker-factored projections, normalization strategies, and orthogonal novelty constraints.
 
 **Best result:** SwiGLU + QK-norm + weight-norm → **58.16 val PPL** (−23.1% vs vanilla SwiGLU)
 
-**Key finding:** Weight normalization (−21.8 PPL) dominates all FFN architecture changes combined. Gating is load-bearing — non-gated variants consistently underperform.
+**Key findings:**
+- Weight normalization (−21.8 PPL) dominates all FFN architecture changes combined
+- Gating is load-bearing — non-gated variants consistently underperform
+- ReLU² FFN matches gated activations at 2-projection cost (no gate branch)
+- LoRA LM head: tied-embedding base + low-rank adapter (r=8) cuts LM head params from 12.9M → 0.4M
+- `orthogonal_ffn_layers` enables selective per-layer orthogonal novelty constraints
 
 ```bash
 # Best overall result
 python -m rbf_ffn.train --config rbf_ffn/configs/baseline_weight_norm.yaml
 
-# Best FFN activation variant
-python -m rbf_ffn.train --config rbf_ffn/configs/pfd_rationalglu_qk_norm_weight_norm.yaml
+# ReLU² FFN with LoRA LM head
+python -m rbf_ffn.train --config rbf_ffn/configs/baseline_xsa_relu_sq_lora_lm_head.yaml
+
+# Selective orthogonal FFN (layers 1–4 only)
+python -m rbf_ffn.train --config rbf_ffn/configs/baseline_xsa_qknorm_wnorm_orthogonal_alternating.yaml
 
 # Resume from checkpoint
 python -m rbf_ffn.train --config rbf_ffn/configs/baseline.yaml --resume_from path/to/checkpoint_latest.pt

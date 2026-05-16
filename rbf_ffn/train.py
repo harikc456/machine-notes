@@ -258,6 +258,10 @@ def train(
     model = CausalLM(cfg).to(device)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Parameters: {n_params:,}")
+    model_info_path = exp_dir / "model_info.json"
+    if not model_info_path.exists():
+        with open(model_info_path, "w") as f:
+            json.dump({"n_params": n_params}, f, indent=2)
 
     # ── Optimisers ────────────────────────────────────────────────────────────
     muon_params, adamw_params = build_optimizer_groups(model)

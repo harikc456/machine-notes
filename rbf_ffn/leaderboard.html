@@ -1,0 +1,2339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>rbf_ffn Leaderboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 13px;
+    padding: 24px;
+  }
+  h1 { color: #a0c4ff; margin-bottom: 16px; font-size: 18px; letter-spacing: 1px; }
+  #filter-input {
+    background: #16213e;
+    border: 1px solid #444;
+    color: #e0e0e0;
+    padding: 6px 10px;
+    font-family: inherit;
+    font-size: 13px;
+    width: 320px;
+    margin-bottom: 14px;
+    border-radius: 3px;
+  }
+  #filter-input:focus { outline: none; border-color: #a0c4ff; }
+  .table-wrap { overflow-x: auto; }
+  table {
+    border-collapse: collapse;
+    white-space: nowrap;
+    width: 100%;
+  }
+  th {
+    background: #16213e;
+    color: #a0c4ff;
+    padding: 7px 10px;
+    cursor: pointer;
+    user-select: none;
+    text-align: right;
+    border-bottom: 2px solid #444;
+  }
+  th:first-child, th:nth-child(2) { text-align: left; }
+  th:hover { background: #1e2f5e; }
+  .sort-ind { margin-left: 4px; font-size: 10px; color: #ffcc00; }
+  td {
+    padding: 5px 10px;
+    border-bottom: 1px solid #2a2a4a;
+    text-align: right;
+  }
+  td:first-child, td:nth-child(2) { text-align: left; }
+  tr:hover > td { background: #1e2f5e; cursor: pointer; }
+  .rank-1 > td { background: #3a2e00; }
+  .rank-1 > td:first-child { color: #ffd700; font-weight: bold; }
+  .rank-2 > td { background: #2a2a2a; }
+  .rank-2 > td:first-child { color: #c0c0c0; font-weight: bold; }
+  .rank-3 > td { background: #2a1e0a; }
+  .rank-3 > td:first-child { color: #cd7f32; font-weight: bold; }
+  .rank-1:hover > td, .rank-2:hover > td, .rank-3:hover > td { filter: brightness(1.3); }
+  .config-row td { padding: 0; background: #0f0f1e; }
+  .config-pre {
+    padding: 12px 16px;
+    color: #88ccaa;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    border-left: 3px solid #a0c4ff;
+    margin: 4px 8px;
+  }
+  footer {
+    margin-top: 18px;
+    font-size: 11px;
+    color: #555;
+  }
+</style>
+</head>
+<body>
+<h1>rbf_ffn Leaderboard &mdash; 51 experiments</h1>
+<input id="filter-input" type="text" placeholder="Filter experiments..." oninput="filterTable(this.value)">
+<div class="table-wrap">
+<table id="lb-table">
+<thead><tr>
+<th onclick="sortTable(0)" data-col="#" data-type="num">#<span class="sort-ind"></span></th>
+<th onclick="sortTable(1)" data-col="experiment" data-type="str">Experiment<span class="sort-ind"></span></th>
+<th onclick="sortTable(2)" data-col="attn" data-type="str">attn<span class="sort-ind"></span></th>
+<th onclick="sortTable(3)" data-col="ffn" data-type="str">ffn<span class="sort-ind"></span></th>
+<th onclick="sortTable(4)" data-col="qk" data-type="str">qk<span class="sort-ind"></span></th>
+<th onclick="sortTable(5)" data-col="wn" data-type="str">wn<span class="sort-ind"></span></th>
+<th onclick="sortTable(6)" data-col="orth_layers" data-type="str">orth_layers<span class="sort-ind"></span></th>
+<th onclick="sortTable(7)" data-col="moe" data-type="str">MoE<span class="sort-ind"></span></th>
+<th onclick="sortTable(8)" data-col="params" data-type="str">params<span class="sort-ind"></span></th>
+<th onclick="sortTable(9)" data-col="ep" data-type="num">ep<span class="sort-ind"></span></th>
+<th onclick="sortTable(10)" data-col="best_ppl" data-type="num">best_ppl<span class="sort-ind"></span></th>
+<th onclick="sortTable(11)" data-col="at_ep" data-type="num">@ep<span class="sort-ind"></span></th>
+<th onclick="sortTable(12)" data-col="final_ppl" data-type="num">final_ppl<span class="sort-ind"></span></th>
+<th onclick="sortTable(13)" data-col="trn_ppl" data-type="num">trn_ppl<span class="sort-ind"></span></th>
+<th onclick="sortTable(14)" data-col="hrs" data-type="num">hrs<span class="sort-ind"></span></th>
+</tr></thead>
+<tbody>
+  <tr class="rank-1" data-config="attn_type: xsa
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+linear_weight_norm_max_only: false
+tie_embeddings: false
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>1</td>
+    <td>xsa_swiglu_qknorm_wnorm_d256</td>
+    <td>xsa</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>30.5M</td>
+    <td>3</td>
+    <td>35.09</td>
+    <td>2</td>
+    <td>35.09</td>
+    <td>42.31</td>
+    <td>0.99</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="rank-2" data-config="# Llama SwiGLU baseline with untied embeddings.
+# lm_head uses its own weight matrix instead of reusing token_embedding.weight.
+# Doubles the parameters at the embedding/output boundary; tests whether
+# weight tying is helping or hurting this model size.
+model_type: baseline
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 65536
+seq_len: 512
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+linear_weight_norm_max_only: false
+tie_embeddings: false
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>2</td>
+    <td>standard_swiglu_qknorm_wnorm_d256</td>
+    <td>std</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>38.3M</td>
+    <td>3</td>
+    <td>36.79</td>
+    <td>2</td>
+    <td>36.79</td>
+    <td>44.66</td>
+    <td>1.05</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="rank-3" data-config="# Llama SwiGLU baseline with linear weight normalisation (target norm = 2.0).
+# All linear layer weight rows are projected to L2 norm 2.0 after every
+# optimizer step. The lm_head (weight-tied to the token embedding) is excluded.
+model_type: baseline
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+seed: 0
+n_epochs: 10
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>3</td>
+    <td>standard_swiglu_qknorm_wnorm_d256</td>
+    <td>std</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>10</td>
+    <td>41.40</td>
+    <td>9</td>
+    <td>41.40</td>
+    <td>44.47</td>
+    <td>3.21</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="model_type: pfd_rationalglu
+pfd_n: 4
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+seed: 0
+n_epochs: 10
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+grad_accum_steps: 1
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+" onclick="toggleConfig(this)">
+    <td>4</td>
+    <td>standard_pfd_rationalglu_qknorm_wnorm_d256</td>
+    <td>std</td>
+    <td>rationalglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>10</td>
+    <td>41.69</td>
+    <td>9</td>
+    <td>41.69</td>
+    <td>44.98</td>
+    <td>3.76</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="model_type: pfd_rationalglu
+pfd_n: 4
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+seed: 123
+n_epochs: 10
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+grad_accum_steps: 1
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+" onclick="toggleConfig(this)">
+    <td>5</td>
+    <td>standard_pfd_rationalglu_qknorm_wnorm_d256</td>
+    <td>std</td>
+    <td>rationalglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>10</td>
+    <td>41.72</td>
+    <td>9</td>
+    <td>41.72</td>
+    <td>45.00</td>
+    <td>3.97</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# Llama SwiGLU baseline with linear weight normalisation (target norm = 2.0).
+# All linear layer weight rows are projected to L2 norm 2.0 after every
+# optimizer step. The lm_head (weight-tied to the token embedding) is excluded.
+model_type: baseline
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+seed: 42
+n_epochs: 10
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>6</td>
+    <td>swiglu_qknorm_wnorm_d256</td>
+    <td>std</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>10</td>
+    <td>44.14</td>
+    <td>9</td>
+    <td>44.14</td>
+    <td>47.85</td>
+    <td>3.72</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# XSA + SwiGLU (4× FFN width) + weight norm.
+#
+# Dense baseline at equivalent parameter budget to the full MoE run (§9.2):
+#
+#   SwiGLU FFN params: 3 × 256 × 2752 = 2,113,536  ≈  4 × 3 × 256 × 688 = 2,113,536
+#
+# Compare against baseline_xsa_moe_weight_norm.yaml (ffn_hidden=688, n_experts=4).
+# If this matches 47.31, MoE&#x27;s gain is pure parameter count (wider dense FFN suffices).
+# If it underperforms, sparse routing adds structural benefit beyond raw capacity.
+attn_type: xsa
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 2752
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>7</td>
+    <td>xsa_swiglu_qknorm_wnorm_d256</td>
+    <td>xsa</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>27.1M</td>
+    <td>3</td>
+    <td>44.33</td>
+    <td>2</td>
+    <td>44.33</td>
+    <td>54.53</td>
+    <td>1.12</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# Llama SwiGLU baseline with linear weight normalisation (target norm = 2.0).
+# All linear layer weight rows are projected to L2 norm 2.0 after every
+# optimizer step. The lm_head (weight-tied to the token embedding) is excluded.
+model_type: baseline
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+seed: 123
+n_epochs: 10
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>8</td>
+    <td>standard_swiglu_qknorm_wnorm_d256</td>
+    <td>std</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>12</td>
+    <td>44.68</td>
+    <td>9</td>
+    <td>44.68</td>
+    <td>48.12</td>
+    <td>4.21</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# PFD RationalGLU with QK norm, weight norm, and activation coefficient norm
+model_type: pfd_rationalglu
+pfd_n: 4
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+seed: 123
+n_epochs: 10
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+grad_accum_steps: 1
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+activation_norm: true
+" onclick="toggleConfig(this)">
+    <td>9</td>
+    <td>pfd_rationalglu_qknorm_wnorm_actnorm_d256</td>
+    <td>std</td>
+    <td>rationalglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>10</td>
+    <td>44.77</td>
+    <td>9</td>
+    <td>44.77</td>
+    <td>48.59</td>
+    <td>4.42</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# XSA + Sparse MoE FFN with linear weight normalisation.
+# Extends baseline_xsa_moe.yaml with bidirectional row-norm projection
+# (target L2 norm = 2.0) applied after every optimizer step.
+# Applies to all nn.Linear weight matrices including expert gate_proj,
+# up_proj, down_proj, and the router — lm_head (tied to embedding) excluded.
+attn_type: xsa
+ffn_type: moe
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+moe_n_experts: 4
+moe_top_k: 2
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>10</td>
+    <td>xsa_moe_qknorm_wnorm_d256</td>
+    <td>xsa</td>
+    <td>moe</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>4/2</td>
+    <td>27.1M</td>
+    <td>3</td>
+    <td>47.31</td>
+    <td>2</td>
+    <td>47.31</td>
+    <td>57.34</td>
+    <td>1.45</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# Llama SwiGLU baseline with Kronecker-factored core + low-rank delta MLP projections.
+# gate_proj: nn.Linear | up_proj, down_proj: KroneckerDeltaLinear
+# Kronecker core (A, B) trained by Muon; delta pathway (delta_C, delta_D) trained by AdamW.
+model_type: baseline
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+linear_weight_norm_max_only: false
+kronecker_delta_mlp: true
+kronecker_delta_rank: 32
+seed: 42
+n_epochs: 10
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>11</td>
+    <td>standard_swiglu_qknorm_wnorm_d256</td>
+    <td>std</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>15.9M</td>
+    <td>10</td>
+    <td>47.97</td>
+    <td>9</td>
+    <td>47.97</td>
+    <td>52.02</td>
+    <td>3.32</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# Llama SwiGLU baseline with Kronecker-factored core + low-rank delta MLP projections.
+# gate_proj: nn.Linear | up_proj, down_proj: KroneckerDeltaLinear
+# Kronecker core (A, B) trained by Muon; delta pathway (delta_C, delta_D) trained by AdamW.
+model_type: baseline
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+linear_weight_norm_max_only: false
+kronecker_delta_mlp: true
+kronecker_delta_rank: 16
+seed: 42
+n_epochs: 10
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>12</td>
+    <td>standard_swiglu_qknorm_wnorm_d256</td>
+    <td>std</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>15.7M</td>
+    <td>10</td>
+    <td>49.06</td>
+    <td>9</td>
+    <td>49.06</td>
+    <td>53.42</td>
+    <td>3.34</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="attn_type: xsa
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+orthogonal_ffn: true
+seed: 42
+n_epochs: 10
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>13</td>
+    <td>xsa_swiglu_qknorm_wnorm_orthogonal_d256</td>
+    <td>xsa</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>10</td>
+    <td>49.91</td>
+    <td>9</td>
+    <td>49.91</td>
+    <td>53.68</td>
+    <td>3.32</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# XSA + Sparse MoE FFN with linear weight normalisation.
+# Extends baseline_xsa_moe.yaml with bidirectional row-norm projection
+# (target L2 norm = 2.0) applied after every optimizer step.
+# Applies to all nn.Linear weight matrices including expert gate_proj,
+# up_proj, down_proj, and the router — lm_head (tied to embedding) excluded.
+attn_type: xsa
+ffn_type: moe
+norm_type: dynamic_erf
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+moe_n_experts: 4
+moe_top_k: 2
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>14</td>
+    <td>xsa_moe_qknorm_wnorm_dynamic_erf_d256</td>
+    <td>xsa</td>
+    <td>moe</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>4/2</td>
+    <td>27.1M</td>
+    <td>3</td>
+    <td>53.86</td>
+    <td>2</td>
+    <td>53.86</td>
+    <td>64.79</td>
+    <td>1.40</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# Llama SwiGLU baseline with QK norm, linear weight normalisation, and SiLU
+# activation applied before the LM head.
+model_type: baseline
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+linear_weight_norm_max_only: false
+pre_lm_head_silu: true
+qkv_silu: true
+seed: 42
+n_epochs: 10
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>15</td>
+    <td>standard_swiglu_qknorm_wnorm_d256</td>
+    <td>std</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>6</td>
+    <td>54.33</td>
+    <td>5</td>
+    <td>54.33</td>
+    <td>61.98</td>
+    <td>1.93</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# Llama SwiGLU baseline with QK normalization in attention
+model_type: baseline
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+seed: 42
+n_epochs: 10
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>16</td>
+    <td>swiglu_qknorm_d256</td>
+    <td>std</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>10</td>
+    <td>54.86</td>
+    <td>9</td>
+    <td>54.86</td>
+    <td>60.08</td>
+    <td>3.68</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# XSA + SwiGLU + qk_norm + weight_norm + selective orthogonal FFN.
+#
+# OrthogonalMLPWrapper applied only to odd-indexed middle layers (1 and 3).
+# First (0) and last (5) layers use a plain SwiGLU FFN.
+# Even middle layers (2 and 4) also use plain SwiGLU.
+#
+# Hypothesis: if alignment is concentrated in specific layers, selective
+# orthogonalization recovers most of the quality gain from full orthogonal_ffn
+# (55.57 ep2, §8.9) with weaker inductive constraint on the remaining layers.
+#
+# Baseline to beat: §8.9 full orthogonal_ffn — 55.57 ep2, 49.91 ep9
+# Ablation reference: §8.8 no orthogonal_ffn — 56.88 ep2
+attn_type: xsa
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+orthogonal_ffn_layers: [1, 3]
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>17</td>
+    <td>xsa_swiglu_qknorm_wnorm_d256</td>
+    <td>xsa</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>[1, 3]</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>54.97</td>
+    <td>2</td>
+    <td>54.97</td>
+    <td>65.49</td>
+    <td>0.92</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# XSA + SwiGLU + qk_norm + weight_norm + selective orthogonal FFN.
+#
+# OrthogonalMLPWrapper applied only to odd-indexed middle layers (1 and 3).
+# First (0) and last (5) layers use a plain SwiGLU FFN.
+# Even middle layers (2 and 4) also use plain SwiGLU.
+#
+# Hypothesis: if alignment is concentrated in specific layers, selective
+# orthogonalization recovers most of the quality gain from full orthogonal_ffn
+# (55.57 ep2, §8.9) with weaker inductive constraint on the remaining layers.
+#
+# Baseline to beat: §8.9 full orthogonal_ffn — 55.57 ep2, 49.91 ep9
+# Ablation reference: §8.8 no orthogonal_ffn — 56.88 ep2
+attn_type: xsa
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+orthogonal_ffn_layers: [1, 2, 3, 4]
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>18</td>
+    <td>xsa_swiglu_qknorm_wnorm_d256</td>
+    <td>xsa</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>[1, 2, 3, 4]</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>55.43</td>
+    <td>2</td>
+    <td>55.43</td>
+    <td>66.06</td>
+    <td>0.92</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="attn_type: xsa
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+# Looped transformer: 2 fixed head + 8 shared middle passes + 2 fixed tail
+# Effective depth: 12 layers, parameter blocks: 5 (vs 12 independent)
+use_loop: true
+loop_n_repeats: 8
+loop_n_fixed: 2
+
+
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+" onclick="toggleConfig(this)">
+    <td>19</td>
+    <td>xsa_swiglu_qknorm_wnorm_d256</td>
+    <td>xsa</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>16.8M</td>
+    <td>3</td>
+    <td>56.88</td>
+    <td>2</td>
+    <td>56.88</td>
+    <td>66.78</td>
+    <td>1.14</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# PFD RationalGLU with QK normalization in attention
+model_type: pfd_rationalglu
+pfd_n: 4
+gate_variant: G0
+sigma_variant: global
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+K: 5
+centers: [-1.0, -0.5, 0.0, 0.5, 1.0]
+sigma_init: 0.5
+sinkhorn_iters: 20
+vocab_size: 50257
+seq_len: 512
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+grad_accum_steps: 1
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+" onclick="toggleConfig(this)">
+    <td>20</td>
+    <td>pfd_rationalglu_qknorm_wnorm_d256</td>
+    <td>std</td>
+    <td>rationalglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>58.91</td>
+    <td>2</td>
+    <td>58.91</td>
+    <td>70.30</td>
+    <td>1.74</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# Llama SwiGLU baseline with linear weight normalisation (target norm = 2.0).
+# All linear layer weight rows are projected to L2 norm 2.0 after every
+# optimizer step. The lm_head (weight-tied to the token embedding) is excluded.
+model_type: baseline
+gate_variant: G0
+sigma_variant: global
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+K: 5
+centers: [-1.0, -0.5, 0.0, 0.5, 1.0]
+sigma_init: 0.5
+sinkhorn_iters: 20
+vocab_size: 50257
+seq_len: 512
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>21</td>
+    <td>swiglu_wnorm_d256</td>
+    <td>std</td>
+    <td>swiglu</td>
+    <td>—</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>58.97</td>
+    <td>2</td>
+    <td>58.97</td>
+    <td>70.19</td>
+    <td>1.02</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# Llama SwiGLU baseline with adaptive depth-based weight normalisation.
+# Target norm decreases linearly from adaptive_norm_early (layer 0) to
+# adaptive_norm_late (layer L-1). A phase-aware derivative correction
+# tightens late layers when the generalization gap is actively growing.
+# Row norm floor of 1.0 is always enforced.
+model_type: baseline
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+adaptive_weight_norm: true
+adaptive_norm_early: 2.5
+adaptive_norm_late: 1.2
+adaptive_norm_gamma: 0.3
+adaptive_norm_beta: 5.0
+adaptive_norm_alpha: 0.9
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>22</td>
+    <td>standard_swiglu_qknorm_adpwnorm_d256</td>
+    <td>std</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>60.67</td>
+    <td>2</td>
+    <td>60.67</td>
+    <td>72.91</td>
+    <td>1.12</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="attn_type: xsa
+ffn_type: relu_sq
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+linear_weight_norm_max_only: false
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>23</td>
+    <td>xsa_relu_sq_qknorm_wnorm_d256</td>
+    <td>xsa</td>
+    <td>relu_sq</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>16.6M</td>
+    <td>3</td>
+    <td>60.83</td>
+    <td>2</td>
+    <td>60.83</td>
+    <td>71.83</td>
+    <td>0.88</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# XSA + Sparse MoE FFN (parameter-matched to SwiGLU) + weight norm.
+#
+# Experiment B: isolates the structural benefit of sparse routing from
+# raw parameter count. Each expert uses ffn_hidden=172 so total FFN params
+# match the SwiGLU baseline (ffn_hidden=688):
+#
+#   4 experts × 3 projections × 256 × 172 = 528,384  ≈  3 × 256 × 688 = 528,384
+#
+# Compare against baseline_xsa_moe_weight_norm.yaml (ffn_hidden=688, ~4× params).
+# If this matches 47.31, routing is the mechanism. If it underperforms, the
+# prior MoE gain was parameter count, not sparse routing.
+attn_type: xsa
+ffn_type: moe
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 172
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+moe_n_experts: 4
+moe_top_k: 2
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>24</td>
+    <td>xsa_moe_qknorm_wnorm_d256</td>
+    <td>xsa</td>
+    <td>moe</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>4/2</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>60.99</td>
+    <td>2</td>
+    <td>60.99</td>
+    <td>72.30</td>
+    <td>1.58</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# XSA + Sparse MoE FFN + weight norm + Gram-Schmidt orthogonal experts.
+# Parameter-matched to SwiGLU baseline (1× FFN params).
+#
+# Extends baseline_xsa_moe_param_matched_weight_norm.yaml with moe_orthogonal=true:
+# active expert outputs are Gram-Schmidt orthogonalised in descending
+# router-score order before the weighted sum. Each expert is forced to
+# write a direction orthogonal to all higher-confidence experts, maximising
+# independent information written to the residual stream per MechInterp
+# key-value memory view.
+#
+#   4 experts × 3 projections × 256 × 172 = 528,384  ≈  3 × 256 × 688 = 528,384
+#
+# Baselines to beat:
+#   §9.3 param-matched MoE (no orthogonal): 60.99 ep2
+#   §8.8 XSA + wnorm (dense SwiGLU):        56.88 ep2
+#   §8.9 XSA + wnorm + orthogonal_ffn:      55.57 ep2
+#
+# Cosine similarity probe on §9.2 (4× MoE) showed mean=0.355 (range 0.17–0.61),
+# confirming substantial inter-expert redundancy that Gram-Schmidt should remove.
+attn_type: xsa
+ffn_type: moe
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 172
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+moe_n_experts: 4
+moe_top_k: 2
+moe_orthogonal: true
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>25</td>
+    <td>xsa_moe_qknorm_wnorm_orthogonal_d256</td>
+    <td>xsa</td>
+    <td>moe</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>4/2</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>61.17</td>
+    <td>2</td>
+    <td>61.17</td>
+    <td>72.68</td>
+    <td>1.38</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="attn_type: xsa
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+orthogonal_ffn: true
+seed: 42
+n_epochs: 10
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>26</td>
+    <td>xsa_swiglu_qknorm_orthogonal_d256</td>
+    <td>xsa</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>10</td>
+    <td>64.19</td>
+    <td>9</td>
+    <td>64.19</td>
+    <td>70.07</td>
+    <td>3.27</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="attn_type: xsa
+ffn_type: moe
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+moe_n_experts: 4
+moe_top_k: 2
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>27</td>
+    <td>xsa_moe_qknorm_d256</td>
+    <td>xsa</td>
+    <td>moe</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>4/2</td>
+    <td>27.1M</td>
+    <td>3</td>
+    <td>64.73</td>
+    <td>2</td>
+    <td>64.73</td>
+    <td>77.99</td>
+    <td>1.44</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="attn_type: xsa
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+gated_orthogonal_ffn: true
+gated_orthogonal_ffn_gate_activation: tanh
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>28</td>
+    <td>xsa_swiglu_qknorm_gated_orthogonal_d256</td>
+    <td>xsa</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>69.92</td>
+    <td>2</td>
+    <td>69.92</td>
+    <td>83.71</td>
+    <td>1.00</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="attn_type: xsa
+ffn_type: swiglu
+norm_type: dynamic_erf
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>29</td>
+    <td>xsa_swiglu_qknorm_d256</td>
+    <td>xsa</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>71.05</td>
+    <td>2</td>
+    <td>71.05</td>
+    <td>84.02</td>
+    <td>1.00</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="attn_type: xsa
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>30</td>
+    <td>xsa_swiglu_qknorm_d256</td>
+    <td>xsa</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>71.57</td>
+    <td>2</td>
+    <td>71.57</td>
+    <td>85.32</td>
+    <td>0.97</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="attn_type: xsa
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+linear_weight_norm: false
+linear_weight_norm_value: 2.0
+linear_weight_norm_max_only: false
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>31</td>
+    <td>xsa_swiglu_qknorm_d256</td>
+    <td>xsa</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>N</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>71.87</td>
+    <td>2</td>
+    <td>71.87</td>
+    <td>85.34</td>
+    <td>0.97</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# PFD RationalGLU with QK normalization in attention
+model_type: pfd_rationalglu
+pfd_n: 4
+gate_variant: G0
+sigma_variant: global
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+K: 5
+centers: [-1.0, -0.5, 0.0, 0.5, 1.0]
+sigma_init: 0.5
+sinkhorn_iters: 20
+vocab_size: 50257
+seq_len: 512
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+grad_accum_steps: 1
+" onclick="toggleConfig(this)">
+    <td>32</td>
+    <td>pfd_rationalglu_qknorm_d256</td>
+    <td>std</td>
+    <td>rationalglu</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>72.25</td>
+    <td>2</td>
+    <td>72.25</td>
+    <td>86.41</td>
+    <td>1.77</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="model_type: xsa
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+linear_weight_norm: false
+linear_weight_norm_value: 2.0
+linear_weight_norm_max_only: false
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>33</td>
+    <td>xsa_swiglu_d256</td>
+    <td>xsa</td>
+    <td>swiglu</td>
+    <td>—</td>
+    <td>N</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>72.41</td>
+    <td>2</td>
+    <td>72.41</td>
+    <td>86.35</td>
+    <td>0.97</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# PFD RationalGLU ablation — gate_variant, sigma_variant, K, centers,
+# sigma_init, and sinkhorn_iters are inert for model_type: pfd_rationalglu
+# but present for a uniform config schema across all runs.
+model_type: pfd_rationalglu
+pfd_n: 4
+gate_variant: G0
+sigma_variant: global
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+K: 5
+centers: [-1.0, -0.5, 0.0, 0.5, 1.0]
+sigma_init: 0.5
+sinkhorn_iters: 20
+vocab_size: 50257
+seq_len: 512
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+grad_accum_steps: 1
+" onclick="toggleConfig(this)">
+    <td>34</td>
+    <td>pfd_rationalglu_d256</td>
+    <td>std</td>
+    <td>rationalglu</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>73.00</td>
+    <td>2</td>
+    <td>73.00</td>
+    <td>88.02</td>
+    <td>1.65</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# RationalGLU with QK normalization in attention
+model_type: rationalglu
+gate_variant: G0
+sigma_variant: global
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+K: 5
+centers: [-1.0, -0.5, 0.0, 0.5, 1.0]
+sigma_init: 0.5
+sinkhorn_iters: 20
+vocab_size: 50257
+seq_len: 512
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+grad_accum_steps: 1
+" onclick="toggleConfig(this)">
+    <td>35</td>
+    <td>rationalglu_qknorm_d256</td>
+    <td>std</td>
+    <td>rationalglu</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>73.51</td>
+    <td>2</td>
+    <td>73.51</td>
+    <td>87.95</td>
+    <td>1.26</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="model_type: first_order_pfd_rational
+pfd_n: 4
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+seed: 0
+n_epochs: 10
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+grad_accum_steps: 1
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+" onclick="toggleConfig(this)">
+    <td>36</td>
+    <td>standard_first_order_pfd_rational_qknorm_wnorm_d256</td>
+    <td>std</td>
+    <td>rational</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>16.6M</td>
+    <td>4</td>
+    <td>74.17</td>
+    <td>3</td>
+    <td>74.17</td>
+    <td>86.72</td>
+    <td>1.56</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# RationalGLU ablation — gate_variant, sigma_variant, K, centers,
+# sigma_init, and sinkhorn_iters are inert for model_type: rationalglu
+# but present for a uniform config schema across all runs.
+model_type: rationalglu
+gate_variant: G0
+sigma_variant: global
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+K: 5
+centers: [-1.0, -0.5, 0.0, 0.5, 1.0]
+sigma_init: 0.5
+sinkhorn_iters: 20
+vocab_size: 50257
+seq_len: 512
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+grad_accum_steps: 1
+" onclick="toggleConfig(this)">
+    <td>37</td>
+    <td>rationalglu_d256</td>
+    <td>std</td>
+    <td>rationalglu</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>74.37</td>
+    <td>2</td>
+    <td>74.37</td>
+    <td>89.30</td>
+    <td>1.19</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="attn_type: xsa
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+# Looped transformer: 2 fixed head + 8 shared middle passes + 2 fixed tail
+# Effective depth: 12 layers, parameter blocks: 5 (vs 12 independent)
+use_loop: true
+loop_n_repeats: 8
+loop_n_fixed: 2
+" onclick="toggleConfig(this)">
+    <td>38</td>
+    <td>xsa_swiglu_qknorm_d256</td>
+    <td>xsa</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>16.8M</td>
+    <td>3</td>
+    <td>74.70</td>
+    <td>2</td>
+    <td>74.70</td>
+    <td>88.47</td>
+    <td>1.16</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# Llama SwiGLU baseline with linear weight normalisation (target norm = 2.0).
+# All linear layer weight rows are projected to L2 norm 2.0 after every
+# optimizer step. The lm_head (weight-tied to the token embedding) is excluded.
+model_type: baseline
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+linear_weight_norm_max_only: true
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>39</td>
+    <td>standard_swiglu_qknorm_wnorm_d256</td>
+    <td>std</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>75.54</td>
+    <td>2</td>
+    <td>75.54</td>
+    <td>89.89</td>
+    <td>0.97</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# Llama SwiGLU baseline — gate_variant and sigma_variant are present for
+# uniform directory naming but are ignored by the model (model_type: baseline).
+model_type: baseline
+gate_variant: G0
+sigma_variant: global
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+K: 5
+centers: [-1.0, -0.5, 0.0, 0.5, 1.0]
+sigma_init: 0.5
+sinkhorn_iters: 20
+vocab_size: 50257
+seq_len: 512
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0" onclick="toggleConfig(this)">
+    <td>40</td>
+    <td>swiglu_d256</td>
+    <td>std</td>
+    <td>swiglu</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>75.68</td>
+    <td>2</td>
+    <td>75.68</td>
+    <td>90.58</td>
+    <td>1.03</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# PFD RationalGLU ablation — gate_variant, sigma_variant, K, centers,
+# sigma_init, and sinkhorn_iters are inert for model_type: pfd_rationalglu
+# but present for a uniform config schema across all runs.
+# has smaller hidden dimension
+model_type: pfd_rationalglu
+pfd_n: 4
+gate_variant: G0
+sigma_variant: global
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 512
+dropout: 0.1
+K: 5
+centers: [-1.0, -0.5, 0.0, 0.5, 1.0]
+sigma_init: 0.5
+sinkhorn_iters: 20
+vocab_size: 50257
+seq_len: 512
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+grad_accum_steps: 1
+" onclick="toggleConfig(this)">
+    <td>41</td>
+    <td>pfd_rationalglu_d256</td>
+    <td>std</td>
+    <td>rationalglu</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>16.8M</td>
+    <td>3</td>
+    <td>75.71</td>
+    <td>2</td>
+    <td>75.71</td>
+    <td>90.57</td>
+    <td>1.48</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# FirstOrderPFDRational ablation — gate_variant, sigma_variant, K, centers,
+# sigma_init, and sinkhorn_iters are inert for model_type: first_order_pfd_rational
+# but present for a uniform config schema across all runs.
+model_type: first_order_pfd_rational
+gate_variant: G0
+sigma_variant: global
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+pfd_n: 4
+dropout: 0.1
+K: 5
+centers: [-1.0, -0.5, 0.0, 0.5, 1.0]
+sigma_init: 0.5
+sinkhorn_iters: 20
+vocab_size: 50257
+seq_len: 512
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+grad_accum_steps: 1
+" onclick="toggleConfig(this)">
+    <td>42</td>
+    <td>first_order_pfd_rational_d256</td>
+    <td>std</td>
+    <td>rational</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>16.6M</td>
+    <td>3</td>
+    <td>76.77</td>
+    <td>2</td>
+    <td>76.77</td>
+    <td>92.14</td>
+    <td>1.69</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# Rational activation ablation — gate_variant, sigma_variant, K, centers,
+# sigma_init, and sinkhorn_iters are inert for model_type: rational but
+# present for a uniform config schema across all runs.
+model_type: rational
+gate_variant: G0
+sigma_variant: global
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+K: 5
+centers: [-1.0, -0.5, 0.0, 0.5, 1.0]
+sigma_init: 0.5
+sinkhorn_iters: 20
+vocab_size: 50257
+seq_len: 512
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+grad_accum_steps: 1
+" onclick="toggleConfig(this)">
+    <td>43</td>
+    <td>rational_d256</td>
+    <td>std</td>
+    <td>rational</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>16.6M</td>
+    <td>3</td>
+    <td>78.38</td>
+    <td>2</td>
+    <td>78.38</td>
+    <td>94.81</td>
+    <td>1.13</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="attn_type: xsa
+ffn_type: leaky_relu_sq
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>44</td>
+    <td>xsa_leaky_relu_sq_qknorm_d256</td>
+    <td>xsa</td>
+    <td>leaky_relu_sq</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>79.30</td>
+    <td>2</td>
+    <td>79.30</td>
+    <td>93.93</td>
+    <td>0.98</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="attn_type: xsa
+ffn_type: leaky_relu_sq
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>45</td>
+    <td>xsa_leaky_relu_sq_qknorm_d256</td>
+    <td>xsa</td>
+    <td>leaky_relu_sq</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>79.97</td>
+    <td>2</td>
+    <td>79.97</td>
+    <td>94.58</td>
+    <td>0.97</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="model_type: polar_mlp
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>46</td>
+    <td>standard_polar_qknorm_wnorm_d256</td>
+    <td>std</td>
+    <td>polar</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>16.6M</td>
+    <td>3</td>
+    <td>85.84</td>
+    <td>2</td>
+    <td>85.84</td>
+    <td>104.37</td>
+    <td>0.95</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="model_type: polar_mlp
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>47</td>
+    <td>standard_polar_d256</td>
+    <td>std</td>
+    <td>polar</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>16.6M</td>
+    <td>3</td>
+    <td>95.11</td>
+    <td>2</td>
+    <td>95.11</td>
+    <td>116.28</td>
+    <td>1.09</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# Llama SwiGLU baseline with QK norm, linear weight normalisation, and
+# Kronecker-factored MLP projections.
+model_type: baseline
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+linear_weight_norm_max_only: false
+pre_lm_head_silu: false
+kronecker_mlp: true
+seed: 42
+n_epochs: 10
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>48</td>
+    <td>standard_swiglu_qknorm_wnorm_d256</td>
+    <td>std</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>14.5M</td>
+    <td>3</td>
+    <td>100.19</td>
+    <td>2</td>
+    <td>100.19</td>
+    <td>123.79</td>
+    <td>0.99</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# Llama SwiGLU baseline with QK norm, linear weight normalisation, and
+# Kronecker-factored MLP projections.
+model_type: baseline
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 50257
+seq_len: 512
+linear_weight_norm: false
+linear_weight_norm_value: 2.0
+linear_weight_norm_max_only: false
+pre_lm_head_silu: false
+kronecker_mlp: true
+seed: 42
+n_epochs: 10
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>49</td>
+    <td>standard_swiglu_qknorm_d256</td>
+    <td>std</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>N</td>
+    <td>—</td>
+    <td>—</td>
+    <td>14.5M</td>
+    <td>3</td>
+    <td>113.09</td>
+    <td>2</td>
+    <td>113.09</td>
+    <td>139.07</td>
+    <td>0.98</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# Llama SwiGLU baseline with Kronecker-factored LM head.
+# W ∈ R^{V×H} is never built; instead A ∈ R^{p×q} and B ∈ R^{m×n} are stored
+# where (p, m) is the most balanced factor pair of vocab_size and (q, n) of d_model.
+# Forward: reshape h → H_mat ∈ R^{n×q}, compute Z_mat = B H_mat A^T, flatten to logits.
+# Avoids rank suppression during back-prop by keeping the two factors independent.
+# tie_embeddings must be false — Kronecker lm_head has no single weight to tie.
+model_type: baseline
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: true
+vocab_size: 65536
+seq_len: 512
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+linear_weight_norm_max_only: false
+tie_embeddings: false
+lm_head_kronecker: true
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>50</td>
+    <td>standard_swiglu_qknorm_wnorm_d256</td>
+    <td>std</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>21.5M</td>
+    <td>3</td>
+    <td>138.21</td>
+    <td>2</td>
+    <td>138.21</td>
+    <td>162.24</td>
+    <td>0.88</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="model_type: polar_full
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+qk_norm: false
+vocab_size: 50257
+seq_len: 512
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>51</td>
+    <td>polar_polar_d256</td>
+    <td>—</td>
+    <td>polar</td>
+    <td>N</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>16.6M</td>
+    <td>1</td>
+    <td>214.20</td>
+    <td>0</td>
+    <td>214.20</td>
+    <td>8122.17</td>
+    <td>0.42</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+</tbody>
+</table>
+</div>
+<footer>Generated: 2026-05-16 10:51:07</footer>
+
+<script>
+(function() {
+  let sortCol = 10;
+  let sortAsc = true;
+
+  function cellValue(row, col) {
+    const cells = row.querySelectorAll('td');
+    return cells[col] ? cells[col].textContent.trim() : '';
+  }
+
+  function parseVal(v, colType) {
+    if (v === '—' || v === '') return colType === 'num' ? Infinity : '';
+    if (colType === 'num') {
+      const n = parseFloat(v.replace(/[MB K]/g, ''));
+      return isNaN(n) ? Infinity : n;
+    }
+    return v.toLowerCase();
+  }
+
+  window.sortTable = function(col) {
+    const table = document.getElementById('lb-table');
+    const ths = table.querySelectorAll('th');
+    const colType = ths[col].dataset.type;
+
+    if (sortCol === col) { sortAsc = !sortAsc; }
+    else { sortCol = col; sortAsc = true; }
+
+    ths.forEach((th, i) => {
+      th.querySelector('.sort-ind').textContent =
+        i === col ? (sortAsc ? ' ▲' : ' ▼') : '';
+    });
+
+    const tbody = table.querySelector('tbody');
+    const pairs = [];
+    const rows = Array.from(tbody.rows);
+    for (let i = 0; i < rows.length; i += 2) {
+      pairs.push([rows[i], rows[i+1]]);
+    }
+
+    pairs.sort((a, b) => {
+      const va = parseVal(cellValue(a[0], col), colType);
+      const vb = parseVal(cellValue(b[0], col), colType);
+      if (va < vb) return sortAsc ? -1 : 1;
+      if (va > vb) return sortAsc ? 1 : -1;
+      return 0;
+    });
+
+    pairs.forEach(([dr, cr]) => { tbody.appendChild(dr); tbody.appendChild(cr); });
+    rerank();
+  };
+
+  function rerank() {
+    const tbody = document.getElementById('lb-table').querySelector('tbody');
+    let visibleRank = 0;
+    Array.from(tbody.rows).forEach(row => {
+      if (row.classList.contains('config-row')) return;
+      if (row.style.display === 'none') return;
+      visibleRank++;
+      row.classList.remove('rank-1', 'rank-2', 'rank-3');
+      if (visibleRank <= 3) row.classList.add('rank-' + visibleRank);
+      row.cells[0].textContent = visibleRank;
+    });
+  }
+
+  window.filterTable = function(query) {
+    const q = query.toLowerCase();
+    const tbody = document.getElementById('lb-table').querySelector('tbody');
+    const rows = Array.from(tbody.rows);
+    for (let i = 0; i < rows.length; i += 2) {
+      const dataRow = rows[i];
+      const configRow = rows[i + 1];
+      const text = dataRow.textContent.toLowerCase();
+      const visible = q === '' || text.includes(q);
+      dataRow.style.display = visible ? '' : 'none';
+      if (!visible) configRow.style.display = 'none';
+    };
+    rerank();
+  };
+
+  window.toggleConfig = function(row) {
+    const configRow = row.nextElementSibling;
+    if (!configRow || !configRow.classList.contains('config-row')) return;
+    const isOpen = configRow.style.display !== 'none';
+    document.querySelectorAll('.config-row').forEach(r => r.style.display = 'none');
+    if (!isOpen) {
+      configRow.querySelector('.config-pre').textContent = row.dataset.config;
+      configRow.style.display = '';
+    }
+  };
+
+  const ths = document.querySelectorAll('#lb-table th');
+  if (ths[sortCol]) ths[sortCol].querySelector('.sort-ind').textContent = ' ▲';
+})();
+</script>
+</body>
+</html>

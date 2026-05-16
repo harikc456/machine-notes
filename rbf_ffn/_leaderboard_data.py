@@ -60,10 +60,10 @@ def load_experiment(exp_dir: Path) -> dict | None:
     final_row = rows[-1]
     total_time_h = sum(r.get("epoch_time_s", 0) for r in rows) / 3600
 
-    params_path = exp_dir / "params.json"
     n_params = None
-    if params_path.exists():
-        n_params = json.loads(params_path.read_text()).get("n_params")
+    model_info_path = exp_dir / "model_info.json"
+    if model_info_path.exists():
+        n_params = json.loads(model_info_path.read_text()).get("n_params")
 
     return {
         "name": exp_dir.name,

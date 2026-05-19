@@ -175,15 +175,19 @@ The KV cache is often the dominant inference memory consumer at long sequence le
 
 **Memory impact:** TriAttention achieves 10.7× KV compression for long-context reasoning tasks while preserving task accuracy — substantially better than H₂O for chain-of-thought workloads.
 
-#### 10b. Quantization — PolarQuant, TurboQuant
+#### 10b. Quantization — PolarQuant, TurboQuant, SpectralQuant
 
 **Core idea:** Instead of evicting tokens, reduce the bit-width of all stored K and V tensors.
 
 - **[[polarquant]]:** Converts K/V vectors to polar coordinates; angular component quantized more aggressively than radial (aligned with attention sensitivity). Eliminates per-block normalization overhead via Hadamard preconditioning. Achieves >4.2× compression.
 
-- **[[turboquant]]:** Random rotation (Hadamard) + MSE quantizer + 1-bit QJL residual. Data-oblivious (no calibration dataset needed). Near-neutral perplexity at 3.5 bits/element.
+- **[[turboquant]]:** Random rotation (Hadamard) + MSE quantizer + 1-bit QJL residual. Data-oblivious (no calibration needed). Near-optimal within the data-oblivious class (proved within 2.7× of information-theoretic optimum). 3.19 bits/element, 5.02× compression.
 
-**Shared insight:** Both use random Hadamard preconditioning to make vector coordinates approximately i.i.d., enabling parameter-free normalization. Traditional per-block normalization stores FP32 scale factors that dominate at low bitwidth.
+- **[[spectralquant]]:** Calibrated eigenvector rotation + non-uniform quantization + selective QJL on signal dims only. Exploits a universal property: KV key vectors have effective dimensionality d_eff ≈ 3–4% of head dim across all tested model families. 15s one-time calibration. **Strictly dominates TurboQuant**: 2.69 bits/element (−0.50 bits), 5.95× compression (+18.6%), +1.7–2.8 pp cosine similarity. Perplexity identical to uncompressed inference.
+
+**Shared insight:** All three use rotation preconditioning before quantization. PolarQuant and TurboQuant use random rotation (data-oblivious); SpectralQuant uses calibrated eigenvector rotation, enabling selective error correction on the 3% of dimensions that carry signal — the key advance.
+
+**Memory impact:** SpectralQuant saves an additional −7.3 to −50.4 MB vs TurboQuant at 8K context depending on model size (1.5B–14B).
 
 #### 10c. Architectural KV Reduction
 
@@ -289,6 +293,7 @@ For the decode phase (one new token per step), attention memory is smaller and K
 | KV eviction (H₂O) | Inference | KV cache | Irreversible; risky for retrieval; unstable at long context |
 | KV eviction (TriAttention) | Inference | KV cache | Offline calibration; still irreversible; best for reasoning |
 | KV quantization (PolarQuant/TurboQuant) | Inference | KV cache | Transform compute overhead |
+| KV quantization (SpectralQuant) | Inference | KV cache | 15s one-time calibration; strictly better than TurboQuant |
 | MQA / GQA / MLA / CSA | Inference | KV cache | Potential attention quality loss (MQA) |
 | PagedAttention | Inference | KV cache fragmentation | Minimal (OS paging is near-zero cost) |
 | Speculative decoding | Inference | — (increases memory) | Throughput gain, not memory gain |
@@ -323,8 +328,9 @@ For the decode phase (one new token per step), attention memory is smaller and K
 - [[h2o]] — KV eviction via heavy-hitter oracle (post-RoPE)
 - [[triattention]] — KV eviction via trigonometric series in pre-RoPE space; best for long-context reasoning
 - [[polarquant]] — polar KV quantization
-- [[turboquant]] — vector KV quantization
-- [[kv-cache-compression-comparison]] — H₂O vs TriAttention vs PolarQuant vs TurboQuant
+- [[turboquant]] — vector KV quantization; data-oblivious, near-optimal within that class
+- [[spectralquant]] — calibrated spectral KV quantization; 15s setup, strictly better than TurboQuant
+- [[kv-cache-compression-comparison]] — H₂O vs TriAttention vs PolarQuant vs TurboQuant vs SpectralQuant
 - [[speculative-decoding]] — draft-verify inference speedup; includes SSD/Saguaro section
 - [[saguaro]] — speculative speculative decoding; parallel draft+verify on separate hardware
 - [[layerskip]] — self-speculative decoding via early exit

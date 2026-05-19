@@ -2,7 +2,7 @@
 
 > Content catalog. Every wiki page listed under its type with a one-line summary.
 > Read this first to find relevant pages for any query.
-> Last updated: 2026-05-19 | Total pages: 44
+> Last updated: 2026-05-19 | Total pages: 45
 
 ## Entities
 
@@ -27,6 +27,7 @@
 - [[polarquant]] — PolarQuant: KV cache quantization using polar coordinate transformation to eliminate normalization overhead
 - [[qknorm]] — QKNorm: cosine-similarity attention (ℓ₂-normalize Q and K) prevents softmax saturation; +0.7 ppl in LM experiments
 - [[saguaro]] — Saguaro (SSD): speculative speculative decoding — parallelizes drafting and verification on separate hardware; 30% faster than SD, up to 5× over AR
+- [[spectralquant]] — SpectralQuant (Gopinath, Apr 2026): calibrated eigenvector rotation + selective QJL on 3% signal dims; +1.7–2.8 pp cosine sim, 5.95× compression vs TurboQuant's 5.02×
 - [[triattention]] — TriAttention: KV cache compression via trigonometric series in pre-RoPE space; 2.5× throughput or 10.7× KV reduction at matched accuracy on AIME25
 - [[turboquant]] — TurboQuant: near-optimal online vector quantization via random rotation + MSE quantizer + 1-bit QJL residual
 - [[weight-normalization]] — Weight Normalization (Salimans & Kingma 2016): decouple weight direction from magnitude; ~21 ppl gain in LM

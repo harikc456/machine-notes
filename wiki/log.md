@@ -175,6 +175,17 @@
   - concepts/hyper-connections.md — added "Alternative Approach: Attention Residuals" section + [[attnres]] See Also link
 - index.md updated: total pages 43 → 44
 
+## [2026-05-19] ingest | SpectralQuant — Gopinath, Apr 2026 (papers/spectralquant.pdf)
+- Pages created:
+  - entities/spectralquant.md — full entity page: spectral gap discovery, 5-stage algorithm, bias-variance proof for selective QJL, results table
+- Pages updated:
+  - entities/turboquant.md — added SpectralQuant as data-aware successor in See Also
+  - comparisons/kv-cache-compression-comparison.md — added SpectralQuant column + full §; updated Recommended Use; title updated to include SpectralQuant
+  - concepts/quantization.md — added SpectralQuant to KV cache quantization §; updated Calibration §; replaced random preconditioning section with spectral gap insight; updated See Also
+- index.md updated: total pages 44 → 45
+- queries/inference-improvements-summary.md — added SpectralQuant to §3c; added row to cross-cutting themes table; added [[spectralquant]] to See Also
+- queries/memory-reduction-survey.md — extended §10b (PolarQuant/TurboQuant → +SpectralQuant); added row to summary table; added [[spectralquant]] to See Also
+
 ## [2026-05-19] update | inference-improvements-summary.md + memory-reduction-survey.md
 - inference-improvements-summary.md:
   - Added §1c Attention Residuals (AttnRes) under Architecture Improvements

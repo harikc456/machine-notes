@@ -186,9 +186,26 @@ See [[triattention]] for the full method; [[kv-cache-compression-comparison]] fo
 2. **MSE quantizer**: near-optimal bit allocation given smoothed distribution
 3. **1-bit QJL residual**: captures residual error with 1-bit quantization
 
-**Result**: near-optimal quantization at 3.5 bits per value.
+**Result**: near-optimal quantization at 3.5 bits per value. Provably within 2.7× of the information-theoretic optimum within the data-oblivious class.
 
-**Shared insight with PolarQuant**: both apply a random Hadamard preconditioning step to eliminate per-block normalization overhead. The transform makes the distribution easier to quantize without needing runtime statistics.
+**Shared insight with PolarQuant**: both apply random Hadamard preconditioning to eliminate per-block normalization overhead. The transform makes the distribution easier to quantize without needing runtime statistics.
+
+#### SpectralQuant
+
+[[spectralquant]] — calibrated spectral KV quantization (Gopinath, Sentra/MIT, Apr 2026).
+
+**Core discovery**: across 6 transformer models and 4 families (Qwen, Llama, Mistral, Gemma), KV cache key vectors have effective dimensionality d_eff ≈ 3–4% of head dimension — universally. On 128-dim heads, only ~4 dimensions carry signal; 124 carry noise. This 97% spectral gap is stable (CV = 3.9% across calibration splits).
+
+**Key insight**: TurboQuant's uniform QJL correction on noise dimensions worsens MSE — on dimensions where the true signal is ≈0, correction adds variance without reducing bias. Selectively removing QJL from noise dims simultaneously improves quality *and* compression.
+
+**Algorithm** (5 stages, 15s one-time calibration):
+1. Compute empirical covariance Σ̂; extract eigenvectors U; set d_s = ⌈PR(Σ̂)⌉ ≈ 4
+2. Spectral rotation: h̃ = U^⊤h; first d_s = signal, rest = noise
+3. Non-uniform quantization: Lloyd-Max codebooks separately for signal/noise dims
+4. Selective QJL: JL error correction on signal dims only
+5. Decompression: reverse quantization + inverse rotation
+
+**Results vs TurboQuant (3-bit)**: +1.7–2.8 pp cosine similarity across all four models; 5.95× vs 5.02× compression (−0.50 bits/element); 4.5× faster attention decoding at 512 tokens. Perplexity identical to uncompressed inference (9.51). Perfect needle-in-haystack to 8K tokens.
 
 ---
 
@@ -373,7 +390,8 @@ Converts pretrained AR models into DLMs using **introspective-consistency traini
 | INT4 weights | Quality (marginal at INT8, moderate at INT4) | Memory ↓ 2–4× |
 | H₂O pruning | Retrieval quality | Throughput ↑ 29× |
 | TriAttention | Offline calibration; still eviction | Throughput ↑ 2.5× or KV ↓ 10.7× at matched accuracy (reasoning) |
-| PolarQuant / TurboQuant | Small quality loss | KV memory ↓ 3–4× |
+| PolarQuant / TurboQuant | Small quality loss | KV memory ↓ 3–5× |
+| SpectralQuant | 15s calibration | KV memory ↓ 5.95×; +1.7–2.8 pp cosine sim vs TurboQuant; 4.5× decode speedup |
 | Speculative decoding | Requires draft model | Latency ↓ 2–3× (lossless) |
 | Saguaro (SSD) | Separate speculator hardware; prediction overhead | Latency ↓ 5× vs AR, 30% over SD (lossless) |
 | Self-speculative (LayerSkip) | Draft quality vs separate model | Latency ↓ 1.3–2.2× (lossless, no extra memory) |
@@ -389,7 +407,8 @@ Converts pretrained AR models into DLMs using **introspective-consistency traini
 
 - [[attnres]] — Attention Residuals: depth-wise softmax attention over preceding layers; Block AttnRes is a drop-in for training
 - [[kv-cache]] — KV cache fundamentals and bottleneck analysis
-- [[kv-cache-compression-comparison]] — H₂O vs TriAttention vs PolarQuant vs TurboQuant head-to-head
+- [[kv-cache-compression-comparison]] — H₂O vs TriAttention vs PolarQuant vs TurboQuant vs SpectralQuant head-to-head
+- [[spectralquant]] — calibrated spectral KV quantization; breaks TurboQuant's data-oblivious bound
 - [[triattention]] — pre-RoPE KV compression; best for long-context reasoning
 - [[speculative-decoding]] — detailed page with algorithm walkthrough, self-speculative, and SSD sections
 - [[saguaro]] — SSD: parallel drafting + verification on separate hardware

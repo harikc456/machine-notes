@@ -1,33 +1,34 @@
 ---
 title: KV Cache Compression Methods Comparison
 created: 2026-05-14
-updated: 2026-05-16
+updated: 2026-05-19
 type: comparison
 tags: [kv-cache, quantization, inference, comparison]
-sources: [raw/papers/2306.14048v3.pdf, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf, raw/papers/2604.04921v1.pdf]
+sources: [raw/papers/2306.14048v3.pdf, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf, raw/papers/2604.04921v1.pdf, papers/spectralquant.pdf]
 confidence: high
 ---
 
-# KV Cache Compression: H₂O vs TriAttention vs PolarQuant vs TurboQuant
+# KV Cache Compression: H₂O vs TriAttention vs PolarQuant vs TurboQuant vs SpectralQuant
 
-Four approaches to reducing KV cache memory, covering two fundamentally different strategies: eviction and quantization.
+Five approaches to reducing KV cache memory, covering two fundamentally different strategies: eviction and quantization.
 
 See [[kv-cache]] for background on why this matters.
 
 ## Comparison Table
 
-| Dimension | [[h2o]] | [[triattention]] | [[polarquant]] | [[turboquant]] |
-|---|---|---|---|---|
-| Strategy | Eviction | Eviction | Quantization | Quantization |
-| All tokens retained? | ❌ | ❌ | ✅ | ✅ |
-| Memory reduction | ~20× (5% tokens) | 10.7× (matched accuracy) | >4.2× | ~3× (3.5 bits) |
-| Q/K space | Post-RoPE | **Pre-RoPE** | N/A | N/A |
-| Importance signal | Attention accumulation | Trigonometric series + norms | Polar transform | Random rotation + QJL |
-| Calibration needed | No | Yes (offline, cheap) | No | No |
-| Needle-in-haystack safe | ❌ (risky) | Better (stable scoring) | ✅ | ✅ |
-| Theoretical guarantees | Submodular bound | Empirical | Empirical | Near-optimal bounds |
-| Long reasoning | ❌ | ✅ (10.7× on AIME25) | Untested | Untested |
-| Venue | NeurIPS 2023 | arXiv Apr 2026 | arXiv Feb 2025 | arXiv Apr 2025 |
+| Dimension | [[h2o]] | [[triattention]] | [[polarquant]] | [[turboquant]] | [[spectralquant]] |
+|---|---|---|---|---|---|
+| Strategy | Eviction | Eviction | Quantization | Quantization | Quantization |
+| All tokens retained? | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Memory reduction | ~20× (5% tokens) | 10.7× (matched accuracy) | >4.2× | 5.02× | **5.95×** |
+| Q/K space | Post-RoPE | **Pre-RoPE** | N/A | N/A | N/A |
+| Importance signal | Attention accumulation | Trigonometric series + norms | Polar transform | Random rotation + QJL | **Calibrated eigenvectors + selective QJL** |
+| Calibration needed | No | Yes (offline, cheap) | No | No | **Yes (15s)** |
+| Needle-in-haystack safe | ❌ (risky) | Better (stable scoring) | ✅ | ✅ | ✅ |
+| Theoretical guarantees | Submodular bound | Empirical | Empirical | Near-optimal bounds (data-oblivious) | Bias-variance proof for selective QJL |
+| Long reasoning | ❌ | ✅ (10.7× on AIME25) | Untested | Untested | Untested |
+| Bits/element | N/A | N/A | N/A | 3.19 | **2.69** |
+| Venue | NeurIPS 2023 | arXiv Apr 2026 | arXiv Feb 2025 | arXiv Apr 2025 | arXiv Apr 2026 |
 
 ## H₂O: Eviction
 
@@ -62,14 +63,29 @@ See [[kv-cache]] for background on why this matters.
 
 **Strengths**:
 - All tokens preserved
-- **Information-theoretically near-optimal** (proved within 2.7× of lower bound)
+- **Information-theoretically near-optimal** (proved within 2.7× of lower bound within data-oblivious class)
 - Dual objective: MSE and inner product both optimized
 - Applies beyond KV cache to nearest neighbor search
+- Zero calibration cost
 
 **Weaknesses**:
-- Two-stage pipeline adds complexity
-- QJL residual is a bit-width overhead
-- Near-optimal but not optimal
+- Uniform QJL on all dimensions injects variance into noise dims (where it worsens MSE)
+- Near-optimal within data-oblivious class — data-aware methods can do better
+
+## SpectralQuant: Calibrated Spectral Quantization
+
+**Core idea**: KV cache key vectors have d_eff ≈ 3–4% of head dimension carrying signal (universally across model families). Rotate into eigenvector coordinates, apply non-uniform quantization, and apply QJL error correction *only* to signal dimensions. 15s one-time calibration.
+
+**Strengths**:
+- All tokens preserved
+- **Strictly dominates TurboQuant**: +1.7–2.8 pp cosine similarity *and* 18.6% better compression at same bit budget
+- Perplexity identical to uncompressed inference
+- 4.5× faster attention decoding than TurboQuant at 512 tokens
+- Counterintuitive insight: *removing* QJL from noise dims improves quality (bias-variance argument)
+
+**Weaknesses**:
+- 15s calibration required (one-time per model, cheap but non-zero)
+- Calibration stability: CV = 3.9% across splits (highly stable, but data-oblivious methods have zero variance here)
 
 ## TriAttention: Pre-RoPE Eviction
 
@@ -87,7 +103,9 @@ See [[kv-cache]] for background on why this matters.
 
 ## Design Convergence
 
-Both PolarQuant and TurboQuant independently arrived at **random preconditioning** as the key to eliminating normalization overhead. The shared insight: after random rotation, the distribution of each coordinate is analytically known and concentrated — making per-block normalization unnecessary. They differ in what they do with the preconditioned vectors (polar transform vs. scalar quantization + QJL).
+PolarQuant, TurboQuant, and SpectralQuant all use **rotation preconditioning** to eliminate normalization overhead. TurboQuant and PolarQuant use random rotation (data-oblivious); SpectralQuant uses calibrated eigenvector rotation (data-aware, 15s cost). The spectral concentration SpectralQuant exploits is empirically universal — d_eff ≈ 3-4% of head dim across all tested model families.
+
+SpectralQuant's core advance over TurboQuant: recognizing that uniform QJL on 97% noise dimensions worsens MSE by injecting variance without reducing bias. This is formally provable via bias-variance decomposition and confirmed empirically (+3.0 pp cosine similarity just from removing QJL on noise dims).
 
 TriAttention exploits a different structural property: **Q/K concentration in pre-RoPE space** enables attention patterns to be predicted from stable centers, bypassing the rotation instability that limits attention-based eviction methods.
 
@@ -95,11 +113,13 @@ TriAttention exploits a different structural property: **Q/K concentration in pr
 
 - **Maximum compression, non-critical tasks**: H₂O (20× compression)
 - **Long-context reasoning (chain-of-thought, AIME)**: TriAttention (10.7× with matched accuracy)
-- **Long-context retrieval with compression**: PolarQuant or TurboQuant (retain all tokens)
+- **Long-context quantization, zero setup**: TurboQuant (data-oblivious bound)
+- **Long-context quantization, best quality+compression**: SpectralQuant (15s calibration, strictly better than TurboQuant)
 - **Principled bounds + dual-use (NN search)**: TurboQuant
-- **Orthogonal combination**: Quantize retained tokens (TriAttention + TurboQuant for eviction + quantization)
+- **Orthogonal combination**: Quantize retained tokens (TriAttention + SpectralQuant for eviction + quantization)
 
 ## See Also
 
 - [[kv-cache]] — background and broader landscape
 - [[quantization]] — general quantization context
+- [[spectralquant]] — full SpectralQuant entity page

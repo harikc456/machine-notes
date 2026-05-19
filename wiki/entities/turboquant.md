@@ -1,7 +1,7 @@
 ---
 title: TurboQuant
 created: 2026-05-14
-updated: 2026-05-14
+updated: 2026-05-19
 type: entity
 tags: [kv-cache, quantization, inference]
 sources: [raw/papers/2504.19874v1.pdf]
@@ -47,5 +47,6 @@ Random rotation makes each coordinate approximately i.i.d. Beta-distributed in h
 - [[h2o]]: eviction-based (complementary rather than competing)
 - [[kv-cache-compression-comparison]]: side-by-side comparison
 - [[quantization]]: general quantization landscape
+- [[spectralquant]]: data-aware successor (Apr 2026) that breaks TurboQuant's data-oblivious bound — calibrated eigenvector rotation + selective QJL on signal dims only achieves +1.7–2.8 pp cosine similarity at 18.6% better compression; 15s calibration cost
 
-Note: TurboQuant and PolarQuant share an author (Zandieh, Mirrokni from Google Research) and both use random preconditioning — they likely represent parallel explorations of the same fundamental idea.
+Note: TurboQuant and PolarQuant share an author (Zandieh, Mirrokni from Google Research) and both use random preconditioning — they likely represent parallel explorations of the same fundamental idea. TurboQuant's theoretical guarantee is tight within the data-oblivious class; SpectralQuant shows that spending 15s on calibration decisively breaks the bound.

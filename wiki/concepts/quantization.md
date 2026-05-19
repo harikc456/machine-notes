@@ -1,7 +1,7 @@
 ---
 title: Quantization
 created: 2026-05-14
-updated: 2026-05-14
+updated: 2026-05-19
 type: concept
 tags: [quantization, inference, training]
 sources: [raw/papers/A Visual Guide to Quantization.md, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf]
@@ -40,8 +40,9 @@ Quantize model weights; activations remain in higher precision:
 ### KV Cache Quantization
 Quantize the K/V tensors stored during inference:
 - [[polarquant]]: polar coordinate transform, no normalization needed
-- [[turboquant]]: random rotation + MSE quantizer + QJL residual
-- Challenge: per-block normalization parameters add overhead — addressed by both PolarQuant and TurboQuant via random preconditioning
+- [[turboquant]]: random rotation + MSE quantizer + QJL residual; data-oblivious, near-optimal within that class
+- [[spectralquant]]: calibrated eigenvector rotation + selective QJL on signal dims only; exploits 97% spectral gap in KV keys; 15s calibration; strictly better than TurboQuant (+1.7–2.8 pp, 18.6% better compression)
+- Challenge: per-block normalization parameters add overhead — addressed by all three via rotation preconditioning
 
 ### Activation Quantization
 Quantize activations (inputs/outputs of layers) during inference — most challenging due to outliers.
@@ -49,7 +50,7 @@ Quantize activations (inputs/outputs of layers) during inference — most challe
 ## Key Concepts
 
 ### Calibration
-Most PTQ methods require a small calibration dataset to determine quantization ranges. Data-oblivious methods ([[turboquant]], QJL) avoid this.
+Most PTQ methods require a small calibration dataset to determine quantization ranges. Data-oblivious methods ([[turboquant]], QJL) avoid this entirely. Data-aware methods ([[spectralquant]]: 15s on one GPU) trade minimal calibration for meaningful quality gains by exploiting structural properties invisible to oblivious methods.
 
 ### Symmetric vs Asymmetric
 - Symmetric: quantization range is [-max, max] — zero point = 0, one parameter (scale)
@@ -60,12 +61,17 @@ Group elements into blocks; normalize each block independently. The scale/zero-p
 
 ## The Random Preconditioning Insight
 
-Both [[polarquant]] and [[turboquant]] use a random (Hadamard) matrix to precondition vectors before quantization. After preconditioning, coordinates become approximately i.i.d. — their distribution is analytically characterized, eliminating the need for data-dependent normalization. This is the key insight that makes both methods normalization-free.
+[[polarquant]], [[turboquant]], and [[spectralquant]] all use rotation preconditioning before quantization. PolarQuant and TurboQuant use random rotation (oblivious); SpectralQuant uses calibrated eigenvector rotation. The calibrated version is strictly better: it aligns the coordinate axes with the actual signal/noise structure, enabling selective error correction that random rotation cannot.
+
+## The Spectral Gap Insight (SpectralQuant)
+
+KV cache key vectors exhibit d_eff ≈ 3–4% of head dimension as effective dimensionality — universally across model families. This means 96–97% of dimensions carry only noise. Applying error correction (QJL) uniformly to all dims, as TurboQuant does, worsens MSE on noise dims (variance added exceeds bias reduced). Selectively applying correction only to signal dims strictly improves quality *and* compression simultaneously.
 
 ## See Also
 
 - [[kv-cache]] — KV cache quantization specifically
 - [[polarquant]] — polar quantization for KV
 - [[turboquant]] — vector quantization for KV
+- [[spectralquant]] — calibrated spectral quantization for KV
 - [[h2o]] — complementary eviction approach
 - [[kv-cache-compression-comparison]] — methods compared

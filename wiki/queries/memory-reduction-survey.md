@@ -1,16 +1,16 @@
 ---
-title: Memory Reduction Techniques for LLM Training and Inference
+title: Memory Reduction Techniques for LLM Training
 created: 2026-05-15
 updated: 2026-05-19
 type: query
-tags: [survey, training, inference, quantization, kv-cache, optimization, sparsity, attention]
+tags: [survey, training, quantization, optimization, attention, sparsity]
 sources: []
 confidence: high
 ---
 
-# Memory Reduction Techniques for LLM Training and Inference
+# Memory Reduction Techniques for LLM Training
 
-A structured survey of techniques that reduce peak or steady-state memory in LLM workflows, organized by phase. Memory pressure manifests differently in each phase: training is dominated by activations, optimizer states, and gradients; inference is dominated by model weights and the KV cache.
+A structured survey of techniques that reduce peak or steady-state memory during LLM training and fine-tuning. Training memory pressure is dominated by activations, optimizer states, and gradients. For inference-time memory reduction (weight quantization, KV cache compression, speculative decoding), see [[memory-inference-techniques]]. For research gaps in the inference space, see [[memory-inference-research-gaps]].
 
 ---
 
@@ -104,8 +104,6 @@ A 175B model in FP32 with Adam optimizer states requires ~2.8 TB total. With 64 
 
 **Recomputation role:** Flash Attention recomputes attention weights during the backward pass rather than storing them — this is selective activation recomputation (§2) applied to attention.
 
-**Wiki cross-reference:** [[flash-attention]] entity page has full benchmarks.
-
 ---
 
 ### 7. Mixture of Experts (MoE) — Training Memory Perspective
@@ -132,149 +130,6 @@ A 175B model in FP32 with Adam optimizer states requires ~2.8 TB total. With 64 
 
 **Adafactor:** Factorizes the second-moment matrix (v) into row/column factors for matrix-shaped parameters, reducing optimizer state from O(d²) to O(d) per matrix. No per-element second moment stored. Used in T5/PaLM training.
 
-**Wiki cross-reference:** [[deepseek-v4]] uses Muon with weight normalization in combination.
-
----
-
-## Part II — Inference
-
-### 9. Weight Quantization (PTQ)
-
-**Core idea:** After training, quantize model weights to lower-bit representations. The model is loaded in quantized form; weights are dequantized to FP16 for matrix multiplications (W8A16) or kept quantized for fully quantized matmuls (W8A8).
-
-**Memory impact:** INT8 → 2× reduction vs FP16 weights. INT4 → 4× reduction. A 70B FP16 model fits in 140 GB; INT4 shrinks it to ~35 GB — from two A100s to one.
-
-**Key methods:**
-- *GPTQ* (Frantar et al., 2022): Layer-wise second-order quantization. Minimizes per-layer output error. Near-lossless to 4-bit for large models.
-- *AWQ* (Lin et al., 2023): Identifies and protects weight channels with large activation magnitudes before quantization. Works without calibration data for most tasks.
-- *SmoothQuant*: Migrates quantization difficulty from activations to weights by scaling channels; enables W8A8 (fully quantized) inference.
-
-**Trade-offs:** Quantization error accumulates across layers. Very low bitwidth (2-bit) suffers perplexity degradation. Extreme methods like BitNet (1-bit weights) require training from scratch.
-
-**Wiki cross-reference:** [[quantization]] covers data types, calibration, and the random preconditioning insight (shared with KV quantization).
-
----
-
-### 10. KV Cache Compression
-
-The KV cache is often the dominant inference memory consumer at long sequence lengths or large batches (can exceed weight memory — see [[kv-cache]] for the formula).
-
-#### 10a. Eviction — H₂O and TriAttention
-
-**Core idea ([[h2o]]):** Not all tokens are equally important for future attention. H₂O maintains a budget-bounded cache by evicting tokens with low accumulated attention scores while always keeping recent tokens (recency window).
-
-**Memory impact:** Reduces KV cache to a fixed fraction (e.g., 5–20%) of full sequence length. Memory bounded by budget size, independent of actual sequence length.
-
-**Limitation:** Eviction is irreversible. H₂O's post-RoPE importance estimation is also unstable at long contexts: RoPE rotation means only recent queries have up-to-date orientations, creating a tiny observation window. This is why H₂O and similar methods fail on long reasoning chains (AIME, chain-of-thought).
-
-**TriAttention ([[triattention]], Apr 2026)** addresses the stability problem by working in **pre-RoPE space**, where Q/K vectors are concentrated around fixed centers that remain stable across all positions. Importance is scored via a trigonometric series in Q-K distance — derived from the stable Q/K centers — avoiding the rotation-induced instability:
-
-- Offline calibration: compute Q distribution centers once per model
-- At inference: score each key using S_trig (distance preference) + S_norm (magnitude complement), weighted by per-head Q/K concentration
-- Results on AIME25 (32K generation): **10.7× KV memory reduction** at matched accuracy vs Full Attention; competing methods achieve only ~half the accuracy at the same memory budget
-
-**Memory impact:** TriAttention achieves 10.7× KV compression for long-context reasoning tasks while preserving task accuracy — substantially better than H₂O for chain-of-thought workloads.
-
-#### 10b. Quantization — PolarQuant, TurboQuant, SpectralQuant
-
-**Core idea:** Instead of evicting tokens, reduce the bit-width of all stored K and V tensors.
-
-- **[[polarquant]]:** Converts K/V vectors to polar coordinates; angular component quantized more aggressively than radial (aligned with attention sensitivity). Eliminates per-block normalization overhead via Hadamard preconditioning. Achieves >4.2× compression.
-
-- **[[turboquant]]:** Random rotation (Hadamard) + MSE quantizer + 1-bit QJL residual. Data-oblivious (no calibration needed). Near-optimal within the data-oblivious class (proved within 2.7× of information-theoretic optimum). 3.19 bits/element, 5.02× compression.
-
-- **[[spectralquant]]:** Calibrated eigenvector rotation + non-uniform quantization + selective QJL on signal dims only. Exploits a universal property: KV key vectors have effective dimensionality d_eff ≈ 3–4% of head dim across all tested model families. 15s one-time calibration. **Strictly dominates TurboQuant**: 2.69 bits/element (−0.50 bits), 5.95× compression (+18.6%), +1.7–2.8 pp cosine similarity. Perplexity identical to uncompressed inference.
-
-**Shared insight:** All three use rotation preconditioning before quantization. PolarQuant and TurboQuant use random rotation (data-oblivious); SpectralQuant uses calibrated eigenvector rotation, enabling selective error correction on the 3% of dimensions that carry signal — the key advance.
-
-**Memory impact:** SpectralQuant saves an additional −7.3 to −50.4 MB vs TurboQuant at 8K context depending on model size (1.5B–14B).
-
-#### 10c. Architectural KV Reduction
-
-**Core idea:** Modify the attention mechanism to produce fewer K/V pairs structurally.
-
-- **Multi-Query Attention (MQA):** One shared K/V head for all query heads. KV cache shrinks by factor n_heads. Used in Falcon, Mistral.
-- **Grouped-Query Attention (GQA):** Groups of g query heads share one K/V head. KV shrinks by n_heads/g. Used in Llama-3 (default g=8), Gemma. Interpolates between MHA (g=n_heads) and MQA (g=1).
-- **Multi-Head Latent Attention (MLA):** Projects K/V into a low-rank latent vector before caching. Only the latent is cached; K/V are reconstructed at decode time. Used in DeepSeek-V3/V4 — 5–13× KV reduction vs. standard MHA.
-- **CSA/HCA ([[deepseek-v4]]):** Compressed Self-Attention and Hybrid Cache Attention; 3.7–9.8× KV reduction vs DeepSeek-V3.2 by combining latent compression with selective full-head caching.
-
-**Wiki cross-reference:** [[deepseek-v4]] and [[kv-cache]] cover MLA and CSA/HCA in depth.
-
-#### 10d. Eviction + Quantization — Combining Approaches
-
-Quantization and eviction are **complementary**: quantization losslessly retains all tokens at reduced precision; eviction aggressively shrinks token count. A combined policy (e.g., quantize the budget, evict the rest) can achieve higher compression than either alone. See [[kv-cache-compression-comparison]] for a direct comparison.
-
----
-
-### 11. PagedAttention
-
-**Core idea ([[paged-attention]]):** The KV cache is allocated in fixed-size non-contiguous "pages" (analogous to OS virtual memory pages), managed by a block table that maps logical sequence positions to physical GPU memory blocks.
-
-**Memory impact:** Eliminates internal and external fragmentation in KV allocation. In traditional serving, reserved contiguous buffers waste 20–80% of memory due to fragmentation. PagedAttention brings this to near-zero waste.
-
-**Throughput effect:** More efficient memory → more concurrent requests → 2–4× higher throughput vs TGI (vLLM benchmarks). Peak memory per request is unchanged, but memory utilization efficiency is greatly improved.
-
-**Wiki cross-reference:** [[radix-attention]] extends this with cross-request prefix sharing via a radix tree.
-
----
-
-### 12. Flash Attention at Inference
-
-Flash Attention (see §6) also reduces memory at inference time for the **prefill** phase. For long prompts, the N×N attention matrix at prefill is the peak memory moment. Flash Attention's O(N) memory profile makes 100K+ token prompts feasible on constrained hardware.
-
-For the decode phase (one new token per step), attention memory is smaller and KV cache management (§10) dominates.
-
----
-
-### 13. Speculative Decoding — Memory Perspective
-
-**Core idea ([[speculative-decoding]]):** A small draft model generates candidate tokens; the large target model verifies a batch in parallel. Lossless 2–3× throughput improvement.
-
-**Memory impact:** Standard speculative decoding *increases* total memory (draft model + target model loaded simultaneously). The benefit is throughput, not memory.
-
-**Self-speculative decoding ([[layerskip]]):** Uses the target model's own early layers as the draft — no extra model weights. Memory overhead is zero; the trade-off is lower draft quality bounded by early-layer representational power.
-
-**Speculative Speculative Decoding ([[saguaro]], May 2026):** Runs speculator and verifier on separate hardware simultaneously — the draft model predicts likely verification outcomes and pre-speculates for them in parallel. Memory impact: same as standard SD (draft + target), but speculator and verifier are on different devices so peak memory per device is lower. Throughput gain: 30% over SD baselines, up to 5× over AR. Lossless.
-
-**Memory-throughput trade-off:** Standard speculative decoding trades higher memory for higher throughput. At constrained memory budgets, self-speculative or no speculative decoding is preferred. SSD adds a hardware separation requirement but doesn't increase per-device memory.
-
----
-
-### 14. Early Exit / Layer Skipping
-
-**Core idea ([[early-exit-inference]]):** Not all tokens require all layers. Adaptive policies skip later transformer layers for "easy" tokens.
-
-**Memory impact:** Reduces *compute* and *activation* memory per token during decode; does not reduce weight memory (all layers still resident). At high skip rates, effective compute and intermediate buffer footprint shrink proportionally.
-
-**Methods:**
-- **LayerSkip (Meta):** Training-time layer dropout enables early exit; self-speculative verification uses skipped states.
-- **SWIFT:** Plug-and-play, no retraining; adaptive layer selection per token.
-- **DASH:** MDP policy for per-token skip decisions; input-aware.
-
----
-
-### 15. Residual Architecture Improvements (AttnRes)
-
-[[attnres]] (Kimi Team, Mar 2026) replaces standard residual accumulation with learned softmax attention over preceding layer outputs. The memory angle:
-
-**Training:** Standard PreNorm residuals cause hidden-state magnitudes to grow as O(L) — deeper layers compensate by producing larger outputs, inflating activation norms throughout training. Block AttnRes resets this accumulation at block boundaries, yielding bounded, periodic output magnitudes and more uniform gradient distribution. The practical effect is more stable training dynamics without extra memory for normalization tricks.
-
-**Memory overhead of AttnRes itself:**
-- Block AttnRes (N≈8): stores N block-summary vectors per token — O(Nd) additional activation memory, negligible vs. O(L·T·d) total activation memory at training time
-- Inference I/O: **5.5d per layer** (vs 3d for standard residuals) — small and amortized via batched inter-block Phase 1
-
-**Why it belongs here:** AttnRes is the first architectural residual change that both improves model quality *and* has a concrete memory accounting (the depth-attention KV budget). Its cross-stage caching optimization also directly reduces pipeline communication memory during training.
-
----
-
-### 16. Mixture of Experts — Inference Memory
-
-**Core idea:** MoE activates only a subset of expert FFN weights per token. Total model memory must accommodate all expert weights, but per-token *activation* memory is small.
-
-**Expert offloading:** For models where total expert weight exceeds GPU VRAM (e.g., a 1.6T MoE), experts can be offloaded to CPU RAM and prefetched on demand. The routing decision for the next batch can be predicted, overlapping prefetch with compute. [[engram]] demonstrates <3% overhead for a related 100B-parameter lookup table with prefetching.
-
-**Continuous batching interaction ([[continuous-batching]]):** With many concurrent requests, different tokens activate different experts — statistical multiplexing reduces per-request effective expert memory pressure.
-
 ---
 
 ## Summary Table
@@ -289,53 +144,30 @@ For the decode phase (one new token per step), attention memory is smaller and K
 | Flash Attention | Training + Inference | Attention matrix (O(N²)→O(N)) | Redundant tile reads (still net faster) |
 | MoE | Training + Inference | Active activations per token | Routing overhead, expert communication |
 | 8-bit Adam / Muon / Adafactor | Training | Optimizer states | Minor accuracy impact (8-bit Adam) |
-| Weight quantization (INT8/INT4) | Inference | Model weights | Accuracy degradation at very low bits |
-| KV eviction (H₂O) | Inference | KV cache | Irreversible; risky for retrieval; unstable at long context |
-| KV eviction (TriAttention) | Inference | KV cache | Offline calibration; still irreversible; best for reasoning |
-| KV quantization (PolarQuant/TurboQuant) | Inference | KV cache | Transform compute overhead |
-| KV quantization (SpectralQuant) | Inference | KV cache | 15s one-time calibration; strictly better than TurboQuant |
-| MQA / GQA / MLA / CSA | Inference | KV cache | Potential attention quality loss (MQA) |
-| PagedAttention | Inference | KV cache fragmentation | Minimal (OS paging is near-zero cost) |
-| Speculative decoding | Inference | — (increases memory) | Throughput gain, not memory gain |
-| Saguaro (SSD) | Inference | — (same as SD; split across devices) | Requires separate speculator hardware |
-| Self-speculative decoding | Inference | Draft model weights (zero extra) | Lower draft quality |
-| Early exit / layer skipping | Inference | Activation memory per token | Weight memory unchanged |
-| Expert offloading | Inference | Expert FFN weights | PCIe bandwidth bottleneck |
 | AttnRes (Block) | Training + Inference | Training activation norms (bounds O(L) growth); +O(Nd) depth-attn memory | Architectural; must be trained in; <4% training overhead |
 
 ---
 
 ## Cross-Cutting Themes
 
-**Recomputation vs. storage trade-off:** Several techniques deliberately trade compute for memory: gradient checkpointing recomputes activations, Flash Attention recomputes attention weights, speculative decoding runs extra forward passes. The invariant is that modern hardware is compute-rich relative to memory bandwidth — recomputing is often cheaper than storing and loading.
+**Recomputation vs. storage trade-off:** Several techniques deliberately trade compute for memory: gradient checkpointing recomputes activations, Flash Attention recomputes attention weights. The invariant is that modern hardware is compute-rich relative to memory bandwidth — recomputing is often cheaper than storing and loading.
 
-**Architectural vs. post-hoc techniques:** Architectural changes (MQA, GQA, MLA, MoE, Flash Attention, AttnRes) must be baked in at training time. Post-hoc techniques (quantization, eviction, LoRA, speculative decoding) can be applied to existing checkpoints. For new model development, architectural choices dominate memory at scale. [[attnres]] is notable here because it is the first residual-connection change with a concrete memory budget: Block AttnRes adds O(Nd) depth-attention state (N≈8), tightly controlled and substantially below O(Ld) for Full AttnRes.
+**Architectural vs. post-hoc techniques:** Architectural changes (MQA, GQA, MLA, MoE, Flash Attention, [[attnres]]) must be baked in at training time. Post-hoc techniques (LoRA, 8-bit Adam) can be applied to existing checkpoints. For new model development, architectural choices dominate memory at scale.
 
-**Stacking:** Most techniques are composable. A typical frontier deployment stacks: MoE + GQA/MLA + Flash Attention (architectural) + INT8/INT4 weights + KV quantization + PagedAttention + continuous batching (system). Training stacks: MoE + Flash Attention + gradient checkpointing + ZeRO-3 + BF16/FP8 + Muon.
-
-**The memory-throughput frontier:** Memory reduction and throughput improvement are often coupled — smaller KV caches allow larger batches (PagedAttention, GQA), which amortize fixed memory overhead and improve hardware utilization.
+**Stacking:** Most techniques are composable. A typical frontier training stack: MoE + Flash Attention + gradient checkpointing + ZeRO-3 + BF16/FP8 + Muon.
 
 ---
 
 ## See Also
 
+- [[memory-inference-techniques]] — inference memory techniques (KV cache compression, weight quantization, PagedAttention, speculative decoding)
+- [[memory-inference-research-gaps]] — research gaps and untested compositions in the inference memory literature
+- [[inference-improvements-summary]] — broader inference survey including architecture and serving
 - [[kv-cache]] — KV cache mechanics and compression landscape
 - [[quantization]] — weight and KV quantization in depth
 - [[flash-attention]] — IO-aware tiled attention
 - [[paged-attention]] — OS-style KV memory management
 - [[radix-attention]] — cross-request prefix sharing
 - [[mixture-of-experts]] — MoE architecture and infrastructure
-- [[h2o]] — KV eviction via heavy-hitter oracle (post-RoPE)
-- [[triattention]] — KV eviction via trigonometric series in pre-RoPE space; best for long-context reasoning
-- [[polarquant]] — polar KV quantization
-- [[turboquant]] — vector KV quantization; data-oblivious, near-optimal within that class
-- [[spectralquant]] — calibrated spectral KV quantization; 15s setup, strictly better than TurboQuant
-- [[kv-cache-compression-comparison]] — H₂O vs TriAttention vs PolarQuant vs TurboQuant vs SpectralQuant
-- [[speculative-decoding]] — draft-verify inference speedup; includes SSD/Saguaro section
-- [[saguaro]] — speculative speculative decoding; parallel draft+verify on separate hardware
-- [[layerskip]] — self-speculative decoding via early exit
-- [[early-exit-inference]] — early exit and layer skipping landscape
-- [[continuous-batching]] — serving scheduler that composes with memory reduction
 - [[deepseek-v4]] — CSA/HCA, MLA, FP8, Muon at frontier scale
-- [[attnres]] — Attention Residuals: depth-wise softmax over preceding layers; Block AttnRes bounds O(L) activation growth with O(Nd) overhead
-- [[inference-improvements-summary]] — broader inference-focused survey (includes AttnRes §1c, DLM §7)
+- [[attnres]] — Attention Residuals: bounds O(L) activation growth with O(Nd) overhead

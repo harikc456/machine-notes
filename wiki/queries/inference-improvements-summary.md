@@ -10,69 +10,46 @@ confidence: high
 
 # LLM Inference Improvements — Structured Survey
 
-> Synthesis across wiki entities/concepts. Each section summarizes the technique landscape and points to detailed pages.
+> Synthesis across wiki entities/concepts. Each section summarizes the technique landscape and points to detailed pages. For deep KV cache and speculative decoding coverage, see [[inference-kv-speculative]]. For memory-impact framing, see [[memory-inference-techniques]].
 
 ---
 
 ## 1. Architecture Improvements
 
-Structural changes that reduce the KV cache footprint or compute per token at the model design level.
+Structural changes that reduce KV cache footprint or compute per token at the model design level. Must be baked in at training time.
 
 ### Attention Head Sharing (MQA / GQA)
 
 - **MQA (Multi-Query Attention)**: all heads share a single K/V pair. Extreme KV reduction; hurts model quality at scale.
-- **GQA (Grouped-Query Attention)**: groups of heads share K/V pairs. Standard in modern LLMs (Llama 3, Mistral). Balances quality vs. KV memory.
-- Both address the same bottleneck: KV cache grows as `batch × seq_len × n_layers × n_heads × head_dim × 2 × dtype_bytes`. Reducing `n_heads` for K/V is multiplicative.
+- **GQA (Grouped-Query Attention)**: groups of heads share K/V pairs. Standard in Llama 3, Mistral. Balances quality vs. KV memory.
+- Both address: KV cache grows as `batch × seq_len × n_layers × n_heads × head_dim × 2 × dtype_bytes`. Reducing `n_heads` for K/V is multiplicative.
 
 ### MLA + CSA/HCA (DeepSeek)
-
-[[deepseek-v3-2]] introduced **DSA (DeepSeek Sparse Attention)** — highly efficient attention mechanism reducing computational complexity for long-context scenarios.
 
 [[deepseek-v4]] pushed further with **CSA/HCA hybrid**:
 - CSA (Compressed Sparse Attention): reduces long-context compute complexity
 - HCA (Heavily Compressed Attention): further compresses attention at extreme context lengths
 - Result: **27% FLOPs reduction, 10% KV cache** vs V3.2 at 1M-token context
 
+[[deepseek-v3-2]] introduced **DSA (DeepSeek Sparse Attention)** — highly efficient attention for long-context scenarios.
+
 ### Sparse MoE
 
-[[mixture-of-experts]]: only `top_k` experts activate per token. The rest of the model sits idle during inference for that token.
-
-- Capacity scales with total parameters, but FLOPs per token are fixed to `top_k / total_experts`
-- DeepSeek-V4 uses fine-grained expert routing (128 routed + 1 shared expert)
-- Tradeoff: all expert weights must fit in memory (or be paged), even if inactive
+[[mixture-of-experts]]: only `top_k` experts activate per token. FLOPs/token fixed to `top_k / total_experts`. Trade-off: all expert weights must fit in memory (or be paged), even if inactive.
 
 ### Attention Residuals (AttnRes)
 
-[[attnres]] — Kimi Team, Mar 2026
+[[attnres]] — Kimi Team, Mar 2026. Replaces fixed residual accumulation with learned softmax attention over preceding layer outputs. One d-dimensional pseudo-query `w_l` per layer.
 
-**Problem**: standard PreNorm residuals accumulate all layer outputs with fixed unit weights, causing hidden-state magnitudes to grow as O(L) with depth. Deeper layers must produce increasingly large outputs to influence the residual stream, progressively burying earlier representations.
+**Block AttnRes (practical variant):** Partition L layers into N blocks (N≈8); layers attend over block summaries. Memory: O(Nd) vs O(Ld) for Full AttnRes. Inference I/O: 5.5d/layer vs 34d for mHC (m=4); <2% latency overhead. Training: cross-stage caching reduces pipeline communication from O(C²) to O(P); <4% overhead.
 
-**Insight**: the depth dimension mirrors the sequence dimension. Just as Transformers replaced RNNs with attention for sequence modeling, AttnRes replaces fixed residual accumulation with learned **softmax attention over preceding layer outputs**:
-
-```
-h_l = Σ_{i=0}^{l-1}  α_{i→l} · v_i      (α = softmax of learned dot products)
-```
-
-One d-dimensional pseudo-query `w_l` per layer is the only new parameter — negligible overhead.
-
-**Block AttnRes (practical variant):** Partition L layers into N blocks (N≈8). Layers attend over block summaries rather than all L individual outputs, reducing memory and communication from O(Ld) to O(Nd).
-
-**Infrastructure for scale:**
-- Training: cross-stage caching reduces pipeline communication from O(C²) to O(P); overhead <4%
-- Inference: two-phase compute (batched inter-block + sequential intra-block via online softmax merge); total I/O **5.5d per layer** vs 34d for mHC (m=4 streams); latency overhead <2%
-
-**Results:**
-- Scaling laws: Block AttnRes = baseline trained with **1.25× more compute**
-- 48B model (Kimi Linear, 1.4T tokens) vs baseline: **+7.5 GPQA-Diamond, +3.6 Math, +3.1 HumanEval, +1.7 BBH, +1.1 MMLU**
-- Training dynamics: mitigates PreNorm dilution → bounded output magnitudes, uniform gradient distribution across depth
-
-**Why it matters for inference quality**: better depth-wise information flow, especially for multi-step reasoning tasks where later layers need access to specific earlier representations. AttnRes is an architectural change baked at training time (like GQA/MoE) — not a post-hoc optimization.
+**Results:** Block AttnRes = baseline trained with **1.25× more compute**. 48B model (Kimi Linear, 1.4T tokens): **+7.5 GPQA-Diamond, +3.6 Math, +3.1 HumanEval, +1.7 BBH, +1.1 MMLU** vs baseline. Mitigates PreNorm dilution → bounded output magnitudes and uniform gradient distribution across depth.
 
 ---
 
 ## 2. Weight Quantization
 
-Compress model weights from their training precision to reduce memory footprint and increase throughput.
+Compress model weights from training precision to reduce memory footprint and increase throughput.
 
 ### The Precision Ladder
 
@@ -96,184 +73,23 @@ Large transformer weights have outlier activations in specific channels that cau
 - **GPTQ**: layer-wise second-order quantization — minimizes weight perturbation effect on output
 - **AWQ**: activation-aware; identifies and protects important weights
 
-### Relationship to KV Cache
-
-Weight quantization and KV cache quantization are **separate** problems:
-- Weight quantization: reduces static memory for model parameters
-- KV cache quantization (→ §3): reduces dynamic memory per request
-
 ---
 
 ## 3. KV Cache
 
-The KV cache stores past K and V tensors to avoid recomputation during autoregressive decoding. It is the primary memory bottleneck at long contexts and large batch sizes.
+The KV cache is the primary memory bottleneck at long contexts and large batch sizes. See [[kv-cache]] for background.
 
-See [[kv-cache]] for background.
+For the full treatment of pruning (H₂O, TriAttention) and quantization (PolarQuant, TurboQuant, SpectralQuant), see [[inference-kv-speculative]].
 
-### 3a. KV Cache Pruning
-
-**Goal**: evict tokens that are unlikely to be attended to, keeping only an important subset.
-
-#### H₂O (Heavy-Hitter Oracle)
-
-[[h2o]] — NeurIPS 2023
-
-**Core insight**: attention score distributions are heavy-tailed. A small subset of tokens (heavy hitters) accumulate most of the attention score mass across all heads and layers.
-
-**Algorithm**:
-1. Maintain a running sum of attention scores per token across all heads
-2. At each step, evict the lowest-scoring token when KV cache is full
-3. Always keep recent tokens (recency window)
-
-**Results**:
-- Retains ~5% of tokens with negligible quality degradation on most benchmarks
-- Up to 29× throughput increase at large batch sizes
-- 1.9× lower OOM risk in long-context settings
-
-**Risk**: retrieval tasks (needle-in-haystack) are vulnerable — the "needle" token may not be a heavy hitter in intermediate layers and gets evicted.
-
-**Positioning**: H₂O solves the problem at inference time, with no retraining required. It's a drop-in policy.
-
-See [[kv-cache-compression-comparison]] for side-by-side vs. quantization approaches.
-
----
-
-### 3b. KV Cache Pruning — TriAttention (Pre-RoPE)
-
-[[triattention]] — MIT / NVIDIA / ZJU, Apr 2026
-
-**Problem with post-RoPE importance estimation**: RoPE rotates Q/K vectors by position, making only the most recent queries have up-to-date orientations. This creates a tiny, unstable observation window — H₂O's attention-accumulation signal is unreliable for long-context reasoning tasks (AIME, chain-of-thought).
-
-**Key insight**: In pre-RoPE space, Q/K vectors are **highly concentrated around fixed non-zero centers** that remain stable across positions and contexts. This concentration makes attention logits predictable as a trigonometric series in Q-K distance — usable as a stable importance score that sees the entire sequence, not just a recent window.
-
-**Scoring function**:
-- *S_trig(k, Δ)*: trigonometric series from Q/K centers — captures distance preference (which positions each head prefers to attend to)
-- *S_norm(k)*: norm-based complement — catches low-norm keys that distance-based scoring would miss
-- Weighted by Q/K concentration (Mean Resultant Length R_f): high concentration → trigonometric score dominates; low → norm complement matters more
-
-**Results on AIME25 (Qwen3-8B, 32K-token generation)**:
-- **2.5× throughput** at same accuracy as Full Attention
-- **10.7× KV memory reduction** at same accuracy as Full Attention
-- R-KV achieves only ~half the accuracy at the same efficiency point
-
-**Why it matters**: existing methods (H₂O, R-KV) effectively fail at long-context reasoning tasks. TriAttention makes aggressive KV compression viable for chain-of-thought and mathematical reasoning.
-
-See [[triattention]] for the full method; [[kv-cache-compression-comparison]] for H₂O vs TriAttention vs quantization.
-
----
-
-### 3c. KV Cache Compression (Quantization)
-
-**Goal**: keep all tokens but represent K/V tensors at lower precision.
-
-#### PolarQuant
-
-[[polarquant]] — KV cache quantization via polar coordinate transformation.
-
-**Key insight**: K/V vectors have directional structure. Instead of quantizing Cartesian (x, y) components, transform to polar coordinates (r, θ) and quantize independently.
-
-- Magnitude `r`: varies smoothly → quantizable at low bits
-- Phase `θ`: normalized to [0, 2π] → no outliers, uniform distribution, eliminates per-block normalization overhead
-
-**Result**: >4.2× compression ratio with minimal quality loss.
-
-#### TurboQuant
-
-[[turboquant]] — near-optimal online vector quantization.
-
-**Three-stage pipeline**:
-1. **Random rotation** (random Hadamard transform): spreads outliers uniformly across all dimensions
-2. **MSE quantizer**: near-optimal bit allocation given smoothed distribution
-3. **1-bit QJL residual**: captures residual error with 1-bit quantization
-
-**Result**: near-optimal quantization at 3.5 bits per value. Provably within 2.7× of the information-theoretic optimum within the data-oblivious class.
-
-**Shared insight with PolarQuant**: both apply random Hadamard preconditioning to eliminate per-block normalization overhead. The transform makes the distribution easier to quantize without needing runtime statistics.
-
-#### SpectralQuant
-
-[[spectralquant]] — calibrated spectral KV quantization (Gopinath, Sentra/MIT, Apr 2026).
-
-**Core discovery**: across 6 transformer models and 4 families (Qwen, Llama, Mistral, Gemma), KV cache key vectors have effective dimensionality d_eff ≈ 3–4% of head dimension — universally. On 128-dim heads, only ~4 dimensions carry signal; 124 carry noise. This 97% spectral gap is stable (CV = 3.9% across calibration splits).
-
-**Key insight**: TurboQuant's uniform QJL correction on noise dimensions worsens MSE — on dimensions where the true signal is ≈0, correction adds variance without reducing bias. Selectively removing QJL from noise dims simultaneously improves quality *and* compression.
-
-**Algorithm** (5 stages, 15s one-time calibration):
-1. Compute empirical covariance Σ̂; extract eigenvectors U; set d_s = ⌈PR(Σ̂)⌉ ≈ 4
-2. Spectral rotation: h̃ = U^⊤h; first d_s = signal, rest = noise
-3. Non-uniform quantization: Lloyd-Max codebooks separately for signal/noise dims
-4. Selective QJL: JL error correction on signal dims only
-5. Decompression: reverse quantization + inverse rotation
-
-**Results vs TurboQuant (3-bit)**: +1.7–2.8 pp cosine similarity across all four models; 5.95× vs 5.02× compression (−0.50 bits/element); 4.5× faster attention decoding at 512 tokens. Perplexity identical to uncompressed inference (9.51). Perfect needle-in-haystack to 8K tokens.
+Key results: **TriAttention** achieves 10.7× KV reduction at matched accuracy for long-context reasoning (AIME25, 32K); **SpectralQuant** achieves 5.95× compression at full perplexity quality, strictly dominating TurboQuant (5.02×, −0.50 bits/element). Combining eviction + quantization is complementary — see [[kv-cache-compression-comparison]]. Architectural KV reduction (MQA/GQA/MLA/CSA) — see §1.
 
 ---
 
 ## 4. Speculative Decoding
 
-[[speculative-decoding]] — Leviathan et al., ICML 2023
+Draft-then-verify paradigm for lossless inference speedup. See [[inference-kv-speculative]] for the full algorithm walkthrough, rejection sampling proof, and self-speculative variants (LayerSkip, SWIFT, DASH).
 
-**Problem**: autoregressive LLMs are memory-bandwidth-bound, not compute-bound. The GPU can process many tokens in parallel but the algorithm forces sequential generation.
-
-**Insight**: if the model is bandwidth-bound, extra compute is "free" — as long as we stay within the same memory access budget.
-
-### Algorithm
-
-1. A small **draft model** generates γ tokens autoregressively (fast, cheap)
-2. The **target model** verifies all γ tokens in a single parallel forward pass
-3. Accept tokens greedily using a rejection sampling scheme:
-   - If draft token probability ≤ target probability at that position: **accept**
-   - Otherwise: **reject** with probability `1 - p_target/p_draft`; resample from adjusted distribution; discard remaining draft tokens
-4. Guaranteed: the output distribution exactly matches the target model (no approximation)
-
-### Why It Works
-
-The target model processes γ+1 tokens in one pass, costing roughly the same memory bandwidth as 1 token. If the draft model has high acceptance rate (α), the expected tokens per target forward pass is `(1 - α^{γ+1}) / (1 - α)` — approaching γ+1 when α is high.
-
-### Results
-
-- **2–3× speedup** on typical text generation benchmarks
-- **Exact distributional match** to target model — not an approximation
-- Works best when the draft model's distribution is close to the target model's
-
-### The Draft Model
-
-The draft model is the key variable:
-- Smaller version of the same model family (e.g., Llama-3.1-8B drafts for Llama-3.1-70B)
-- Specialized draft head trained on top of the target model's early layers
-- Self-drafting (Medusa): multiple draft heads attached to the target model
-
-### Self-Speculative Decoding
-
-Variant that eliminates the separate draft model. See [[early-exit-inference]] for full coverage.
-
-- **[[layerskip]]** (Meta, 2024): layer dropout training → early layers (0..e) draft, full model verifies; reuses draft KV states; up to 2.16× speedup
-- **SWIFT** (2025): no retraining; adaptively selects skip layers per token at runtime; 1.3–1.6×
-- **DASH** (2025): MDP policy for per-token layer selection; input-aware
-
-Trade-off: no extra model memory, but draft quality bounded by early-exit representation quality.
-
-### Speculative Speculative Decoding (SSD / Saguaro)
-
-[[saguaro]] — Kumar, Dao, May (Stanford / Princeton / Together AI), May 2026
-
-**The remaining bottleneck in standard SD**: drafting and verification are still sequential — the draft model must wait for verification to finish before generating the next speculation. This idle time is the limiting factor.
-
-**SSD eliminates this by running speculator and verifier on separate hardware in parallel**:
-1. Draft model sends speculated tokens to verifier
-2. While verification runs, the draft model **predicts the most likely verification outcomes** (k tokens accepted + which bonus token sampled)
-3. Pre-speculates for each predicted outcome — stores in a "speculation cache"
-4. When verification result arrives: cache hit → return pre-speculated tokens immediately (zero drafting latency); cache miss → synchronous fallback
-
-**Key challenge — predicting the bonus token**: The bonus token is sampled from the residual distribution max(p_target − p_draft, 0). Saguaro uses draft logits to predict the most likely bonus token with ~90% accuracy.
-
-**Results** (Llama-3.1-70B target, Llama-3.2-1B draft, TP=4 H100):
-- **30% faster than strongest SD baselines** (vLLM, SGLang)
-- **Up to 5× faster than autoregressive decoding**
-- Lossless — same output distribution as target model
-- Improves Pareto frontier across all batch sizes
-
-**Distinction from tree-based SD**: tree methods increase *verifier* compute; SSD scales *speculator* compute with no extra verification overhead. Orthogonal and combinable.
+Key results: **Standard SD** delivers 2–3× lossless speedup (exact distributional match to target). **Saguaro** (May 2026) parallelizes speculator and verifier on separate hardware, predicting verification outcomes with ~90% accuracy — 30% faster than strongest SD baselines, up to **5× over AR**. **LayerSkip** self-speculative decoding: up to 2.16× speedup, zero extra model memory. See [[saguaro]], [[speculative-decoding]], [[layerskip]].
 
 ---
 
@@ -283,50 +99,19 @@ Scheduling and memory management techniques that improve throughput at the servi
 
 ### Flash Attention
 
-[[flash-attention]] (Dao et al., 2022) — IO-aware attention kernel.
-
-**Problem**: standard attention materializes the full N×N attention matrix in HBM, making attention IO-bound (not compute-bound).
-
-**Solution**: tile Q, K, V into SRAM blocks; compute attention with online softmax without ever writing the full matrix to HBM. IO complexity drops from O(N²d) to O(Nd + N²/B).
-
-- 7.6× speedup on GPT-2 (A100); 1.6× on T5
-- O(N) memory (vs O(N²)) — enables longer sequences or larger batches
-- Now default in PyTorch, HuggingFace, vLLM; on FA4 for Blackwell GPUs
+[[flash-attention]] (Dao et al., 2022): tiles Q/K/V into SRAM blocks; computes attention with online softmax without materializing the full N×N matrix. IO complexity: O(Nd + N²/B) vs O(N²d). **7.6× speedup on GPT-2** (A100); O(N) memory — enables long contexts. Now default in PyTorch, HuggingFace, vLLM.
 
 ### PagedAttention
 
-[[paged-attention]] (vLLM, Kwon et al., 2023) — OS-style virtual memory for KV cache.
-
-**Problem**: contiguous KV cache allocation causes 60–80% memory waste from fragmentation. Short requests leave holes; long requests can't start until contiguous space is available.
-
-**Solution**: fixed-size pages mapped via block tables (like OS page tables). Non-contiguous allocation, copy-on-write for parallel sampling, prefix sharing across requests.
-
-- 2–4× throughput over HuggingFace TGI at same hardware
-- Enables prefix caching: system prompts computed once, shared across all requests
+[[paged-attention]] (vLLM, 2023): fixed-size KV pages mapped via block tables (OS-style virtual memory). Eliminates 20–80% memory waste from fragmentation. **2–4× throughput over TGI** at same hardware. Enables prefix caching: system prompts computed once, shared across requests.
 
 ### RadixAttention
 
-[[radix-attention]] (SGLang, Zheng et al., 2023) — cross-request KV prefix caching via radix tree.
-
-**Problem**: PagedAttention eliminates within-request fragmentation, but every new request still recomputes its prefix (system prompt, few-shot examples, earlier turns) from scratch.
-
-**Solution**: a radix tree maps token sequences → cached KV blocks. On each new request, the longest matching prefix is looked up in O(prefix_length); only the unmatched suffix is prefilled. Nodes are reference-counted; LRU eviction clears the least recently used leaves when memory is full.
-
-- **2–4× throughput improvement over vLLM** on shared-prefix workloads
-- Greatest gains: chatbot deployments (system prompt shared across all requests), batch inference with shared few-shot examples, agentic pipelines with repeated tool descriptions
-- Composes with PagedAttention: both active simultaneously — PagedAttention manages block layout, RadixAttention manages prefix reuse
+[[radix-attention]] (SGLang, 2023): radix tree maps token sequences → cached KV blocks. Longest matching prefix served on cache hit; LRU eviction clears unused leaves. **2–4× throughput improvement over vLLM** for shared-prefix workloads (system prompts, few-shot examples, agentic pipelines with repeated tool descriptions). Composes with PagedAttention: both active simultaneously.
 
 ### Continuous Batching + Chunked Prefill
 
-[[continuous-batching]] — iteration-level scheduling with SARATHI-style chunked prefill.
-
-**Problem**: static batching idles GPU slots when any request finishes; long prompts stall decode requests ("prefill monopolization").
-
-**Two-part solution**:
-1. **Continuous batching**: swap finished requests out at the token level, not request level; zero padding waste via ragged batching
-2. **Chunked prefill** (SARATHI): split long prompts into fixed-size chunks; interleave with decode steps
-
-Results (SARATHI): 1.25–1.91× end-to-end, 4–10× decode throughput improvement; 6.29× pipeline bubble reduction for GPT-3 with pipeline parallelism.
+[[continuous-batching]]: swap finished requests out at the token level (not request level); split long prompts into fixed-size chunks interleaved with decode steps. Results (SARATHI): **1.25–1.91× end-to-end**, **4–10× decode throughput**, 6.29× pipeline bubble reduction for GPT-3.
 
 ---
 
@@ -337,7 +122,7 @@ See [[early-exit-inference]] for full coverage.
 Not all tokens need all layers. Adaptive computation routes easy tokens through fewer layers:
 
 - **Hard early exit**: run to layer e < L; use intermediate LM head. Fast but quality-limited.
-- **Self-speculative decoding**: early layers draft, full model verifies — lossless when verification accepts (→ §4).
+- **Self-speculative decoding**: early layers draft, full model verifies — lossless when verification accepts (→ [[inference-kv-speculative]] §4).
 - **Per-token layer skipping** (DASH): MDP policy skips individual layers based on token difficulty; input-aware.
 
 Gain depends on task difficulty distribution: summarization and code completion benefit more than complex multi-step reasoning.
@@ -346,37 +131,11 @@ Gain depends on task difficulty distribution: summarization and code completion 
 
 ## 7. Diffusion Language Models as an Inference Paradigm
 
-Diffusion language models (DLMs) offer **parallel token generation** — a fundamentally different inference mode vs. autoregressive decoding. Two recent systems bring DLMs to parity with AR quality while delivering real serving efficiency gains.
+DLMs offer **parallel token generation** — a fundamentally different inference mode vs. AR decoding. See [[diffusion-language-models]] for the landscape; [[block-diffusion]] and [[i-dlm]] for entity pages.
 
-See [[diffusion-language-models]] for the landscape; [[block-diffusion]] and [[i-dlm]] for entity pages.
+**BD3-LM** [[block-diffusion]] (ICLR 2025): AR over blocks, discrete diffusion within each block. Restores KV caching and variable-length generation to DLMs. SOTA discrete DLM perplexity on LM1B.
 
-### Block Diffusion (BD3-LM)
-
-[[block-diffusion]] — Arriola et al., ICLR 2025
-
-Interpolates between AR and diffusion by being **autoregressive over blocks** and applying discrete diffusion **within each block**. Key inference properties restored vs. standard DLMs:
-- **KV caching**: block-causal attention means prior blocks' KV pairs are cached exactly like AR
-- **Variable-length generation**: block-AR structure supports arbitrary sequence lengths
-- **Within-block parallelism**: all L' tokens in a block denoised in parallel, with parallel token sampling
-
-Sets SOTA perplexity among discrete DLMs on LM1B; with tuned noise schedule matches AR perplexity.
-
-### I-DLM (Introspective Diffusion Language Model)
-
-[[i-dlm]] — Yu, Jian et al. (Together AI / UIUC / Princeton / Stanford), Apr 2026
-
-Converts pretrained AR models into DLMs using **introspective-consistency training** (causal attention + logit shift + all-masked objective). Key serving properties:
-
-- **AR-compatible inference**: strict causal attention enables direct integration into SGLang, continuous batching, paged KV cache — no special DLM serving stack needed
-- **Introspective Strided Decoding (ISD)**: single forward pass simultaneously generates N new tokens (masked positions) and verifies N prior tokens (introspection positions) against the causal anchor distribution
-- **Compute efficiency**: ISD is the only DLM decoding method above the efficiency break-even line at practical acceptance rates (p ≥ 0.83)
-
-**Results** vs. prior DLMs (8B model, concurrency=32):
-- 3.1× higher throughput than SDAR; 4× over LLaDA-2.1-mini (16B)
-- First DLM to match strong same-scale AR quality (matches Qwen3-8B on MATH-500)
-- TPS growth rate 549 (vs SDAR: 84) — batching efficiency scales with TPF
-
-**Why it matters for inference**: I-DLM reframes the AR-vs-diffusion tradeoff — rather than choosing between quality (AR) and parallelism (DLM), ISD delivers both via a single unified forward pass that generates and verifies simultaneously.
+**I-DLM** [[i-dlm]] (Together AI / UIUC / Princeton / Stanford, Apr 2026): converts pretrained AR models to DLMs via introspective-consistency training. Strict causal attention enables direct SGLang / PagedAttention integration. ISD decoding generates N tokens and verifies N prior tokens in a single forward pass. **First DLM to match same-scale AR quality** (Qwen3-8B on MATH-500); 3.1× over SDAR; TPS growth rate 549 vs SDAR 84.
 
 ---
 
@@ -405,9 +164,12 @@ Converts pretrained AR models into DLMs using **introspective-consistency traini
 
 ## See Also
 
-- [[attnres]] — Attention Residuals: depth-wise softmax attention over preceding layers; Block AttnRes is a drop-in for training
+- [[inference-kv-speculative]] — full KV cache and speculative decoding detail (H₂O, TriAttention, PolarQuant, TurboQuant, SpectralQuant, SD algorithm, Saguaro, LayerSkip)
+- [[memory-inference-techniques]] — memory-focused inference survey with quantitative memory impact per technique
+- [[memory-inference-research-gaps]] — methodological gaps, untested compositions, Pareto analysis
+- [[attnres]] — Attention Residuals entity page
 - [[kv-cache]] — KV cache fundamentals and bottleneck analysis
-- [[kv-cache-compression-comparison]] — H₂O vs TriAttention vs PolarQuant vs TurboQuant vs SpectralQuant head-to-head
+- [[kv-cache-compression-comparison]] — KV compression head-to-head
 - [[spectralquant]] — calibrated spectral KV quantization; breaks TurboQuant's data-oblivious bound
 - [[triattention]] — pre-RoPE KV compression; best for long-context reasoning
 - [[speculative-decoding]] — detailed page with algorithm walkthrough, self-speculative, and SSD sections

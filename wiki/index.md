@@ -2,7 +2,7 @@
 
 > Content catalog. Every wiki page listed under its type with a one-line summary.
 > Read this first to find relevant pages for any query.
-> Last updated: 2026-05-19 | Total pages: 45
+> Last updated: 2026-05-19 | Total pages: 47
 
 ## Entities
 
@@ -57,5 +57,8 @@
 
 ## Queries
 
-- [[inference-improvements-summary]] — LLM inference efficiency survey: architecture (GQA/MLA/MoE), weight quantization, KV cache pruning (H₂O) and compression (PolarQuant/TurboQuant), speculative decoding
-- [[memory-reduction-survey]] — Comprehensive survey of memory reduction techniques for LLM training (ZeRO, gradient checkpointing, LoRA, Flash Attention, MoE) and inference (KV compression, weight quantization, MQA/GQA/MLA, PagedAttention)
+- [[inference-improvements-summary]] — LLM inference efficiency survey: architecture (GQA/MLA/MoE/AttnRes), weight quantization, serving (Flash Attention/PagedAttention/RadixAttention), DLMs; see [[inference-kv-speculative]] for KV/SD detail
+- [[inference-kv-speculative]] — KV cache compression and speculative decoding detail: H₂O, TriAttention, PolarQuant, TurboQuant, SpectralQuant, SD algorithm, Saguaro, LayerSkip
+- [[memory-reduction-survey]] — Memory reduction techniques for LLM training: ZeRO, gradient checkpointing, LoRA/QLoRA, Flash Attention, MoE, optimizer compression (Muon, Adafactor)
+- [[memory-inference-techniques]] — Memory reduction techniques for LLM inference: weight quantization, KV cache compression, architectural KV reduction (MLA/CSA), speculative decoding memory trade-offs
+- [[memory-inference-research-gaps]] — Critical-thinking pass over memory/inference coverage: methodological, coverage, composition, and shared-premise gaps; ranked high-value targets (MLA × KV quant, streaming-prefill, factorial composition study)

@@ -196,3 +196,22 @@
   - Added AttnRes row to Summary Table
   - Updated Cross-Cutting Themes paragraph to include AttnRes
   - Added [[attnres]] to See Also
+
+## [2026-05-19] create | memory-inference-research-gaps.md
+- Pages created:
+  - queries/memory-inference-research-gaps.md — critical-thinking analysis of gaps in memory reduction & inference optimization literature; 6 gap categories (methodological, coverage, shared-premise, compositional, robustness, process), ranked high-value targets
+- index.md updated: total pages 45 → 46; added entry under Queries
+
+## [2026-05-19] lint | 3 issues found
+- Orphan (1): queries/memory-inference-research-gaps.md — no inbound links yet (newly created)
+- Oversized (2): queries/inference-improvements-summary.md (426 lines), queries/memory-reduction-survey.md (341 lines) — candidates for splitting
+- All frontmatter, tags, wikilinks, and index entries clean
+
+## [2026-05-19] create | lint fixes — split oversized pages, resolve orphan
+- Pages created:
+  - queries/inference-kv-speculative.md — §3 KV cache (H₂O, TriAttention, PolarQuant, TurboQuant, SpectralQuant) + §4 Speculative Decoding (SD algorithm, Saguaro, LayerSkip) split from inference-improvements-summary
+  - queries/memory-inference-techniques.md — Part II inference memory techniques (§9–16) split from memory-reduction-survey; includes [[memory-inference-research-gaps]] in See Also (orphan fix)
+- Pages updated:
+  - queries/inference-improvements-summary.md — §3/§4 replaced with brief summaries + links; trimmed to ~190 lines; links to new pages and [[memory-inference-research-gaps]]
+  - queries/memory-reduction-survey.md — retitled to training-only; Part II inference content removed; training summary table + cross-cutting themes retained; links to new pages and [[memory-inference-research-gaps]]
+- index.md updated: total pages 46 → 48; added entries for inference-kv-speculative and memory-inference-techniques

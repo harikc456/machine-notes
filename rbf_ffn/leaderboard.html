@@ -76,7 +76,7 @@
 </style>
 </head>
 <body>
-<h1>rbf_ffn Leaderboard &mdash; 53 experiments</h1>
+<h1>rbf_ffn Leaderboard &mdash; 54 experiments</h1>
 <input id="filter-input" type="text" placeholder="Filter experiments..." oninput="filterTable(this.value)">
 <div class="table-wrap">
 <table id="lb-table">
@@ -1791,6 +1791,43 @@ loop_n_fixed: 2
     <td>1.16</td>
   </tr>
   <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="attn_type: xsa
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+use_attn_res: true
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>41</td>
+    <td>xsa_swiglu_qknorm_d256</td>
+    <td>xsa</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>75.03</td>
+    <td>2</td>
+    <td>75.03</td>
+    <td>84.56</td>
+    <td>1.02</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
   <tr class="" data-config="# Llama SwiGLU baseline with linear weight normalisation (target norm = 2.0).
 # All linear layer weight rows are projected to L2 norm 2.0 after every
 # optimizer step. The lm_head (weight-tied to the token embedding) is excluded.
@@ -1815,7 +1852,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>41</td>
+    <td>42</td>
     <td>standard_swiglu_qknorm_wnorm_d256</td>
     <td>std</td>
     <td>swiglu</td>
@@ -1856,7 +1893,7 @@ adamw_lr: 0.0003
 adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0" onclick="toggleConfig(this)">
-    <td>42</td>
+    <td>43</td>
     <td>swiglu_d256</td>
     <td>std</td>
     <td>swiglu</td>
@@ -1902,7 +1939,7 @@ warmup_ratio: 0.02
 grad_clip: 1.0
 grad_accum_steps: 1
 " onclick="toggleConfig(this)">
-    <td>43</td>
+    <td>44</td>
     <td>pfd_rationalglu_d256</td>
     <td>std</td>
     <td>rationalglu</td>
@@ -1947,7 +1984,7 @@ warmup_ratio: 0.02
 grad_clip: 1.0
 grad_accum_steps: 1
 " onclick="toggleConfig(this)">
-    <td>44</td>
+    <td>45</td>
     <td>first_order_pfd_rational_d256</td>
     <td>std</td>
     <td>rational</td>
@@ -1991,7 +2028,7 @@ warmup_ratio: 0.02
 grad_clip: 1.0
 grad_accum_steps: 1
 " onclick="toggleConfig(this)">
-    <td>45</td>
+    <td>46</td>
     <td>rational_d256</td>
     <td>std</td>
     <td>rational</td>
@@ -2027,7 +2064,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>46</td>
+    <td>47</td>
     <td>xsa_leaky_relu_sq_qknorm_d256</td>
     <td>xsa</td>
     <td>leaky_relu_sq</td>
@@ -2063,7 +2100,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>47</td>
+    <td>48</td>
     <td>xsa_leaky_relu_sq_qknorm_d256</td>
     <td>xsa</td>
     <td>leaky_relu_sq</td>
@@ -2100,7 +2137,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>48</td>
+    <td>49</td>
     <td>standard_polar_qknorm_wnorm_d256</td>
     <td>std</td>
     <td>polar</td>
@@ -2134,7 +2171,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>49</td>
+    <td>50</td>
     <td>standard_polar_d256</td>
     <td>std</td>
     <td>polar</td>
@@ -2176,7 +2213,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>50</td>
+    <td>51</td>
     <td>standard_swiglu_qknorm_wnorm_d256</td>
     <td>std</td>
     <td>swiglu</td>
@@ -2218,7 +2255,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>51</td>
+    <td>52</td>
     <td>standard_swiglu_qknorm_d256</td>
     <td>std</td>
     <td>swiglu</td>
@@ -2264,7 +2301,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>52</td>
+    <td>53</td>
     <td>standard_swiglu_qknorm_wnorm_d256</td>
     <td>std</td>
     <td>swiglu</td>
@@ -2299,7 +2336,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>53</td>
+    <td>54</td>
     <td>polar_polar_d256</td>
     <td>—</td>
     <td>polar</td>
@@ -2319,7 +2356,7 @@ grad_clip: 1.0
 </tbody>
 </table>
 </div>
-<footer>Generated: 2026-05-16 13:24:23</footer>
+<footer>Generated: 2026-05-19 11:50:39</footer>
 
 <script>
 (function() {

@@ -61,7 +61,8 @@ class CausalLM(nn.Module):
         token_embedding → N × TransformerBlock → RMSNorm → lm_head
 
     Block type is controlled by cfg.attn_type and cfg.ffn_type (see ATTN_REGISTRY
-    and FFN_REGISTRY). If cfg.use_kromhc=True, each block is wrapped in KromHCWrapper.
+    and FFN_REGISTRY). If cfg.use_kromhc=True, each block is wrapped in KromHCWrapper
+    (incompatible with use_attn_res; config validation rejects that combination).
 
     lm_head variants (selected by cfg):
         default (tie_embeddings=True)  → nn.Linear, weight tied to token_embedding
@@ -125,12 +126,7 @@ class CausalLM(nn.Module):
             sources = [x]
             for i, block in enumerate(self.blocks):
                 h = self.attn_res_layers[i](sources)
-                result = block(h)
-                if self.use_kromhc:
-                    z, H = result
-                    hs.append(H.detach())
-                else:
-                    z = result
+                z = block(h)
                 sources.append(z)
             x = sources[-1]
         else:

@@ -129,6 +129,8 @@ class ModelConfig:
 
         if self.use_loop and self.use_kromhc:
             raise ValueError("use_loop and use_kromhc cannot be used together")
+        if self.use_attn_res and self.use_kromhc:
+            raise ValueError("use_attn_res and use_kromhc cannot be used together")
         if self.use_attn_res and self.use_loop:
             raise ValueError("use_attn_res and use_loop cannot be used together")
         if self.use_loop and self.loop_n_fixed < 1:

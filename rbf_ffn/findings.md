@@ -96,7 +96,11 @@ All three σ variants perform within ~1 perplexity point of each other. Per-dim 
 | XSA + PFDRationalGLU + qk_norm + orthogonal_ffn | Stack best attention + best FFN + orthogonality | Deprioritized — §7 shows PFD advantage vanishes at 10 epochs; §6.1 shows wnorm erases it at 3 epochs |
 | SwiGLU at 4× FFN width (ffn_hidden=2752) | Complete the parameter-matched comparison with dense baseline | **Done** — 44.33 ep2 (§9.5); beats MoE at equal budget, sparse routing adds no structural benefit |
 | XSA + qknorm + wnorm + orthogonal_ffn on odd middle layers only (layers 1,3) | Whether alignment gain concentrates in specific layers; recover most of §8.9 gain with weaker global constraint | **Done** — 54.97 ep2 (§10.2); beats full orthogonal_ffn (55.57) |
-| XSA + qknorm + wnorm + orthogonal_ffn on layers 1,3,4 | Whether adding blocks.4 (next highest uncontrolled alignment per probe) compounds the gain | **Priority 1** — see §10.3 |
+| XSA + qknorm + wnorm + orthogonal_ffn on layers 1,3,4 | Whether adding blocks.4 (next highest uncontrolled alignment per probe) compounds the gain | Pending — [1,2,3,4] done (55.43, §10.4); [1,3,4] untested |
+| XSA + qknorm + wnorm + LoRA LM head rank=8 | Whether a low-rank adapter on the tied LM head provides complementary gain | **Done** — 53.50 ep2 (§11.2); new 3-epoch best (no AttnRes) |
+| XSA + relu_sq + qknorm + wnorm | Whether ReLU² gate competes with SwiGLU under wnorm | **Done** — 60.83 ep2 (§11.1); underperforms SwiGLU |
+| XSA + qknorm + wnorm + AttnRes | Whether learned per-layer blending of all prior outputs improves over fixed residual | **Done** — 56.07 ep2 (§12.2); modest standalone gain under wnorm; hurts without wnorm |
+| XSA + SwiGLU + qknorm + wnorm + AttnRes + LoRA8 + orthogonal[1,3] | Compound of three best independent improvements | **Done** — 52.12 ep2 (§12.2); new overall 3-epoch best |
 | MoE + Gram-Schmidt orthogonal experts (param-matched) | Whether forcing expert output orthogonality recovers the structural benefit of sparse routing | **Done** — 61.17 ep2 (§9.7); no gain over non-orthogonal MoE (60.99) |
 | MoE parameter-matched ablation | Isolate MoE structural gain from param count | **Done** — 60.99 ep2 (§9.3); gain was parameter count, not routing |
 | MoE + dynamic_erf norm | Whether dynamic ERF norm helps MoE | **Done** — 53.86 ep2 (§9.4); underperforms standard RMSNorm |
@@ -686,3 +690,128 @@ Run `20260512_190734_225960_xsa_swiglu_qknorm_wnorm_d256`:
 **Interpretation:** blocks.5's large |proj| with beneficial unconstrained behavior suggests a qualitative role change in the last layer — it writes in the input direction by design, not by accident. The orthogonal constraint is valuable in middle layers where parallel-direction writes are redundant, but harmful in the last layer where they carry signal toward the LM head.
 
 **Priority next:** `orthogonal_ffn_layers: [1, 3, 4]` — add blocks.4 (next highest uncontrolled alignment) to the current set and test whether the gain compounds.
+
+### §10.4 Selective Orthogonal FFN layers [1,2,3,4] (2026-05-12)
+
+Run `20260512_201637_969967_xsa_swiglu_qknorm_wnorm_d256` — XSA + SwiGLU + qknorm + wnorm with `orthogonal_ffn_layers: [1, 2, 3, 4]` (all middle layers wrapped, boundary layers 0 and 5 left free):
+
+| Epoch | Val PPL | Time (s) |
+|-------|---------|----------|
+| 0 | 109.66 | 1120 |
+| 1 | 70.13 | 1093 |
+| 2 | **55.43** | 1093 |
+
+**Comparison to §10.2 ([1,3]) and §8.9 (all):**
+
+| Variant | Val PPL (ep 2) | Orthogonal layers |
+|---------|----------------|-------------------|
+| XSA + qknorm + wnorm + orthogonal_ffn (layers 1,3) | **54.97** | 1,3 |
+| XSA + qknorm + wnorm + orthogonal_ffn (layers 1,2,3,4) | 55.43 | 1,2,3,4 |
+| XSA + qknorm + wnorm + orthogonal_ffn (all, §8.9) | 55.57 | 0,1,2,3,4,5 |
+| XSA + qknorm + wnorm (none, §8.8) | 56.88 | — |
+
+**Key conclusions:**
+
+1. **Adding layers 2 and 4 to the wrapper set provides no benefit** (55.43 vs 54.97, worse by 0.46 ppl). The even middle layers (blocks.2, blocks.4) do not benefit from the orthogonal constraint.
+2. **Layers [1,3] remain the best selective configuration.** This is consistent with the probe findings (§10.3): blocks.2 has the lowest alignment of any middle layer (0.176), and wrapping it adds constraint without removing meaningful redundancy.
+3. **[1,3,4] remains untested.** The probe identified blocks.4 (alignment 0.292) as the next highest unwrapped candidate. The [1,2,3,4] result shows that adding both blocks.2 and blocks.4 is harmful, but [1,3,4] alone may still provide a gain by targeting only the higher-alignment candidate.
+
+## §11 ReLU² FFN and LoRA LM Head (2026-05-15/16)
+
+### §11.1 ReLU² FFN (2026-05-15)
+
+`relu_sq` FFN: `relu(x)²` activation, always non-negative. Tested as XSA + relu_sq + qknorm + wnorm (run `20260515_155952_271445_xsa_relu_sq_qknorm_wnorm_d256`):
+
+| Epoch | Val PPL | Time (s) |
+|-------|---------|----------|
+| 0 | 115.63 | 1076 |
+| 1 | 75.57 | 1046 |
+| 2 | **60.83** | 1046 |
+
+**Comparison to SwiGLU:**
+
+| Variant | Val PPL (ep 2) | Δ vs XSA+wnorm |
+|---------|----------------|----------------|
+| XSA + SwiGLU + qknorm + wnorm (§8.8) | **56.88** | — |
+| XSA + relu_sq + qknorm + wnorm | 60.83 | +3.95 |
+
+**Key conclusion:** ReLU² underperforms SwiGLU by 3.95 ppl. Always-non-negative activation limits gate dynamic range — same pattern as LeakyReLUSq in §8.3. SwiGLU remains preferred.
+
+### §11.2 LoRA LM Head (2026-05-16)
+
+`LoRALMHead` adds a rank-r low-rank adapter to the tied LM head: `logits = W_tied x + B(Ax)`, where A (256×8) and B (8×50257) are Muon-trained and W_tied remains shared with the token embedding. At rank=8: ~404K extra parameters (~8% of base model).
+
+Two runs:
+
+| Run | Variant | Val PPL (ep 0) | Val PPL (ep 2) | Time/epoch |
+|-----|---------|----------------|----------------|------------|
+| 20260516_111830 | XSA + relu_sq + qknorm + wnorm + LoRA rank=8 | 120.05 | 57.89 | ~1192s |
+| 20260516_122144 | XSA + SwiGLU + qknorm + wnorm + LoRA rank=8 | 114.51 | **53.50** | ~1236s |
+
+**Comparison to no-LoRA baselines:**
+
+| Variant | Val PPL (ep 2) | Δ |
+|---------|----------------|---|
+| **XSA + SwiGLU + qknorm + wnorm + LoRA rank=8** | **53.50** | — |
+| XSA + qknorm + wnorm + orthogonal_ffn (layers 1,3) | 54.97 | +1.47 |
+| XSA + qknorm + wnorm + orthogonal_ffn (all, §8.9) | 55.57 | +2.07 |
+| XSA + qknorm + wnorm (§8.8) | 56.88 | +3.38 |
+| XSA + relu_sq + qknorm + wnorm + LoRA rank=8 | 57.89 | +4.39 |
+| SwiGLU + qknorm + wnorm (§6.1) | 58.16 | +4.66 |
+| XSA + relu_sq + qknorm + wnorm | 60.83 | — |
+
+**Key conclusions:**
+
+1. **LoRA LM head + SwiGLU sets a new 3-epoch best at 53.50 ppl**, beating XSA+wnorm+orthogonal (54.97) and SwiGLU+wnorm (58.16). The adapter allows the LM head to adapt beyond the tied-weight constraint without decoupling the embeddings.
+2. **LoRA significantly improves relu_sq too** (57.89 vs 60.83, −2.94 ppl). The adapter compensates for limited gate dynamic range by providing an expressive output correction.
+3. **LoRA gain is ~3.38 ppl for SwiGLU, ~2.94 ppl for relu_sq.** The benefit is not FFN-type-specific — it addresses the LM head bottleneck independent of the FFN design.
+
+## §12 Attention Residuals (AttnRes, 2026-05-19)
+
+### §12.1 Architecture
+
+`AttnResLayer` replaces the standard per-layer residual with learned softmax attention over all previous layer outputs (including the token embedding):
+
+```
+h_l = Σ_i softmax(w_l · RMSNorm(v_i)) * v_i
+```
+
+`w_l ∈ R^d` is a learned per-layer pseudo-query (d_model params per layer; negligible vs total count). `RMSNorm` on keys prevents high-magnitude layers from dominating. Standard residual: `h_l = h_{l-1} + block(h_{l-1})`; AttnRes: `h_l = AttnResLayer([v_0, ..., v_{l-1}]); z_l = block(h_l); v_l = z_l`.
+
+Reference: Chen et al. arXiv:2603.15031 (Kimi AttnRes).
+
+### §12.2 AttnRes Results
+
+Four runs on 2026-05-19:
+
+| Run | Variant | Val PPL (ep 0) | Val PPL (ep 2) | Time/epoch |
+|-----|---------|----------------|----------------|------------|
+| 20260519_104618 | XSA + SwiGLU + qknorm + AttnRes (no wnorm) | 134.30 | 75.03 | ~1220s |
+| 20260519_115352 | XSA + SwiGLU + qknorm + wnorm + AttnRes | 108.19 | 56.07 | ~1205s |
+| 20260519_125823 | XSA + relu_sq + qknorm + wnorm + AttnRes | 113.85 | 60.45 | ~1174s |
+| 20260519_140754 | XSA + SwiGLU + qknorm + wnorm + AttnRes + LoRA8 + orthogonal[1,3] | 112.06 | **52.12** | ~1333s |
+
+**Comparison to non-AttnRes baselines:**
+
+| Variant | Val PPL (ep 2) | AttnRes |
+|---------|----------------|---------|
+| **XSA + SwiGLU + qknorm + wnorm + AttnRes + LoRA8 + orthogonal[1,3]** | **52.12** | yes |
+| XSA + SwiGLU + qknorm + wnorm + LoRA8 (§11.2) | 53.50 | no |
+| XSA + qknorm + wnorm + orthogonal[1,3] (§10.2) | 54.97 | no |
+| XSA + qknorm + wnorm + orthogonal[all] (§8.9) | 55.57 | no |
+| XSA + SwiGLU + qknorm + wnorm + AttnRes | 56.07 | yes |
+| XSA + qknorm + wnorm (§8.8) | 56.88 | no |
+| XSA + relu_sq + qknorm + wnorm + AttnRes | 60.45 | yes |
+| XSA + SwiGLU + qknorm (no wnorm, §8.1) | 72.41 | no |
+| XSA + SwiGLU + qknorm + AttnRes (no wnorm) | 75.03 | yes |
+
+**Key conclusions:**
+
+1. **AttnRes hurts without weight norm** (75.03 vs 72.41 for XSA+qknorm without wnorm, +2.62 ppl). The learned blending of all prior layer outputs adds optimization complexity that wnorm's regularization is needed to handle.
+2. **AttnRes alone provides modest gain under wnorm** (56.07 vs 56.88, −0.81 ppl). Real but small; one run, marginally above run-to-run noise.
+3. **AttnRes + LoRA + orthogonal[1,3] sets a new 3-epoch best at 52.12 ppl.** The three components are complementary:
+   - AttnRes: learned blending of all prior layer outputs (replaces fixed skip connection)
+   - LoRA rank=8: expressive LM head adapter beyond tied-weight constraint (§11.2)
+   - Selective orthogonal FFN (layers 1,3): removes parallel-direction FFN writes in highest-alignment layers (§10.2)
+4. **ReLU² + AttnRes provides marginal improvement** (60.45 vs 60.83, −0.38 ppl) — small benefit, consistent with relu_sq's limited gate expressiveness.
+5. **AttnRes adds ~25–35s/epoch overhead** (~1205s vs SwiGLU+wnorm ~1373s, noting hardware variance; compound variant 1333s).

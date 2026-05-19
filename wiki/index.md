@@ -2,10 +2,11 @@
 
 > Content catalog. Every wiki page listed under its type with a one-line summary.
 > Read this first to find relevant pages for any query.
-> Last updated: 2026-05-16 | Total pages: 43
+> Last updated: 2026-05-19 | Total pages: 44
 
 ## Entities
 
+- [[attnres]] — Attention Residuals (Kimi Team, Mar 2026): depth-wise softmax attention over preceding layers replaces fixed residuals; Block AttnRes = 1.25× compute advantage, +7.5 GPQA-Diamond on 48B model
 - [[block-diffusion]] — BD3-LM (ICLR 2025): block-level AR + within-block discrete diffusion; variable-length generation, KV caching, SOTA diffusion LM perplexity
 - [[clip-to-grok]] — Clip to Grok: per-row weight norm clipping accelerates grokking 39–249× without weight decay
 - [[flash-attention]] — Flash Attention (Dao et al.): IO-aware tiled attention; 7.6× speedup on GPT-2; O(N) memory via online softmax

@@ -1,7 +1,7 @@
 ---
 title: Hyper-Connections
 created: 2026-05-14
-updated: 2026-05-14
+updated: 2026-05-19
 type: concept
 tags: [architecture, residual, training]
 sources: [raw/papers/2512.24880v2.pdf, raw/papers/2601.05732v1.pdf, raw/papers/2601.21579v1.pdf]
@@ -56,11 +56,16 @@ For detailed comparison see [[hyper-connections-variants]].
 - [[mhc]] is used in [[deepseek-v4]] at trillion-parameter scale
 - Research on [[mhc-lite]] (Yang & Gao) and [[kromhc]] (Zhou et al.) represents the community improving on DeepSeek's approach
 
+## Alternative Approach: Attention Residuals
+
+[[attnres]] (Kimi Team, Mar 2026) takes a fundamentally different approach: instead of maintaining m parallel streams, it gives each layer direct softmax attention over *all* preceding layer outputs using a single learned pseudo-query per layer. In scaling ablations, Full AttnRes (loss 1.737) and Block AttnRes (1.746) both outperform mHC-lite (1.747) and mHC (1.747) at the 436M scale, while Block AttnRes uses only **5.5d memory I/O per layer** vs mHC's 34d (m=4 streams). The two methods are architecturally orthogonal — HC widens the residual stream, AttnRes selects across depth — and could in principle be combined.
+
 ## Open Questions
 
 - Can Kronecker-product construction be extended beyond stream width n = 2^K?
 - Does stream width n have diminishing returns beyond a certain point?
 - How does HC interact with [[mixture-of-experts]] at large scale?
+- Can HC multi-stream and AttnRes cross-layer access be combined?
 
 ## See Also
 
@@ -68,4 +73,5 @@ For detailed comparison see [[hyper-connections-variants]].
 - [[mhc-lite]] — permutation-based exact construction
 - [[kromhc]] — Kronecker-product exact construction
 - [[hyper-connections-variants]] — full comparison
+- [[attnres]] — alternative: depth-wise softmax attention over all preceding layers
 - [[deepseek-v4]] — large-scale deployment context

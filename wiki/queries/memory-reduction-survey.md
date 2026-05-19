@@ -1,7 +1,7 @@
 ---
 title: Memory Reduction Techniques for LLM Training and Inference
 created: 2026-05-15
-updated: 2026-05-16
+updated: 2026-05-19
 type: query
 tags: [survey, training, inference, quantization, kv-cache, optimization, sparsity, attention]
 sources: []
@@ -249,7 +249,21 @@ For the decode phase (one new token per step), attention memory is smaller and K
 
 ---
 
-### 15. Mixture of Experts — Inference Memory
+### 15. Residual Architecture Improvements (AttnRes)
+
+[[attnres]] (Kimi Team, Mar 2026) replaces standard residual accumulation with learned softmax attention over preceding layer outputs. The memory angle:
+
+**Training:** Standard PreNorm residuals cause hidden-state magnitudes to grow as O(L) — deeper layers compensate by producing larger outputs, inflating activation norms throughout training. Block AttnRes resets this accumulation at block boundaries, yielding bounded, periodic output magnitudes and more uniform gradient distribution. The practical effect is more stable training dynamics without extra memory for normalization tricks.
+
+**Memory overhead of AttnRes itself:**
+- Block AttnRes (N≈8): stores N block-summary vectors per token — O(Nd) additional activation memory, negligible vs. O(L·T·d) total activation memory at training time
+- Inference I/O: **5.5d per layer** (vs 3d for standard residuals) — small and amortized via batched inter-block Phase 1
+
+**Why it belongs here:** AttnRes is the first architectural residual change that both improves model quality *and* has a concrete memory accounting (the depth-attention KV budget). Its cross-stage caching optimization also directly reduces pipeline communication memory during training.
+
+---
+
+### 16. Mixture of Experts — Inference Memory
 
 **Core idea:** MoE activates only a subset of expert FFN weights per token. Total model memory must accommodate all expert weights, but per-token *activation* memory is small.
 
@@ -282,6 +296,7 @@ For the decode phase (one new token per step), attention memory is smaller and K
 | Self-speculative decoding | Inference | Draft model weights (zero extra) | Lower draft quality |
 | Early exit / layer skipping | Inference | Activation memory per token | Weight memory unchanged |
 | Expert offloading | Inference | Expert FFN weights | PCIe bandwidth bottleneck |
+| AttnRes (Block) | Training + Inference | Training activation norms (bounds O(L) growth); +O(Nd) depth-attn memory | Architectural; must be trained in; <4% training overhead |
 
 ---
 
@@ -289,7 +304,7 @@ For the decode phase (one new token per step), attention memory is smaller and K
 
 **Recomputation vs. storage trade-off:** Several techniques deliberately trade compute for memory: gradient checkpointing recomputes activations, Flash Attention recomputes attention weights, speculative decoding runs extra forward passes. The invariant is that modern hardware is compute-rich relative to memory bandwidth — recomputing is often cheaper than storing and loading.
 
-**Architectural vs. post-hoc techniques:** Architectural changes (MQA, GQA, MLA, MoE, Flash Attention) must be baked in at training time. Post-hoc techniques (quantization, eviction, LoRA, speculative decoding) can be applied to existing checkpoints. For new model development, architectural choices dominate memory at scale.
+**Architectural vs. post-hoc techniques:** Architectural changes (MQA, GQA, MLA, MoE, Flash Attention, AttnRes) must be baked in at training time. Post-hoc techniques (quantization, eviction, LoRA, speculative decoding) can be applied to existing checkpoints. For new model development, architectural choices dominate memory at scale. [[attnres]] is notable here because it is the first residual-connection change with a concrete memory budget: Block AttnRes adds O(Nd) depth-attention state (N≈8), tightly controlled and substantially below O(Ld) for Full AttnRes.
 
 **Stacking:** Most techniques are composable. A typical frontier deployment stacks: MoE + GQA/MLA + Flash Attention (architectural) + INT8/INT4 weights + KV quantization + PagedAttention + continuous batching (system). Training stacks: MoE + Flash Attention + gradient checkpointing + ZeRO-3 + BF16/FP8 + Muon.
 
@@ -316,4 +331,5 @@ For the decode phase (one new token per step), attention memory is smaller and K
 - [[early-exit-inference]] — early exit and layer skipping landscape
 - [[continuous-batching]] — serving scheduler that composes with memory reduction
 - [[deepseek-v4]] — CSA/HCA, MLA, FP8, Muon at frontier scale
-- [[inference-improvements-summary]] — broader inference-focused survey (includes DLM §7)
+- [[attnres]] — Attention Residuals: depth-wise softmax over preceding layers; Block AttnRes bounds O(L) activation growth with O(Nd) overhead
+- [[inference-improvements-summary]] — broader inference-focused survey (includes AttnRes §1c, DLM §7)

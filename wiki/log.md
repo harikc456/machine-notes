@@ -166,3 +166,22 @@
   - Extended §13 (speculative decoding) to mention Saguaro and SSD memory model
   - Updated summary table: TriAttention and Saguaro rows added
   - Updated See Also: triattention, saguaro wikilinks added
+
+## [2026-05-19] ingest | Attention Residuals (AttnRes) — Kimi Team, arXiv 2603.15031v1
+- Source: papers/2603.15031v1.pdf
+- Pages created:
+  - entities/attnres.md
+- Pages updated:
+  - concepts/hyper-connections.md — added "Alternative Approach: Attention Residuals" section + [[attnres]] See Also link
+- index.md updated: total pages 43 → 44
+
+## [2026-05-19] update | inference-improvements-summary.md + memory-reduction-survey.md
+- inference-improvements-summary.md:
+  - Added §1c Attention Residuals (AttnRes) under Architecture Improvements
+  - Added AttnRes row to cross-cutting themes table
+  - Added [[attnres]] to See Also
+- memory-reduction-survey.md:
+  - Added §15 Residual Architecture Improvements (AttnRes); renumbered prior §15 MoE → §16
+  - Added AttnRes row to Summary Table
+  - Updated Cross-Cutting Themes paragraph to include AttnRes
+  - Added [[attnres]] to See Also

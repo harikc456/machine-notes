@@ -492,6 +492,66 @@ def test_looped_and_kromhc_raises():
         ModelConfig(use_loop=True, use_kromhc=True)
 
 
+def _make_attn_res_model() -> CausalLM:
+    cfg = ModelConfig(
+        d_model=D, n_heads=H, n_layers=L,
+        vocab_size=VOCAB, seq_len=N,
+        attn_type="standard", ffn_type="swiglu",
+        ffn_hidden=86,
+        dropout=0.0,
+        use_attn_res=True,
+    )
+    return CausalLM(cfg)
+
+
+def test_attn_res_output_shape():
+    model = _make_attn_res_model()
+    tokens = torch.randint(0, VOCAB, (B, N))
+    logits, hs = model(tokens)
+    assert logits.shape == (B, N, VOCAB)
+    assert hs == []
+
+
+def test_attn_res_gradient_flows():
+    model = _make_attn_res_model()
+    tokens = torch.randint(0, VOCAB, (B, N))
+    logits, _ = model(tokens)
+    logits.sum().backward()
+    assert model.token_embedding.weight.grad is not None
+    for layer in model.attn_res_layers:
+        assert layer.query.grad is not None
+
+
+def test_attn_res_layer_count():
+    model = _make_attn_res_model()
+    assert len(model.attn_res_layers) == L
+
+
+def test_attn_res_query_in_adamw():
+    """AttnResLayer.query is 1-D → must be in AdamW, not Muon."""
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = _make_attn_res_model()
+    muon_params, adamw_params = build_optimizer_groups(model)
+    muon_ids  = {id(p) for p in muon_params}
+    adamw_ids = {id(p) for p in adamw_params}
+    for layer in model.attn_res_layers:
+        assert id(layer.query) in adamw_ids,    "query should be in AdamW"
+        assert id(layer.query) not in muon_ids, "query should not be in Muon"
+
+
+def test_attn_res_no_duplicate_params():
+    from rbf_ffn.models.model import build_optimizer_groups
+    model = _make_attn_res_model()
+    muon_params, adamw_params = build_optimizer_groups(model)
+    all_ids = [id(p) for p in muon_params] + [id(p) for p in adamw_params]
+    assert len(all_ids) == len(set(all_ids))
+
+
+def test_attn_res_and_loop_raises():
+    with pytest.raises(ValueError, match="use_attn_res and use_loop"):
+        ModelConfig(use_attn_res=True, use_loop=True)
+
+
 def _make_kromhc_model() -> CausalLM:
     cfg = ModelConfig(
         d_model=D, n_heads=H, n_layers=L,

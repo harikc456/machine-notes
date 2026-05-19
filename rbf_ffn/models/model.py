@@ -5,6 +5,7 @@ import torch.nn as nn
 from rbf_ffn.config import ModelConfig
 from rbf_ffn.models.transformer_block import TransformerBlock, KromHCWrapper, LoopBlock
 from rbf_ffn.models.kronecker_linear import KroneckerLMHead, LoRALMHead
+from rbf_ffn.models.attn_res import AttnResLayer
 
 
 def build_optimizer_groups(
@@ -82,7 +83,8 @@ class CausalLM(nn.Module):
                 return KromHCWrapper(block, cfg)
             return block
 
-        self.use_kromhc = cfg.use_kromhc
+        self.use_kromhc  = cfg.use_kromhc
+        self.use_attn_res = cfg.use_attn_res
         self.token_embedding = nn.Embedding(cfg.vocab_size, cfg.d_model)
 
         if cfg.use_loop:
@@ -96,6 +98,10 @@ class CausalLM(nn.Module):
             self.blocks = nn.ModuleList(head + [shared] + tail)
         else:
             self.blocks = nn.ModuleList([make_block(i) for i in range(cfg.n_layers)])
+        if cfg.use_attn_res:
+            self.attn_res_layers = nn.ModuleList(
+                [AttnResLayer(cfg.d_model) for _ in range(len(self.blocks))]
+            )
         self.norm = nn.RMSNorm(cfg.d_model)
         self.pre_lm_head_silu = cfg.pre_lm_head_silu
         if cfg.lm_head_kronecker:
@@ -115,13 +121,26 @@ class CausalLM(nn.Module):
         """
         x = self.token_embedding(tokens)
         hs: list[torch.Tensor] = []
-        for block in self.blocks:
-            result = block(x)
-            if self.use_kromhc:
-                x, H = result
-                hs.append(H.detach())
-            else:
-                x = result
+        if self.use_attn_res:
+            sources = [x]
+            for i, block in enumerate(self.blocks):
+                h = self.attn_res_layers[i](sources)
+                result = block(h)
+                if self.use_kromhc:
+                    z, H = result
+                    hs.append(H.detach())
+                else:
+                    z = result
+                sources.append(z)
+            x = sources[-1]
+        else:
+            for block in self.blocks:
+                result = block(x)
+                if self.use_kromhc:
+                    x, H = result
+                    hs.append(H.detach())
+                else:
+                    x = result
         x = self.norm(x)
         if self.pre_lm_head_silu:
             x = torch.nn.functional.silu(x)

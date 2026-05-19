@@ -1,7 +1,7 @@
 ---
 title: LLM Inference Improvements — Structured Survey
 created: 2026-05-14
-updated: 2026-05-16
+updated: 2026-05-19
 type: query
 tags: [inference, architecture, quantization, kv-cache, speculative, attention, survey, training]
 sources: []
@@ -40,6 +40,33 @@ Structural changes that reduce the KV cache footprint or compute per token at th
 - Capacity scales with total parameters, but FLOPs per token are fixed to `top_k / total_experts`
 - DeepSeek-V4 uses fine-grained expert routing (128 routed + 1 shared expert)
 - Tradeoff: all expert weights must fit in memory (or be paged), even if inactive
+
+### Attention Residuals (AttnRes)
+
+[[attnres]] — Kimi Team, Mar 2026
+
+**Problem**: standard PreNorm residuals accumulate all layer outputs with fixed unit weights, causing hidden-state magnitudes to grow as O(L) with depth. Deeper layers must produce increasingly large outputs to influence the residual stream, progressively burying earlier representations.
+
+**Insight**: the depth dimension mirrors the sequence dimension. Just as Transformers replaced RNNs with attention for sequence modeling, AttnRes replaces fixed residual accumulation with learned **softmax attention over preceding layer outputs**:
+
+```
+h_l = Σ_{i=0}^{l-1}  α_{i→l} · v_i      (α = softmax of learned dot products)
+```
+
+One d-dimensional pseudo-query `w_l` per layer is the only new parameter — negligible overhead.
+
+**Block AttnRes (practical variant):** Partition L layers into N blocks (N≈8). Layers attend over block summaries rather than all L individual outputs, reducing memory and communication from O(Ld) to O(Nd).
+
+**Infrastructure for scale:**
+- Training: cross-stage caching reduces pipeline communication from O(C²) to O(P); overhead <4%
+- Inference: two-phase compute (batched inter-block + sequential intra-block via online softmax merge); total I/O **5.5d per layer** vs 34d for mHC (m=4 streams); latency overhead <2%
+
+**Results:**
+- Scaling laws: Block AttnRes = baseline trained with **1.25× more compute**
+- 48B model (Kimi Linear, 1.4T tokens) vs baseline: **+7.5 GPQA-Diamond, +3.6 Math, +3.1 HumanEval, +1.7 BBH, +1.1 MMLU**
+- Training dynamics: mitigates PreNorm dilution → bounded output magnitudes, uniform gradient distribution across depth
+
+**Why it matters for inference quality**: better depth-wise information flow, especially for multi-step reasoning tasks where later layers need access to specific earlier representations. AttnRes is an architectural change baked at training time (like GQA/MoE) — not a post-hoc optimization.
 
 ---
 
@@ -340,6 +367,7 @@ Converts pretrained AR models into DLMs using **introspective-consistency traini
 
 | Technique | What it trades | Gain |
 |---|---|---|
+| AttnRes (Block) | O(Nd) depth-attention memory; architectural change at training time | 1.25× compute advantage; +7.5 GPQA-Diamond; mitigates PreNorm dilution |
 | GQA/DSA/CSA+HCA | Model quality (marginal) | KV cache ↓ 10–90% |
 | MoE | Memory (all experts must load) | FLOPs/token ↓ |
 | INT4 weights | Quality (marginal at INT8, moderate at INT4) | Memory ↓ 2–4× |
@@ -359,6 +387,7 @@ Converts pretrained AR models into DLMs using **introspective-consistency traini
 
 ## See Also
 
+- [[attnres]] — Attention Residuals: depth-wise softmax attention over preceding layers; Block AttnRes is a drop-in for training
 - [[kv-cache]] — KV cache fundamentals and bottleneck analysis
 - [[kv-cache-compression-comparison]] — H₂O vs TriAttention vs PolarQuant vs TurboQuant head-to-head
 - [[triattention]] — pre-RoPE KV compression; best for long-context reasoning

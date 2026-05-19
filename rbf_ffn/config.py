@@ -76,6 +76,10 @@ class ModelConfig:
     use_kromhc: bool = False           # wrap any block with KromHC head mixing
     kromhc_mixer_hidden: int = 32      # hidden dim of per-factor weight MLP
 
+    # Attention Residuals (AttnRes) — replaces depth-wise accumulation with
+    # learned softmax attention over all preceding layer outputs (arXiv:2603.15031)
+    use_attn_res: bool = False
+
     # Looped transformer (weight-shared middle block)
     use_loop: bool = False             # repeat a single shared middle block N times
     loop_n_repeats: int = 4            # how many times to repeat the shared middle block
@@ -125,6 +129,8 @@ class ModelConfig:
 
         if self.use_loop and self.use_kromhc:
             raise ValueError("use_loop and use_kromhc cannot be used together")
+        if self.use_attn_res and self.use_loop:
+            raise ValueError("use_attn_res and use_loop cannot be used together")
         if self.use_loop and self.loop_n_fixed < 1:
             raise ValueError("loop_n_fixed must be >= 1")
 

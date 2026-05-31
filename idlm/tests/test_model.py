@@ -84,3 +84,60 @@ def test_lora_count():
     lora_layers = [m for m in model.modules() if isinstance(m, LoRALinear)]
     # 2 target modules (q_proj, v_proj) * L_layers = 4
     assert len(lora_layers) == L_layers * 2
+
+
+# --- Loss tests ---
+
+def compute_idlm_loss(model, x_0, device, mask_id=MASK_ID):
+    """Helper: build 2L input, run forward, return (loss, l_mask, l_clean, lam)."""
+    import torch.nn.functional as F
+    B, L = x_0.shape
+    x_t = torch.full_like(x_0, mask_id)
+    tokens = torch.cat([x_t, x_0], dim=1)          # (B, 2L)
+    mask = torch.zeros(B, 2 * L, 1, device=device)
+    mask[:, :L, :] = 1.0
+    logits = model(tokens, mask)                    # (B, 2L, V)
+    l_mask = F.cross_entropy(
+        logits[:, :L].reshape(-1, logits.size(-1)),
+        x_0.reshape(-1),
+    )
+    l_clean = F.cross_entropy(
+        logits[:, L:2 * L - 1].reshape(-1, logits.size(-1)),
+        x_0[:, 1:].reshape(-1),
+    )
+    with torch.no_grad():
+        lam = (l_mask / (l_clean + 1e-8)).detach()
+    loss = l_mask + lam * l_clean
+    return loss, l_mask, l_clean, lam
+
+
+def test_loss_terms_finite():
+    model = make_idlm(make_ar_model())
+    # Use V-1 as toy MASK_ID (fits in toy vocab of size V=256); targets avoid it
+    x_0 = torch.randint(0, V - 1, (B, N))
+    loss, l_mask, l_clean, lam = compute_idlm_loss(model, x_0, torch.device("cpu"), mask_id=V - 1)
+    assert torch.isfinite(loss)
+    assert torch.isfinite(l_mask)
+    assert torch.isfinite(l_clean)
+    assert lam > 0
+
+
+def test_lambda_has_no_grad():
+    """λ must not appear in the computation graph."""
+    model = make_idlm(make_ar_model())
+    x_0 = torch.randint(0, V - 1, (B, N))
+    loss, l_mask, l_clean, lam = compute_idlm_loss(model, x_0, torch.device("cpu"), mask_id=V - 1)
+    assert not lam.requires_grad
+
+
+def test_loss_backward_updates_lora_only():
+    """After loss.backward(), only LoRA params should have gradients."""
+    model = make_idlm(make_ar_model())
+    x_0 = torch.randint(0, V - 1, (B, N))
+    loss, *_ = compute_idlm_loss(model, x_0, torch.device("cpu"), mask_id=V - 1)
+    loss.backward()
+    for name, param in model.named_parameters():
+        if "lora_A" in name or "lora_B" in name:
+            assert param.grad is not None, f"{name} missing grad after loss.backward()"
+        else:
+            assert param.grad is None, f"{name} should have no grad"

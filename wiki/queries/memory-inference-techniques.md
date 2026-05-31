@@ -1,7 +1,7 @@
 ---
 title: Memory Reduction Techniques for LLM Inference
 created: 2026-05-19
-updated: 2026-05-19
+updated: 2026-05-31
 type: query
 tags: [survey, inference, quantization, kv-cache, attention, sparsity]
 sources: []
@@ -100,6 +100,10 @@ For the decode phase (one new token per step), attention memory is smaller and K
 
 **Memory impact:** Standard SD *increases* total memory (draft model + target model loaded simultaneously). The benefit is throughput, not memory.
 
+**EAGLE family ([[eagle]] / [[eagle-2]] / [[eagle-3]]):** All three share the same memory model: one small plug-in draft layer (~1 decoder layer) + frozen target. Memory overhead: negligible compared to target model. EAGLE-1/2/3 trade off increasingly on training compute, not inference memory. EAGLE-3 additionally requires a larger draft training dataset.
+
+**DFlash ([[dflash]], ICML 2026):** Replaces the AR draft layer with a block diffusion adapter of comparable size — memory overhead similar to EAGLE. The gain is that draft cost is constant (one parallel forward pass) regardless of speculation length, not sequential like EAGLE. Throughput benefit larger than EAGLE-3 (6×+ vs 6.5×max) but from parallel compute, not less memory.
+
 **Self-speculative ([[layerskip]]):** Uses the target model's own early layers as the draft — zero extra memory overhead. Trade-off: lower draft quality bounded by early-layer representational power.
 
 **Speculative Speculative Decoding ([[saguaro]], May 2026):** Speculator and verifier run on separate hardware simultaneously. Memory per device unchanged vs. standard SD (draft + target split across devices). 30% over SD baselines, up to 5× over AR. Lossless.
@@ -148,6 +152,8 @@ MoE activates only top_k experts per token, but all expert weights must reside i
 | MQA / GQA / MLA / CSA | Inference | KV cache | Potential attention quality loss (MQA) |
 | PagedAttention | Inference | KV cache fragmentation | Minimal (OS paging is near-zero cost) |
 | Speculative decoding | Inference | — (increases memory) | Throughput gain, not memory gain |
+| EAGLE / EAGLE-2 / EAGLE-3 | Inference | +1 small draft layer (negligible) | Throughput gain via better acceptance; EAGLE-3 unlocks data scaling |
+| DFlash (block diffusion draft) | Inference | +1 small diffusion adapter (≈ EAGLE) | Constant draft cost → 6×+ throughput; 2.5× over EAGLE-3 |
 | Saguaro (SSD) | Inference | — (split across devices) | Requires separate speculator hardware |
 | Self-speculative decoding | Inference | Draft model weights (zero extra) | Lower draft quality |
 | Early exit / layer skipping | Inference | Activation memory per token | Weight memory unchanged |
@@ -172,6 +178,10 @@ MoE activates only top_k experts per token, but all expert weights must reside i
 - [[paged-attention]] — OS-style KV memory management
 - [[radix-attention]] — cross-request prefix sharing
 - [[speculative-decoding]] — draft-verify inference speedup
+- [[eagle]] — feature-level AR drafting; 2.7–3.5× lossless; minimal memory overhead
+- [[eagle-2]] — dynamic draft trees; 3.05–4.26×; no extra training
+- [[eagle-3]] — training-time test; up to 6.5×; data scaling law
+- [[dflash]] — block diffusion parallel drafting; 6×+; constant draft cost
 - [[saguaro]] — parallel draft+verify on separate hardware
 - [[layerskip]] — self-speculative decoding via early exit
 - [[early-exit-inference]] — early exit and layer skipping landscape
@@ -180,3 +190,4 @@ MoE activates only top_k experts per token, but all expert weights must reside i
 - [[continuous-batching]] — serving scheduler that composes with memory reduction
 - [[attnres]] — Attention Residuals
 - [[inference-improvements-summary]] — broader inference survey (architecture, serving, DLMs)
+- [[inference-kv-speculative]] — deep-dive on KV compression + speculative decoding (including EAGLE family)

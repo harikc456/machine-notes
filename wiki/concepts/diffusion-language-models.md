@@ -1,10 +1,10 @@
 ---
 title: Diffusion Language Models
 created: 2026-05-16
-updated: 2026-05-16
+updated: 2026-05-31
 type: concept
 tags: [architecture, training, inference]
-sources: [raw/papers/2503.09573v3.pdf, raw/papers/2604.11035v1.pdf]
+sources: [raw/papers/2503.09573v3.pdf, raw/papers/2604.11035v1.pdf, raw/papers/2602.06036v2.pdf]
 confidence: high
 ---
 
@@ -42,6 +42,9 @@ Interpolates between AR and diffusion by defining an autoregressive distribution
 ### [[i-dlm]] (Apr 2026)
 Converts pretrained AR models into DLMs using **introspective-consistency training**: causal attention + logit shift + all-masked objective. Introduces Introspective Strided Decoding (ISD) — single-pass generation + verification. First DLM to match strong same-scale AR quality; 3.1× higher throughput than prior SOTA DLMs at concurrency.
 
+### [[dflash]] (May 2026, ICML 2026)
+A novel use of diffusion models as **speculative decoding draft engines** for AR models — not as standalone generators. DFlash trains a small block diffusion adapter conditioned on the target AR model's hidden features; it generates all γ draft tokens in a single parallel forward pass. The AR target model performs verification (lossless). "The target knows best" — large AR models implicitly encode future-token information in their hidden states, making them ideal conditioning context for the diffusion drafter. Achieves 6×+ lossless speedup over AR decoding, 2.5× over [[eagle-3]]. Demonstrates DLMs as *accelerators* for AR models rather than replacements.
+
 ## Key Noise Processes
 
 **Masking diffusion** (D3PM, MDLM, MD4): tokens are replaced by a [MASK] token; the model predicts the original token given surrounding context and noise level. Most effective and widely used in recent DLMs.
@@ -67,6 +70,7 @@ I-DLM specifically addresses this by using causal attention throughout, enabling
 
 - [[block-diffusion]] — entity page: block-level AR + within-block diffusion
 - [[i-dlm]] — entity page: introspective consistency training + ISD algorithm
-- [[speculative-decoding]] — ISD in I-DLM is related to self-speculative decoding
+- [[dflash]] — entity page: block diffusion as a speculative decoding draft engine for AR models
+- [[speculative-decoding]] — ISD in I-DLM and DFlash both connect DLMs to SD
 - [[kv-cache]] — DLMs lose KV caching; BD3-LM and I-DLM restore it
 - [[early-exit-inference]] — another form of adaptive compute at inference

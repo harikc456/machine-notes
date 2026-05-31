@@ -67,3 +67,5 @@ These are complementary — weight norm and mHC target different failure modes a
 - [[grokking]] — the generalization dynamics that norm clipping accelerates
 - [[orthogonal-residual-streams]] — a different perspective on what normalization achieves
 - [[hyper-connections]] — stability via residual matrix constraints
+- [[normalization-free-transformers]] — point-wise replacements for LayerNorm (Derf, DyT); related design philosophy
+- [[derf]] — `erf(αx+s)` as a drop-in norm replacement; surpasses LayerNorm across modalities

@@ -2,12 +2,13 @@
 
 > Content catalog. Every wiki page listed under its type with a one-line summary.
 > Read this first to find relevant pages for any query.
-> Last updated: 2026-05-19 | Total pages: 47
+> Last updated: 2026-05-31 | Total pages: 51
 
 ## Entities
 
 - [[attnres]] — Attention Residuals (Kimi Team, Mar 2026): depth-wise softmax attention over preceding layers replaces fixed residuals; Block AttnRes = 1.25× compute advantage, +7.5 GPQA-Diamond on 48B model
 - [[block-diffusion]] — BD3-LM (ICLR 2025): block-level AR + within-block discrete diffusion; variable-length generation, KV caching, SOTA diffusion LM perplexity
+- [[dflash]] — DFlash (UC San Diego, ICML 2026): block diffusion adapter as speculative draft engine; parallel draft generation; 6×+ lossless speedup, 2.5× over EAGLE-3
 - [[clip-to-grok]] — Clip to Grok: per-row weight norm clipping accelerates grokking 39–249× without weight decay
 - [[flash-attention]] — Flash Attention (Dao et al.): IO-aware tiled attention; 7.6× speedup on GPT-2; O(N) memory via online softmax
 - [[layerskip]] — LayerSkip (Meta): layer dropout training + early exit inference + self-speculative decoding; up to 2.16× speedup
@@ -17,6 +18,9 @@
 - [[lejepa]] — LeJEPA: provable JEPA with SIGReg enforcing isotropic Gaussian embeddings — eliminates training heuristics
 - [[lewm]] — LeWorldModel: stable end-to-end JEPA world model from pixels using prediction loss + SIGReg; 15M params
 - [[deepseek-v4]] — DeepSeek-V4 series (Pro 1.6T, Flash 284B): CSA/HCA hybrid attention, mHC, Muon optimizer, 1M-token context
+- [[eagle]] — EAGLE (Peking U / MSR, Mar 2025): feature-level AR speculative drafting; resolves feature uncertainty; 2.7×–3.5× speedup, lossless
+- [[eagle-2]] — EAGLE-2 (Peking U / MSR, Jun 2024): context-dependent dynamic draft trees via calibrated confidence scores; 3.05×–4.26×, 20-40% over EAGLE-1
+- [[eagle-3]] — EAGLE-3 (Peking U / MSR, Apr 2025): direct token prediction + multi-layer features + training-time test; up to 6.5×; unlocks data scaling law
 - [[deepseek-v3-2]] — DeepSeek-V3.2: DSA attention, scalable RL, agentic task synthesis, gold-medal IMO/IOI performance
 - [[engram]] — Conditional memory module using N-gram lookup; complement to MoE sparsity for static knowledge retrieval
 - [[h2o]] — H₂O Heavy-Hitter Oracle: KV cache eviction policy retaining "heavy hitter" tokens via attention score accumulation

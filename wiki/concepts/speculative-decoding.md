@@ -1,10 +1,10 @@
 ---
 title: Speculative Decoding
 created: 2026-05-14
-updated: 2026-05-16
+updated: 2026-05-31
 type: concept
 tags: [inference, speculative]
-sources: [raw/papers/2211.17192v2.pdf, raw/papers/2603.03251v3.pdf]
+sources: [raw/papers/2211.17192v2.pdf, raw/papers/2603.03251v3.pdf, raw/papers/2401.15077v3.pdf, raw/papers/2406.16858v2.pdf, raw/papers/2503.01840v3.pdf, raw/papers/2602.06036v2.pdf]
 confidence: high
 ---
 
@@ -29,6 +29,22 @@ Autoregressive decoding from large Transformers is slow: generating K tokens req
 4. **Guarantee**: The joint distribution of accepted tokens is *identical* to M_p's autoregressive distribution
 
 The number of serial target model passes is at most 1 per generation step (and often fewer). The *expected* number of new tokens per target pass is >1 whenever the draft model is a reasonable approximator.
+
+## EAGLE Family: Feature-Level Speculative Decoding
+
+The EAGLE series dramatically improves acceptance rates by reconsidering *what* the draft model predicts:
+
+### [[eagle]] (Jan 2024 / Mar 2025)
+Performs autoregression at the **feature (second-to-top-layer) level** rather than token level. Features vary more smoothly than discrete tokens, making prediction easier. Resolves feature uncertainty by inputting the token sequence shifted one time step ahead. Trains only a lightweight single-layer decoder plug-in on top of the frozen target model. Achieves **2.7×–3.5× speedup** (lossless), with draft accuracy ~0.8 vs Medusa's ~0.6.
+
+### [[eagle-2]] (Jun 2024)
+EAGLE-1 uses a static draft tree (fixed candidates per position). EAGLE-2 observes acceptance rates are **context-dependent** and that EAGLE's draft model is well-calibrated. Uses confidence scores to build **dynamic draft trees** at runtime — expanding branches where confidence is high, pruning where low. No extra training. **3.05×–4.26× speedup**, 20–40% over EAGLE-1.
+
+### [[eagle-3]] (Apr 2025)
+Removes the feature prediction constraint entirely, switching to **direct token prediction + multi-layer feature fusion** (low/mid/high-level target features). Fixes the resulting distribution shift via **training-time test**: Step 2 of training uses the draft model's own imperfect Step 1 output as input, matching test conditions. Unlocks a **data scaling law** — acceptance rate grows proportionally with training data (EAGLE-1/2 showed near-flat scaling). **Up to 6.5× speedup**, ~1.4× over EAGLE-2.
+
+### [[dflash]] (May 2026, ICML 2026)
+Replaces autoregressive drafting with a **block diffusion adapter** conditioned on target model hidden features. All γ draft tokens are generated in a *single parallel forward pass* (constant drafting cost, independent of γ), breaking the linear scaling wall of AR drafters. **Over 6× lossless acceleration**, up to **2.5× over EAGLE-3** on math/code benchmarks (GSM8K 5.15×, Math500 6.08×, AIME25 5.62×).
 
 ## Speculative Sampling
 
@@ -89,3 +105,10 @@ Key challenge: predicting the bonus token (sampled from residual distribution) w
 - [[deepseek-v3-2]] — uses scalable RL for improved reasoning, orthogonal to inference-time optimizations
 - [[saguaro]] — SSD: parallelizes drafting and verification across separate hardware; 30% faster than SD baselines
 - [[deepseek-v4]] — architectural KV reduction via CSA/HCA, complementary to speculative decoding
+- [[eagle]] — feature-level AR drafting; 2.7×–3.5× speedup, lossless
+- [[eagle-2]] — dynamic draft trees; 3.05×–4.26×, 20–40% over EAGLE-1
+- [[eagle-3]] — direct token prediction + training-time test; up to 6.5×, data scaling law unlocked
+- [[dflash]] — block diffusion drafting; constant draft cost; 6×+ lossless, 2.5× over EAGLE-3
+- [[block-diffusion]] — DFlash's draft engine architecture
+- [[diffusion-language-models]] — DFlash uses diffusion as an AR model accelerator
+- [[inference-kv-speculative]] — deep-dive companion: full EAGLE family section, KV compression detail, SSD algorithm

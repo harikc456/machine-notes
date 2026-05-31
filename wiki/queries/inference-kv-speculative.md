@@ -1,7 +1,7 @@
 ---
 title: KV Cache Compression and Speculative Decoding — Detail
 created: 2026-05-19
-updated: 2026-05-19
+updated: 2026-05-31
 type: query
 tags: [inference, kv-cache, quantization, speculative, survey]
 sources: []
@@ -153,6 +153,55 @@ The draft model is the key variable:
 - Specialized draft head trained on top of the target model's early layers
 - Self-drafting (Medusa): multiple draft heads attached to the target model
 
+### EAGLE Family: Feature-Level and Beyond
+
+The EAGLE series reconsiders *what* the draft model predicts and how it is structured, achieving far higher acceptance rates than vanilla SD.
+
+#### [[eagle]] — Feature-Level AR Drafting (Mar 2025)
+
+**Key insight**: Feature sequences (second-to-top-layer hidden states) are smoother and easier to autoregressively predict than discrete token sequences. EAGLE trains a single lightweight transformer decoder plug-in that autoregressively predicts the next feature, then uses the frozen target LM head to convert it to a token distribution.
+
+**Uncertainty resolution**: Since the next feature depends on which token was sampled (e.g., "am" vs "always" yield different continuations), EAGLE feeds the actual token sequence shifted one time step ahead as an additional input — resolving the sampling ambiguity.
+
+**Draft accuracy**: ~0.8, vs ~0.6 for Medusa and lower for Lookahead. **2.7×–3.5× speedup** on LLaMA2-Chat 70B, lossless in both greedy and non-greedy settings.
+
+#### [[eagle-2]] — Context-Dependent Dynamic Draft Trees (Jun 2024)
+
+EAGLE uses a static draft tree (fixed number of candidates per position). EAGLE-2 observes acceptance rates are **context-dependent** — easy queries need fewer branches, hard ones need more. It leverages the fact that EAGLE's draft model is well-calibrated (its confidence scores ≈ true acceptance rates) to dynamically expand or prune the draft tree at runtime.
+
+**No extra training needed.** Works directly on any EAGLE checkpoint. **3.05×–4.26× speedup**, 20–40% over EAGLE-1.
+
+#### [[eagle-3]] — Training-Time Test (Apr 2025)
+
+**Root cause of EAGLE-1/2 data scaling plateau**: the feature prediction loss (l_fea) constrains the draft model's expressiveness; scaling training data hits diminishing returns because the constraint, not data, is the bottleneck.
+
+**Fix — direct token prediction + multi-layer feature fusion**: remove l_fea; predict tokens directly; fuse low-, mid-, and high-level target features as conditioning.
+
+**Problem this creates**: distribution shift at step 2. Step 1 now produces an unconstrained vector â (not a true feature f̂), so step 2 sees out-of-distribution input at inference time.
+
+**Training-time test**: during training, step 2 is fed â from step 1 (not the ground-truth feature). This exactly matches the inference distribution, closing the shift.
+
+**Result**: **up to 6.5× speedup**, ~1.4× over EAGLE-2. Critically, acceptance rate now scales proportionally with training data — a data scaling law that was absent in EAGLE-1/2.
+
+#### [[dflash]] — Block Diffusion for Parallel Drafting (ICML 2026)
+
+**Root cause of all AR-based SD ceiling**: drafting is still sequential — T_draft = γ × t_step grows linearly with speculation length, capping practical speedups at ~2–3× even with high acceptance rates.
+
+**Fix**: replace AR drafting with a **block diffusion adapter** conditioned on the target model's hidden features. All γ draft tokens are generated in a **single parallel forward pass** (T_draft = t_parallel, constant). "The target knows best" — large AR model hidden states implicitly encode multi-step future-token information; the diffusion adapter reads these features to generate high-quality parallel drafts without being large itself.
+
+**Results on Qwen3-8B (SGLang)**:
+
+| Benchmark | EAGLE-3 | DFlash |
+|---|---|---|
+| GSM8K | 2.23× | 5.15× |
+| Math500 | 2.05× | 6.08× |
+| AIME25 | 2.05× | 5.62× |
+| HumanEval | 2.17× | 5.14× |
+| MBPP | 1.93× | 4.65× |
+| MT-Bench | 1.90× | 2.75× |
+
+Over 6× lossless acceleration on math/code, **2.5× over EAGLE-3** across most tasks. MT-Bench lower (2.75×) — conversational tasks have less concentrated future-token signal in hidden states.
+
 ### Self-Speculative Decoding
 
 Variant that eliminates the separate draft model. See [[early-exit-inference]] for full coverage.
@@ -200,6 +249,12 @@ Trade-off: no extra model memory, but draft quality bounded by early-exit repres
 - [[turboquant]] — data-oblivious near-optimal KV quantization entity page
 - [[spectralquant]] — calibrated spectral KV quantization entity page
 - [[speculative-decoding]] — speculative decoding concept page
+- [[eagle]] — feature-level AR drafting; 2.7–3.5× lossless
+- [[eagle-2]] — dynamic draft trees; 3.05–4.26×; no extra training
+- [[eagle-3]] — training-time test; up to 6.5×; data scaling law
+- [[dflash]] — block diffusion parallel drafting; 6×+; 2.5× over EAGLE-3
 - [[saguaro]] — SSD: parallel drafting + verification on separate hardware
 - [[layerskip]] — Meta's self-speculative decoding via layer dropout
 - [[early-exit-inference]] — early exit and layer skipping (LayerSkip, SWIFT, DASH)
+- [[block-diffusion]] — BD3-LM: DFlash's draft engine architecture
+- [[diffusion-language-models]] — DLMs as AR model accelerators (DFlash)

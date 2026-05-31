@@ -215,3 +215,40 @@
   - queries/inference-improvements-summary.md — §3/§4 replaced with brief summaries + links; trimmed to ~190 lines; links to new pages and [[memory-inference-research-gaps]]
   - queries/memory-reduction-survey.md — retitled to training-only; Part II inference content removed; training summary table + cross-cutting themes retained; links to new pages and [[memory-inference-research-gaps]]
 - index.md updated: total pages 46 → 48; added entries for inference-kv-speculative and memory-inference-techniques
+
+## [2026-05-31] ingest | Batch ingest: 4 new papers — EAGLE family + DFlash
+- Sources ingested:
+  - 2401.15077v3.pdf → EAGLE: Speculative Sampling Requires Rethinking Feature Uncertainty (Li et al., Peking U/MSR/Waterloo, Mar 2025)
+  - 2406.16858v2.pdf → EAGLE-2: Faster Inference with Dynamic Draft Trees (Li et al., Jun 2024)
+  - 2503.01840v3.pdf → EAGLE-3: Scaling Inference Acceleration via Training-Time Test (Li et al., Apr 2025)
+  - 2602.06036v2.pdf → DFlash: Block Diffusion for Flash Speculative Decoding (Chen/Liang/Liu, UC San Diego, ICML 2026)
+- Pages created:
+  - entities/eagle.md — feature-level AR drafting; uncertainty resolution via shifted token input; 2.7×–3.5× lossless
+  - entities/eagle-2.md — dynamic draft trees via calibrated confidence scores; 3.05×–4.26×; no extra training
+  - entities/eagle-3.md — direct token prediction + multi-layer features + training-time test; up to 6.5×; data scaling law
+  - entities/dflash.md — block diffusion adapter for parallel drafting; constant draft cost; 6×+ lossless, 2.5× over EAGLE-3
+- Pages updated:
+  - concepts/speculative-decoding.md — added EAGLE Family section (EAGLE/EAGLE-2/EAGLE-3/DFlash); updated See Also; updated sources
+  - concepts/diffusion-language-models.md — added DFlash entry under Key Systems; updated See Also; updated sources
+  - entities/block-diffusion.md — added "Use in DFlash" section; updated See Also
+- index.md updated: total pages 48 → 51; added eagle, eagle-2, eagle-3, dflash entries
+
+## [2026-05-31] update | queries/ — extended with EAGLE family + DFlash
+- queries/inference-improvements-summary.md — §4 speculative decoding: added EAGLE/EAGLE-2/EAGLE-3/DFlash with key numbers; updated cross-cutting themes table (4 new rows); updated See Also
+- queries/inference-kv-speculative.md — §4 speculative decoding: added full EAGLE Family section (EAGLE/EAGLE-2/EAGLE-3/DFlash with technical detail, result tables, root-cause analysis); updated See Also
+- queries/memory-inference-techniques.md — §13 speculative decoding: added EAGLE family + DFlash memory model paragraph; updated summary table (2 new rows); updated See Also
+- queries/memory-inference-research-gaps.md — updated page count (45→51); added §3e (DFlash acceptance rate degradation gap); added 2 new composition rows to §4 table; added gap #6 to ranked targets; updated See Also
+
+## [2026-05-31] lint | 4 issues found, all fixed
+- Broken wikilinks: 0
+- Orphans: 0
+- Index completeness: 51/51 pages in index.md ✓
+- Frontmatter: all valid ✓
+- Tags: all 21 taxonomy tags valid, no unknown tags ✓
+- Log size: 240 lines, well within 500-entry rotation threshold ✓
+- Oversized (1): queries/inference-kv-speculative.md at 260 lines — accepted (query pages exempt from 200-line split rule, per prior precedent)
+- Near-orphans fixed (3):
+  - concepts/speculative-decoding.md → added [[inference-kv-speculative]] to See Also
+  - queries/memory-inference-techniques.md → added [[inference-kv-speculative]] to See Also
+  - queries/memory-inference-research-gaps.md → added [[inference-kv-speculative]] to See Also
+  - concepts/weight-norm-training.md → added [[derf]] and [[normalization-free-transformers]] to See Also

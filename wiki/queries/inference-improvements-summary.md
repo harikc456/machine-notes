@@ -1,7 +1,7 @@
 ---
 title: LLM Inference Improvements — Structured Survey
 created: 2026-05-14
-updated: 2026-05-19
+updated: 2026-05-31
 type: query
 tags: [inference, architecture, quantization, kv-cache, speculative, attention, survey, training]
 sources: []
@@ -89,7 +89,7 @@ Key results: **TriAttention** achieves 10.7× KV reduction at matched accuracy f
 
 Draft-then-verify paradigm for lossless inference speedup. See [[inference-kv-speculative]] for the full algorithm walkthrough, rejection sampling proof, and self-speculative variants (LayerSkip, SWIFT, DASH).
 
-Key results: **Standard SD** delivers 2–3× lossless speedup (exact distributional match to target). **Saguaro** (May 2026) parallelizes speculator and verifier on separate hardware, predicting verification outcomes with ~90% accuracy — 30% faster than strongest SD baselines, up to **5× over AR**. **LayerSkip** self-speculative decoding: up to 2.16× speedup, zero extra model memory. See [[saguaro]], [[speculative-decoding]], [[layerskip]].
+Key results: **Standard SD** delivers 2–3× lossless speedup (exact distributional match to target). **[[eagle]]** (feature-level AR drafting, Mar 2025): 2.7×–3.5×. **[[eagle-2]]** (dynamic draft trees, Jun 2024): 3.05×–4.26×, 20-40% over EAGLE-1. **[[eagle-3]]** (direct token prediction + training-time test, Apr 2025): up to 6.5×; unlocks data scaling law. **[[dflash]]** (block diffusion parallel drafting, ICML 2026): constant draft cost regardless of draft length; 6×+ lossless, 2.5× over EAGLE-3. **Saguaro** (May 2026): orthogonal — parallelizes speculator and verifier on separate hardware; 30% over SD baselines, up to 5× over AR. **LayerSkip** self-speculative decoding: up to 2.16× speedup, zero extra model memory. See [[speculative-decoding]], [[inference-kv-speculative]] for full detail.
 
 ---
 
@@ -152,6 +152,10 @@ DLMs offer **parallel token generation** — a fundamentally different inference
 | PolarQuant / TurboQuant | Small quality loss | KV memory ↓ 3–5× |
 | SpectralQuant | 15s calibration | KV memory ↓ 5.95×; +1.7–2.8 pp cosine sim vs TurboQuant; 4.5× decode speedup |
 | Speculative decoding | Requires draft model | Latency ↓ 2–3× (lossless) |
+| EAGLE (feature-level AR drafting) | Draft model training; frozen target | Latency ↓ 2.7–3.5× (lossless) |
+| EAGLE-2 (dynamic draft trees) | Context-dependent tree expansion logic | Latency ↓ 3.05–4.26× (lossless, no extra training) |
+| EAGLE-3 (training-time test) | Larger draft training dataset | Latency ↓ up to 6.5×; data scaling law unlocked |
+| DFlash (block diffusion drafting) | Draft adapter training; constant draft overhead | Latency ↓ 6×+; 2.5× over EAGLE-3; lossless |
 | Saguaro (SSD) | Separate speculator hardware; prediction overhead | Latency ↓ 5× vs AR, 30% over SD (lossless) |
 | Self-speculative (LayerSkip) | Draft quality vs separate model | Latency ↓ 1.3–2.2× (lossless, no extra memory) |
 | Flash Attention | Recomputes during backward pass | Attention IO ↓ 7.6×; memory O(N) |
@@ -173,10 +177,14 @@ DLMs offer **parallel token generation** — a fundamentally different inference
 - [[spectralquant]] — calibrated spectral KV quantization; breaks TurboQuant's data-oblivious bound
 - [[triattention]] — pre-RoPE KV compression; best for long-context reasoning
 - [[speculative-decoding]] — detailed page with algorithm walkthrough, self-speculative, and SSD sections
+- [[eagle]] — feature-level AR speculative drafting; 2.7–3.5× lossless
+- [[eagle-2]] — dynamic draft trees; 3.05–4.26×; no extra training
+- [[eagle-3]] — direct token prediction + training-time test; up to 6.5×; data scaling law
+- [[dflash]] — block diffusion parallel drafting; constant draft cost; 6×+; 2.5× over EAGLE-3
 - [[saguaro]] — SSD: parallel drafting + verification on separate hardware
 - [[early-exit-inference]] — early exit and layer skipping (LayerSkip, SWIFT, DASH)
 - [[layerskip]] — Meta's self-speculative decoding via layer dropout
-- [[diffusion-language-models]] — DLM landscape: BD3-LM, I-DLM, quality gap
+- [[diffusion-language-models]] — DLM landscape: BD3-LM, I-DLM, DFlash
 - [[block-diffusion]] — BD3-LM: AR-over-blocks + within-block diffusion
 - [[i-dlm]] — introspective DLM: ISD decoding, AR-compatible serving
 - [[flash-attention]] — IO-aware tiled attention kernel

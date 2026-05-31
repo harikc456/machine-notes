@@ -1,7 +1,7 @@
 ---
 title: Research Gaps in Memory Reduction and Inference Optimization
 created: 2026-05-19
-updated: 2026-05-19
+updated: 2026-05-31
 type: query
 tags: [survey, inference, kv-cache, quantization, sparsity, attention, comparison]
 sources: []
@@ -14,7 +14,7 @@ A critical-thinking pass over the wiki's memory/inference coverage ([[memory-red
 
 Most "gaps" below are not "this technique doesn't exist" — they are claims that have been *asserted but not rigorously tested*, or compositions everyone assumes will work.
 
-**Confidence is `medium`**: coverage is bounded by the wiki's current 45 pages. Some gaps may already be addressed by published work not yet ingested.
+**Confidence is `medium`**: coverage is bounded by the wiki's current 51 pages. Some gaps may already be addressed by published work not yet ingested.
 
 ---
 
@@ -91,6 +91,11 @@ The "recompute over store" theme of [[memory-reduction-survey]] assumes modern a
 
 - *Gap:* position-encoding × eviction-stability matrix.
 
+### 3e. "Diffusion drafters are high-quality across all task types" ([[dflash]] premise)
+[[dflash]] achieves 6×+ speedup on math/code (GSM8K, AIME25) but only 2.75× on MT-Bench (conversational). This gap is unexplained in the paper — it could be that target model hidden states encode fewer future-token signals in open-ended dialogue than in structured reasoning, making the diffusion adapter less accurate as a drafter.
+
+- *Gap:* systematic analysis of when diffusion drafting acceptance rates drop. Needed to determine the boundary conditions for DFlash's 2.5× advantage over EAGLE-3.
+
 ### 3d. "Self-speculative is free" ([[layerskip]] premise)
 [[layerskip]] adds zero parameters for the draft, but draft quality is bounded by early-layer representational power. Empirical results are on Llama-class dense models.
 
@@ -111,6 +116,8 @@ Asserted as additive. **No paper in the wiki runs the full stack and measures ad
 | INT4 weights × KV quant | Compounding numerical error → accuracy collapse below thresholds |
 | MLA × KV quant | Low-rank latent has different statistics than raw K/V → quant methods miscalibrated |
 | Eviction × speculative decoding | Verifier's KV state may diverge from drafter's after eviction |
+| EAGLE-3 data scaling × KV quantization | More training data improves acceptance rate — does applying KV quant at inference degrade the acceptance rate faster than standard SD? |
+| DFlash × tensor parallelism | Diffusion adapter is conditioned on target hidden states — correctness of this conditioning under TP sharding is unverified |
 | AttnRes × MLA | [[attnres]] reads preceding-layer features; latent attention may not preserve them |
 | MoE × KV eviction | Experts attend to different patterns → per-expert eviction policies? |
 
@@ -145,12 +152,13 @@ Ranked by tractability × impact:
 3. **Factorial composition study** (§4) — low novelty, high citation value.
 4. **Position-encoding × eviction-stability** (§3c) — would falsify or extend [[triattention]]'s central claim.
 5. **DLM memory optimization** (§2d) — entire stack to be re-derived for [[block-diffusion]] / [[i-dlm]].
+6. **DFlash acceptance rate degradation analysis** (§3e) — understanding why diffusion drafting underperforms on open-ended dialogue vs. structured reasoning; needed to scope the deployment envelope for [[dflash]] over [[eagle-3]].
 
 ---
 
 ## Caveats
 
-- Coverage assessment is bounded by the wiki's current 45 pages; some "gaps" may exist as published work not yet ingested. Recommended: a focused literature search on each gap before claiming novelty.
+- Coverage assessment is bounded by the wiki's current 51 pages; some "gaps" may exist as published work not yet ingested. Recommended: a focused literature search on each gap before claiming novelty.
 - Critique is structural — not independently re-validated against source PDFs in this analysis pass.
 - The "no standardized benchmark" claim (§1a) is synthesized from variance in metrics across wiki entries; community efforts (MLPerf-Inference variants, EfficientML benchmark proposals) may already exist and warrant a search.
 
@@ -167,3 +175,6 @@ Ranked by tractability × impact:
 - [[spectralquant]] — d_eff universality claim, see §3a
 - [[deepseek-v4]] — MLA/CSA, see §2b
 - [[diffusion-language-models]] — DLM landscape, see §2d
+- [[dflash]] — diffusion drafting for SD; see §3e
+- [[eagle-3]] — EAGLE-3 data scaling law; see §4 interaction rows
+- [[inference-kv-speculative]] — deep-dive on EAGLE family + KV compression; the detail layer behind the gaps above

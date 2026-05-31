@@ -1,7 +1,7 @@
 ---
 title: Block Diffusion (BD3-LM)
 created: 2026-05-16
-updated: 2026-05-16
+updated: 2026-05-31
 type: entity
 tags: [architecture, inference, training]
 sources: [raw/papers/2503.09573v3.pdf]
@@ -56,6 +56,10 @@ Block size L' controls the AR/diffusion tradeoff: L'=1 recovers standard AR; L'=
 - Tractable likelihood estimates (unlike Gaussian continuous diffusion LMs)
 - Generates sequences longer than training context
 
+## Use in DFlash (ICML 2026)
+
+[[dflash]] repurposes the block diffusion architecture as a **speculative decoding draft engine**. Instead of generating standalone text, a small BD3-LM adapter is conditioned on a target AR model's hidden features and generates draft tokens in parallel. The AR model verifies the draft (lossless). This demonstrates a new role for DLMs — accelerators for AR models rather than alternatives.
+
 ## Relationship to I-DLM
 
 [[i-dlm]] (Apr 2026) takes a different approach to closing the AR/diffusion quality gap: rather than block-AR structure, it introduces **introspective consistency training** and **causal attention** into diffusion models. Both target the same quality gap but from different angles — BD3-LM is more structurally similar to AR, while I-DLM converts pretrained AR models into DLMs.
@@ -63,7 +67,8 @@ Block size L' controls the AR/diffusion tradeoff: L'=1 recovers standard AR; L'=
 ## See Also
 
 - [[i-dlm]] — complementary approach to high-quality diffusion LMs; introspective consistency training
+- [[dflash]] — uses BD3-LM architecture as a speculative decoding draft engine; 6×+ lossless speedup
 - [[diffusion-language-models]] — concept page for the DLM landscape
-- [[speculative-decoding]] — orthogonal inference speedup; BD3-LM within-block parallelism is related
+- [[speculative-decoding]] — BD3-LM within-block parallelism enables DFlash's constant-cost drafting
 - [[kv-cache]] — BD3-LM re-enables KV caching that standard diffusion LMs cannot use
 - [[early-exit-inference]] — another axis of inference efficiency

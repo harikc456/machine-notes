@@ -19,8 +19,10 @@ def make_cfg(attn_type: str = "standard", ffn_type: str = "swiglu") -> ModelConf
 
 def test_ffn_registry_keys():
     expected = {
-        "swiglu", "rational", "rationalglu",
-        "pfd_rational", "pfd_rationalglu", "first_order_pfd_rational", "polar",
+        "swiglu", "relu_sq", "leaky_relu_sq",
+        "rational", "rationalglu",
+        "pfd_rational", "pfd_rationalglu", "first_order_pfd_rational",
+        "polar", "moe",
     }
     assert set(FFN_REGISTRY.keys()) == expected
 

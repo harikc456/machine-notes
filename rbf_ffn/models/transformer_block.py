@@ -34,15 +34,12 @@ def _build_norm(norm_type: str, d_model: int) -> nn.Module:
 
 FFN_REGISTRY: dict[str, type] = {
     "swiglu":                  SwiGLUFFN,
-    "relu_sq":                 ReLUSquaredFFN,
-    "leaky_relu_sq":           LeakyReLUSquaredFFN,
     "rational":                RationalFFN,
     "rationalglu":             RationalGatedFFN,
     "pfd_rational":            PFDRationalFFN,
     "pfd_rationalglu":         PFDRationalGatedFFN,
     "first_order_pfd_rational": FirstOrderPFDRationalFFN,
     "polar":                   AdaptivePolarMLP,
-    "moe":                     SparseMoEFFN,
 }
 
 

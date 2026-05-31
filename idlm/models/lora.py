@@ -46,6 +46,8 @@ def apply_lora(
             module.weight.requires_grad_(False)
             if module.bias is not None:
                 module.bias.requires_grad_(False)
-            setattr(model, name, LoRALinear(module, rank, alpha))
+            lora_layer = LoRALinear(module, rank, alpha)
+            lora_layer.to(device=module.weight.device, dtype=module.weight.dtype)
+            setattr(model, name, lora_layer)
         else:
             apply_lora(module, target_modules, rank, alpha)

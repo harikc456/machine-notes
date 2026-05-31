@@ -459,13 +459,13 @@ def parse_args():
     p.add_argument("--n_epochs",    type=int, default=None, help="Override n_epochs")
     p.add_argument("--resume",      type=str, default=None,
                    help="Experiment directory to resume training from")
-    p.add_argument("--resume_from", choices=["best", "final", "latest"], default=None,
+    p.add_argument("--resume_from", choices=["best", "final", "latest"], default="best",
                    help="Which checkpoint to load when resuming (default: best)")
     args = p.parse_args()
     if args.resume is None and args.config is None:
         p.error("--config is required when not using --resume")
-    if args.resume_from is not None and args.resume is None:
-        p.error("--resume_from requires --resume")
+    # --resume_from is only meaningful when --resume is also given;
+    # if resume is absent the value is simply ignored at runtime.
     return args
 
 

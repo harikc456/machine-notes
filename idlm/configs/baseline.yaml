@@ -1,0 +1,26 @@
+# I-DLM baseline: fine-tune the best rbf_ffn AR checkpoint (SwiGLU + QK-norm + weight-norm)
+# AR base: 58.16 val PPL on WikiText-103
+ar_checkpoint: rbf_ffn/experiments/20260404_105557_877306_standard_swiglu_qknorm_wnorm_d256/checkpoint_best.pt
+
+# LoRA
+lora_rank: 8
+lora_alpha: 16.0
+lora_target_modules: [q_proj, v_proj]
+
+# Training
+seq_len: 512
+batch_size: 8
+max_steps: 10000
+lr: 0.0003
+warmup_steps: 200
+grad_clip: 1.0
+seed: 42
+
+# Evaluation / ISD
+eval_every: 500
+stride: 4
+num_eval_examples: 200
+prompt_len: 64
+gen_len: 128
+
+vocab_size: 50257

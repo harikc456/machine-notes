@@ -12,6 +12,7 @@ A personal ML research lab notebook — independent experiments in transformer a
 | [`grokking/`](#grokking) | Grokking on modular arithmetic | Synthetic | Active |
 | [`hyvit/`](#hyvit) | Hyperbolic Vision Transformer (Lorentz space) | CIFAR-10 | Active |
 | [`flow_matching/`](#flow_matching) | Flow matching experiments | — | Active |
+| [`idlm/`](#idlm) | Introspective Diffusion LM (I-DLM) — LoRA fine-tune AR checkpoint with masked diffusion objective + ISD decoding | WikiText-103 | Active |
 | [`archive/`](#archive) | Archived earlier experiments | — | Archived |
 
 ---
@@ -124,6 +125,20 @@ See [`hyvit/README.md`](hyvit/README.md) for setup, architecture diagram, and tr
 ## flow_matching
 
 Flow matching experiments. See [`flow_matching/`](flow_matching/) for configs and training scripts.
+
+---
+
+## idlm
+
+Small-scale reproduction of [I-DLM](https://arxiv.org/abs/2604.11035): fine-tune a frozen `rbf_ffn` AR checkpoint with LoRA adapters using the introspective-consistency training objective, then evaluate with Introspective Strided Decoding.
+
+Key metrics: introspective acceptance rate α, perplexity, and TPF/OH compute efficiency.
+
+```bash
+python -m idlm.train --config idlm/configs/baseline.yaml
+```
+
+See [`idlm/README.md`](idlm/README.md) for full config reference and ISD evaluation instructions.
 
 ---
 

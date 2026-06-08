@@ -166,3 +166,16 @@ def test_ar_generate_caps_to_real_vocab():
     model = _BigVocabLM()
     out = ar_generate(model, [1], gen_len=5, device=torch.device("cpu"), real_vocab_size=50257)
     assert all(0 <= t < 50257 for t in out[1:])
+
+
+def test_load_rbf_model_raises_on_missing_checkpoint(tmp_path):
+    from idlm.chat_utils import load_rbf_model
+    run_dir = tmp_path / "20260404_swiglu_d256"
+    run_dir.mkdir()
+    (run_dir / "config.yaml").write_text(
+        "d_model: 64\nn_heads: 2\nn_layers: 2\nvocab_size: 50257\nseq_len: 64\n"
+    )
+    # no checkpoint_best.pt
+    import torch
+    with pytest.raises(FileNotFoundError):
+        load_rbf_model(run_dir, device=torch.device("cpu"))

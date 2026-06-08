@@ -7,7 +7,7 @@ import torch
 
 from idlm.config import IDLMConfig, load_config
 from idlm.models.idlm_model import IDLMCausalLM
-from rbf_ffn.config import load_config as load_ar_config, ModelConfig  # noqa: F401
+from rbf_ffn.config import load_config as load_ar_config, ModelConfig
 from rbf_ffn.models.model import CausalLM
 
 
@@ -145,3 +145,19 @@ def ar_generate(
         next_id = int(torch.multinomial(probs, num_samples=1).item())
         ids.append(next_id)
     return ids
+
+
+def load_rbf_model(
+    run_dir: Path,
+    device: torch.device,
+) -> tuple[CausalLM, ModelConfig]:
+    """Load a plain rbf_ffn CausalLM checkpoint."""
+    cfg = load_ar_config(run_dir / "config.yaml")
+    ckpt_path = run_dir / "checkpoint_best.pt"
+    if not ckpt_path.exists():
+        raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
+    model = CausalLM(cfg).to(device)
+    ckpt = torch.load(ckpt_path, map_location=device, weights_only=True)
+    model.load_state_dict(ckpt["model"])
+    model.eval()
+    return model, cfg

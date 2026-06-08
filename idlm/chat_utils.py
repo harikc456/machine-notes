@@ -7,7 +7,7 @@ import torch
 
 from idlm.config import IDLMConfig, load_config
 from idlm.models.idlm_model import IDLMCausalLM
-from rbf_ffn.config import load_config as load_ar_config
+from rbf_ffn.config import load_config as load_ar_config, ModelConfig
 from rbf_ffn.models.model import CausalLM
 
 
@@ -16,6 +16,7 @@ class RunInfo:
     dir_name: str
     run_dir: Path
     final_loss: float | None
+    model_type: str = "idlm"  # "idlm" or "rbf"
 
     @property
     def label(self) -> str:
@@ -39,6 +40,7 @@ def discover_runs(experiments_dir: Path) -> list[RunInfo]:
             dir_name=run_dir.name,
             run_dir=run_dir,
             final_loss=final_loss,
+            model_type="idlm",
         ))
     return runs
 
@@ -86,3 +88,60 @@ def load_model(
         raise RuntimeError(f"Unexpected keys in LoRA checkpoint: {unexpected}")
     model.eval()
     return model, cfg
+
+
+def discover_rbf_runs(experiments_dir: Path) -> list[RunInfo]:
+    """Scan rbf_ffn experiments_dir for valid AR runs, sorted newest-first."""
+    runs: list[RunInfo] = []
+    for run_dir in sorted(experiments_dir.iterdir(), reverse=True):
+        if not run_dir.is_dir():
+            continue
+        if not (run_dir / "checkpoint_best.pt").exists():
+            continue
+        if not (run_dir / "config.yaml").exists():
+            continue
+        final_loss = _read_rbf_val_loss(run_dir / "metrics.jsonl")
+        runs.append(RunInfo(
+            dir_name=run_dir.name,
+            run_dir=run_dir,
+            final_loss=final_loss,
+            model_type="rbf",
+        ))
+    return runs
+
+
+def _read_rbf_val_loss(metrics_path: Path) -> float | None:
+    if not metrics_path.exists():
+        return None
+    last_val_loss = None
+    try:
+        for line in metrics_path.read_text().splitlines():
+            row = json.loads(line)
+            if "val_loss" in row:
+                last_val_loss = float(row["val_loss"])
+    except (json.JSONDecodeError, OSError, ValueError):
+        return None
+    return last_val_loss
+
+
+@torch.no_grad()
+def ar_generate(
+    model,
+    prompt_ids: list[int],
+    gen_len: int,
+    device: torch.device,
+    real_vocab_size: int = 50257,
+) -> list[int]:
+    """Autoregressive generation, capping logits to real_vocab_size."""
+    model.eval()
+    ids = list(prompt_ids)
+    max_ctx = 512
+    for _ in range(gen_len):
+        ctx = ids[-max_ctx:]
+        tokens = torch.tensor(ctx, dtype=torch.long, device=device).unsqueeze(0)
+        logits, _ = model(tokens)
+        next_logits = logits[0, -1, :real_vocab_size]
+        probs = torch.softmax(next_logits, dim=-1)
+        next_id = int(torch.multinomial(probs, num_samples=1).item())
+        ids.append(next_id)
+    return ids

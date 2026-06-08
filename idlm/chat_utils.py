@@ -163,6 +163,10 @@ def load_rbf_model(
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=True)
     if "model" not in ckpt:
         raise KeyError(f"Checkpoint at {ckpt_path} has no 'model' key; keys found: {list(ckpt.keys())}")
-    model.load_state_dict(ckpt["model"])
+    try:
+        model.load_state_dict(ckpt["model"])
+    except RuntimeError as e:
+        msg = str(e).split("\n")[0]  # first line only — skip the massive key list
+        raise RuntimeError(f"Architecture mismatch for {run_dir.name}: {msg}") from None
     model.eval()
     return model, cfg

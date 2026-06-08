@@ -71,6 +71,8 @@ def load_model(
         raise FileNotFoundError(f"AR checkpoint not found: {ar_ckpt_path}")
 
     ar_config_yaml = ar_ckpt_path.parent / "config.yaml"
+    if not ar_config_yaml.exists():
+        raise FileNotFoundError(f"AR config not found: {ar_config_yaml}")
     ar_cfg = load_ar_config(ar_config_yaml)
     ar_model = CausalLM(ar_cfg).to(device)
     ar_ckpt = torch.load(ar_ckpt_path, map_location=device, weights_only=True)
@@ -79,6 +81,8 @@ def load_model(
     model = IDLMCausalLM(ar_model, cfg.lora_rank, cfg.lora_alpha, cfg.lora_target_modules)
     lora_ckpt_path = run_dir / "checkpoint_best.pt"
     lora_ckpt = torch.load(lora_ckpt_path, map_location=device, weights_only=True)
-    model.load_state_dict(lora_ckpt["lora_state"], strict=False)
+    missing, unexpected = model.load_state_dict(lora_ckpt["lora_state"], strict=False)
+    if unexpected:
+        raise RuntimeError(f"Unexpected keys in LoRA checkpoint: {unexpected}")
     model.eval()
     return model, cfg

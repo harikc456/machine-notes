@@ -81,5 +81,5 @@ def test_load_model_raises_on_missing_ar_checkpoint(tmp_path):
     )
     (run_dir / "checkpoint_best.pt").touch()  # exists but empty
     import torch
-    with pytest.raises(Exception):
+    with pytest.raises(FileNotFoundError):
         load_model(run_dir, repo_root=tmp_path, device=torch.device("cpu"))

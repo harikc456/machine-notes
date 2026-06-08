@@ -13,9 +13,10 @@ import tiktoken
 import torch
 
 from idlm.chat_utils import RunInfo, discover_runs, load_model
+from idlm.config import load_config as _load_idlm_config
 from idlm.generate import isd_generate
 
-EXPERIMENTS_DIR = Path("idlm/experiments")
+EXPERIMENTS_DIR = Path(__file__).parent / "experiments"
 REPO_ROOT = Path(".")
 
 st.set_page_config(page_title="I-DLM Chat", layout="wide")
@@ -45,17 +46,31 @@ with st.sidebar:
         st.stop()
 
     run_labels = [r.label for r in runs]
+
+    def _reset_slider_defaults():
+        """Called when run selection changes — reset slider keys from new run's config."""
+        idx = st.session_state["run_selector"]
+        run = runs[idx]
+        try:
+            cfg = _load_idlm_config(run.run_dir / "config.yaml")
+            st.session_state["stride_slider"] = cfg.stride
+            st.session_state["gen_len_slider"] = cfg.gen_len
+        except Exception:
+            st.session_state["stride_slider"] = 4
+            st.session_state["gen_len_slider"] = 128
+
     selected_idx = st.selectbox(
         "Run",
         range(len(runs)),
         format_func=lambda i: run_labels[i],
+        key="run_selector",
+        on_change=_reset_slider_defaults,
     )
     selected_run = runs[selected_idx]
 
-    # Load defaults from this run's config (best-effort)
+    # Load defaults for initial render only (session state wins on subsequent renders)
     try:
-        from idlm.config import load_config as _lc
-        _default_cfg = _lc(selected_run.run_dir / "config.yaml")
+        _default_cfg = _load_idlm_config(selected_run.run_dir / "config.yaml")
         default_stride = _default_cfg.stride
         default_gen_len = _default_cfg.gen_len
     except Exception:
@@ -63,9 +78,9 @@ with st.sidebar:
         default_gen_len = 128
 
     stride = st.slider("Stride", min_value=1, max_value=16,
-                       value=default_stride, step=1)
+                       value=default_stride, step=1, key="stride_slider")
     gen_len = st.slider("Gen len", min_value=32, max_value=512,
-                        value=default_gen_len, step=32)
+                        value=default_gen_len, step=32, key="gen_len_slider")
 
     st.divider()
 
@@ -85,6 +100,8 @@ with st.sidebar:
 
     if "model_key" in st.session_state:
         st.success(f"Loaded: {st.session_state['model_key'][:15]}")
+        if st.session_state["model_key"] != selected_run.dir_name:
+            st.warning("Loaded model is from a different run — click Load Model to apply.")
 
 # ── Main area ──────────────────────────────────────────────────────────────────
 prompt_text = st.text_area(

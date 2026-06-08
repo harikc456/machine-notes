@@ -60,10 +60,14 @@ def get_rbf_runs() -> list[RunInfo]:
 with st.sidebar:
     st.header("Model")
 
+    def _reset_run_selector():
+        st.session_state["run_selector"] = 0
+
     model_family = st.radio(
         "Model family",
         ["I-DLM (ISD)", "rbf_ffn (AR)"],
         key="model_family",
+        on_change=_reset_run_selector,
     )
     is_idlm = model_family == "I-DLM (ISD)"
 
@@ -136,7 +140,9 @@ with st.sidebar:
 
     if "model_key" in st.session_state:
         st.success(f"Loaded: {st.session_state['model_key'][:15]}")
-        if st.session_state["model_key"] != selected_run.dir_name:
+        loaded_family = st.session_state.get("model_type", "idlm")
+        current_family = "idlm" if is_idlm else "rbf"
+        if st.session_state["model_key"] != selected_run.dir_name or loaded_family != current_family:
             st.warning("Loaded model is from a different run — click Load Model to apply.")
 
 # ── Main area ────────────────────────────────────────────────────────────────────
@@ -157,11 +163,13 @@ if generate_clicked and prompt_text.strip():
     model = st.session_state["model"]
     base_cfg = st.session_state["model_cfg"]
     device = st.session_state["device"]
-    loaded_type = st.session_state["model_type"]
+    loaded_type = st.session_state.get("model_type", "idlm")
+    _stride = st.session_state.get("stride_slider", 4)
+    _gen_len = st.session_state.get("gen_len_slider", 128)
 
     if loaded_type == "idlm":
         enc = get_idlm_tokenizer()
-        cfg_override = dataclasses.replace(base_cfg, stride=stride, gen_len=gen_len)
+        cfg_override = dataclasses.replace(base_cfg, stride=_stride, gen_len=_gen_len)
         prompt_ids = enc.encode(prompt_text)
         with st.spinner("Generating (ISD)…"):
             output_ids = isd_generate(model, prompt_ids, cfg_override, device)
@@ -171,7 +179,7 @@ if generate_clicked and prompt_text.strip():
         enc = get_rbf_tokenizer()
         prompt_ids = enc.encode(prompt_text)
         with st.spinner("Generating (AR)…"):
-            output_ids = ar_generate(model, prompt_ids, gen_len=gen_len, device=device)
+            output_ids = ar_generate(model, prompt_ids, gen_len=_gen_len, device=device)
         generated_ids = output_ids[len(prompt_ids):]
 
     generated_text = enc.decode(generated_ids)

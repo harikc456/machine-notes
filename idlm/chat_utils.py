@@ -45,6 +45,6 @@ def _read_final_loss(metrics_path: Path) -> float | None:
             row = json.loads(line)
             if row.get("type") == "step" and "loss" in row:
                 last_step_loss = float(row["loss"])
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError, ValueError):
         return None
     return last_step_loss

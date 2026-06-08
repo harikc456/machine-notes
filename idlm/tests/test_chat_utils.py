@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 import pytest
-from idlm.chat_utils import discover_runs, RunInfo
+from idlm.chat_utils import discover_runs, RunInfo, load_model
 
 
 def _make_run(root: Path, name: str, steps: list[dict]) -> Path:
@@ -71,3 +71,15 @@ def test_run_info_label_no_loss(tmp_path):
     (run_dir / "config.yaml").write_text("ar_checkpoint: x.pt\n")
     runs = discover_runs(tmp_path)
     assert "N/A" in runs[0].label
+
+
+def test_load_model_raises_on_missing_ar_checkpoint(tmp_path):
+    run_dir = tmp_path / "20260607_113459_031611_idlm_r8_s4"
+    run_dir.mkdir()
+    (run_dir / "config.yaml").write_text(
+        "ar_checkpoint: /nonexistent/path/checkpoint_best.pt\n"
+    )
+    (run_dir / "checkpoint_best.pt").touch()  # exists but empty
+    import torch
+    with pytest.raises(Exception):
+        load_model(run_dir, repo_root=tmp_path, device=torch.device("cpu"))

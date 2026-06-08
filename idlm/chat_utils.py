@@ -7,7 +7,7 @@ import torch
 
 from idlm.config import IDLMConfig, load_config
 from idlm.models.idlm_model import IDLMCausalLM
-from rbf_ffn.config import load_config as load_ar_config, ModelConfig
+from rbf_ffn.config import load_config as load_ar_config, ModelConfig  # noqa: F401
 from rbf_ffn.models.model import CausalLM
 
 
@@ -131,11 +131,11 @@ def ar_generate(
     gen_len: int,
     device: torch.device,
     real_vocab_size: int = 50257,
+    max_ctx: int = 512,
 ) -> list[int]:
     """Autoregressive generation, capping logits to real_vocab_size."""
     model.eval()
     ids = list(prompt_ids)
-    max_ctx = 512
     for _ in range(gen_len):
         ctx = ids[-max_ctx:]
         tokens = torch.tensor(ctx, dtype=torch.long, device=device).unsqueeze(0)

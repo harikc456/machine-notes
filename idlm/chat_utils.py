@@ -98,7 +98,8 @@ def discover_rbf_runs(experiments_dir: Path) -> list[RunInfo]:
             continue
         if not (run_dir / "checkpoint_best.pt").exists():
             continue
-        if not (run_dir / "config.yaml").exists():
+        config_path = run_dir / "config.yaml"
+        if not config_path.exists() or config_path.stat().st_size == 0:
             continue
         final_loss = _read_rbf_val_loss(run_dir / "metrics.jsonl")
         runs.append(RunInfo(
@@ -166,7 +167,9 @@ def load_rbf_model(
     try:
         model.load_state_dict(ckpt["model"])
     except RuntimeError as e:
-        msg = str(e).split("\n")[0]  # first line only — skip the massive key list
-        raise RuntimeError(f"Architecture mismatch for {run_dir.name}: {msg}") from None
+        lines = str(e).splitlines()
+        # Show first 4 lines to capture the actual reason, not the full key dump
+        summary = " | ".join(l.strip() for l in lines[:4] if l.strip())
+        raise RuntimeError(f"Architecture mismatch for {run_dir.name}: {summary}") from None
     model.eval()
     return model, cfg

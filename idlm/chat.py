@@ -110,13 +110,18 @@ with st.sidebar:
             default_stride = 4
             default_gen_len = 128
 
-        stride = st.slider("Stride", min_value=1, max_value=16,
-                           value=default_stride, step=1, key="stride_slider")
-        gen_len = st.slider("Gen len", min_value=32, max_value=512,
-                            value=default_gen_len, step=32, key="gen_len_slider")
+        # Seed session state on first render only — don't pass value= alongside key=
+        if "stride_slider" not in st.session_state:
+            st.session_state["stride_slider"] = default_stride
+        if "gen_len_slider" not in st.session_state:
+            st.session_state["gen_len_slider"] = default_gen_len
+
+        stride = st.slider("Stride", min_value=1, max_value=16, step=1, key="stride_slider")
+        gen_len = st.slider("Gen len", min_value=32, max_value=512, step=32, key="gen_len_slider")
     else:
-        gen_len = st.slider("Gen len", min_value=32, max_value=512,
-                            value=128, step=32, key="gen_len_slider")
+        if "gen_len_slider" not in st.session_state:
+            st.session_state["gen_len_slider"] = 128
+        gen_len = st.slider("Gen len", min_value=32, max_value=512, step=32, key="gen_len_slider")
 
     st.divider()
 

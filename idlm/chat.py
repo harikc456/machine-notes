@@ -6,7 +6,13 @@ Run from repo root:
 """
 from __future__ import annotations
 import dataclasses
+import sys
 from pathlib import Path
+
+# Ensure repo root is on the path when launched via `streamlit run idlm/chat.py`
+_repo_root = Path(__file__).parent.parent
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
 
 import streamlit as st
 import tiktoken
@@ -128,7 +134,9 @@ if generate_clicked and prompt_text.strip():
     with st.spinner("Generating…"):
         output_ids = isd_generate(model, prompt_ids, cfg_override, device)
 
-    generated_ids = output_ids[len(prompt_ids):]
+    # Filter out the mask token (50256) and any out-of-range IDs before decoding
+    _MASK_ID = 50256
+    generated_ids = [t for t in output_ids[len(prompt_ids):] if 0 <= t < _MASK_ID]
     generated_text = enc.decode(generated_ids)
 
     st.subheader("Output")

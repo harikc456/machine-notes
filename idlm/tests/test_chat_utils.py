@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 import pytest
-from idlm.chat_utils import discover_runs, RunInfo, load_model, discover_rbf_runs, ar_generate
+from idlm.chat_utils import discover_runs, RunInfo, load_model, discover_rbf_runs, ar_generate, load_rbf_model
 
 
 def _make_run(root: Path, name: str, steps: list[dict]) -> Path:
@@ -169,7 +169,6 @@ def test_ar_generate_caps_to_real_vocab():
 
 
 def test_load_rbf_model_raises_on_missing_checkpoint(tmp_path):
-    from idlm.chat_utils import load_rbf_model
     run_dir = tmp_path / "20260404_swiglu_d256"
     run_dir.mkdir()
     (run_dir / "config.yaml").write_text(

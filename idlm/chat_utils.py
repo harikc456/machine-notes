@@ -152,12 +152,17 @@ def load_rbf_model(
     device: torch.device,
 ) -> tuple[CausalLM, ModelConfig]:
     """Load a plain rbf_ffn CausalLM checkpoint."""
-    cfg = load_ar_config(run_dir / "config.yaml")
+    config_path = run_dir / "config.yaml"
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config not found: {config_path}")
+    cfg = load_ar_config(config_path)
     ckpt_path = run_dir / "checkpoint_best.pt"
     if not ckpt_path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
     model = CausalLM(cfg).to(device)
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=True)
+    if "model" not in ckpt:
+        raise KeyError(f"Checkpoint at {ckpt_path} has no 'model' key; keys found: {list(ckpt.keys())}")
     model.load_state_dict(ckpt["model"])
     model.eval()
     return model, cfg

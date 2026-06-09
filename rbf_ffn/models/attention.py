@@ -88,6 +88,13 @@ class PolarAttention(nn.Module):
         self.q_scale = nn.Parameter(torch.ones(H))
         self.k_scale = nn.Parameter(torch.ones(H))
         self._qkv_silu = cfg.qkv_silu
+        _gain_targets = set(cfg.qkv_gain_targets) if cfg.qkv_gain else set()
+        if "q" in _gain_targets:
+            self.q_gain = nn.Parameter(torch.zeros(H))
+        if "k" in _gain_targets:
+            self.k_gain = nn.Parameter(torch.zeros(H))
+        if "v" in _gain_targets:
+            self.v_gain = nn.Parameter(torch.zeros(H))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """x: (B, N, d_model)"""
@@ -114,6 +121,13 @@ class PolarAttention(nn.Module):
         q_dir = q_dir.transpose(1, 2)          # (B, H, N, head_dim)
         k_dir = k_dir.transpose(1, 2)
         v     = v.transpose(1, 2)
+
+        if hasattr(self, "q_gain"):
+            q_dir = q_dir * (1 + self.q_gain.view(1, -1, 1, 1))
+        if hasattr(self, "k_gain"):
+            k_dir = k_dir * (1 + self.k_gain.view(1, -1, 1, 1))
+        if hasattr(self, "v_gain"):
+            v = v * (1 + self.v_gain.view(1, -1, 1, 1))
         r_q   = r_q.transpose(1, 2)            # (B, H, N, 1)
         r_k   = r_k.transpose(1, 2)
 
@@ -175,6 +189,13 @@ class ExclusiveSelfAttention(nn.Module):
         if self._qk_norm:
             self.q_norm = nn.RMSNorm(self.head_dim)
             self.k_norm = nn.RMSNorm(self.head_dim)
+        _gain_targets = set(cfg.qkv_gain_targets) if cfg.qkv_gain else set()
+        if "q" in _gain_targets:
+            self.q_gain = nn.Parameter(torch.zeros(H))
+        if "k" in _gain_targets:
+            self.k_gain = nn.Parameter(torch.zeros(H))
+        if "v" in _gain_targets:
+            self.v_gain = nn.Parameter(torch.zeros(H))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """x: (B, N, d_model)"""
@@ -194,6 +215,13 @@ class ExclusiveSelfAttention(nn.Module):
         q = self.rope(split_heads(q_raw))   # (B, H, N, head_dim)
         k = self.rope(split_heads(k_raw))
         v = split_heads(v_raw)
+
+        if hasattr(self, "q_gain"):
+            q = q * (1 + self.q_gain.view(1, -1, 1, 1))
+        if hasattr(self, "k_gain"):
+            k = k * (1 + self.k_gain.view(1, -1, 1, 1))
+        if hasattr(self, "v_gain"):
+            v = v * (1 + self.v_gain.view(1, -1, 1, 1))
 
         if self._qk_norm:
             q = self.q_norm(q)
@@ -246,6 +274,13 @@ class CausalSelfAttention(nn.Module):
         if self._qk_norm:
             self.q_norm = nn.RMSNorm(self.head_dim)
             self.k_norm = nn.RMSNorm(self.head_dim)
+        _gain_targets = set(cfg.qkv_gain_targets) if cfg.qkv_gain else set()
+        if "q" in _gain_targets:
+            self.q_gain = nn.Parameter(torch.zeros(H))
+        if "k" in _gain_targets:
+            self.k_gain = nn.Parameter(torch.zeros(H))
+        if "v" in _gain_targets:
+            self.v_gain = nn.Parameter(torch.zeros(H))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """x: (B, N, d_model)"""
@@ -256,6 +291,13 @@ class CausalSelfAttention(nn.Module):
         q = self.rope(split_heads(F.silu(self.q_proj(x)) if self._qkv_silu else self.q_proj(x)))   # (B, H, N, head_dim)
         k = self.rope(split_heads(F.silu(self.k_proj(x)) if self._qkv_silu else self.k_proj(x)))
         v = split_heads(F.silu(self.v_proj(x)) if self._qkv_silu else self.v_proj(x))
+
+        if hasattr(self, "q_gain"):
+            q = q * (1 + self.q_gain.view(1, -1, 1, 1))
+        if hasattr(self, "k_gain"):
+            k = k * (1 + self.k_gain.view(1, -1, 1, 1))
+        if hasattr(self, "v_gain"):
+            v = v * (1 + self.v_gain.view(1, -1, 1, 1))
 
         # Apply QK normalization if enabled
         if self._qk_norm:

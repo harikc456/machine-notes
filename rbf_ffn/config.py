@@ -31,6 +31,11 @@ class ModelConfig:
     qk_norm: bool = False          # Enable QK normalization in attention
     qkv_silu: bool = False         # Apply SiLU after Q, K, V projections
 
+    # Per-head learnable gain: each head is scaled by (1 + g), g init=0.
+    # Applied after positional embeddings (post-RoPE for Q/K, post-split for V).
+    qkv_gain: bool = False
+    qkv_gain_targets: list[str] = field(default_factory=lambda: ["q", "k", "v"])  # subset of {"q","k","v"}
+
     # Sequence / vocab
     seq_len: int = 512
     vocab_size: int = 50257
@@ -121,6 +126,14 @@ class ModelConfig:
                     f"Prefer attn_type + ffn_type directly."
                 )
             self.attn_type, self.ffn_type = _MODEL_TYPE_MAP[self.model_type]
+
+        if self.qkv_gain:
+            valid_targets = {"q", "k", "v"}
+            bad = set(self.qkv_gain_targets) - valid_targets
+            if bad:
+                raise ValueError(f"qkv_gain_targets contains invalid entries: {bad}. Must be subset of {valid_targets}")
+            if not self.qkv_gain_targets:
+                raise ValueError("qkv_gain_targets must be non-empty when qkv_gain=True")
 
         if self.norm_type not in ("rmsnorm", "dynamic_erf"):
             raise ValueError(

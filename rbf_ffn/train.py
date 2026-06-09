@@ -51,6 +51,8 @@ def get_experiment_dir(cfg: ModelConfig) -> Path:
         norm_tags += "_orthogonal"
     if cfg.lm_head_lora_rank > 0:
         norm_tags += f"_loralm{cfg.lm_head_lora_rank}"
+    if cfg.qkv_gain:
+        norm_tags += f"_gain{''.join(sorted(cfg.qkv_gain_targets))}"
     name = f"{stamp}_{cfg.attn_type}_{cfg.ffn_type}{norm_tags}_d{cfg.d_model}"
     path = Path(__file__).parent / "experiments" / name
     path.mkdir(parents=True, exist_ok=True)

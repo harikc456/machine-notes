@@ -1,8 +1,8 @@
 """
-I-DLM / rbf_ffn Chat UI — select a checkpoint and generate text interactively.
+Chat UI — select a checkpoint and generate text interactively.
 
 Run from repo root:
-    PYTHONPATH=/path/to/machine-notes streamlit run idlm/chat.py
+    PYTHONPATH=/path/to/machine-notes streamlit run chat/chat.py
 """
 from __future__ import annotations
 import dataclasses
@@ -17,7 +17,7 @@ import streamlit as st
 import tiktoken
 import torch
 
-from idlm.chat_utils import (
+from chat.chat_utils import (
     RunInfo,
     ar_generate,
     discover_rbf_runs,
@@ -28,9 +28,9 @@ from idlm.chat_utils import (
 from idlm.config import load_config as _load_idlm_config
 from idlm.generate import isd_generate
 
-IDLM_EXPERIMENTS_DIR = Path(__file__).parent / "experiments"
-RBF_EXPERIMENTS_DIR = Path(__file__).parent.parent / "rbf_ffn" / "experiments"
-REPO_ROOT = Path(__file__).parent.parent
+IDLM_EXPERIMENTS_DIR = _repo_root / "idlm" / "experiments"
+RBF_EXPERIMENTS_DIR = _repo_root / "rbf_ffn" / "experiments"
+REPO_ROOT = _repo_root
 
 st.set_page_config(page_title="I-DLM / rbf_ffn Chat", layout="wide")
 st.title("I-DLM / rbf_ffn Chat")

@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 import pytest
-from idlm.chat_utils import discover_runs, RunInfo, load_model, discover_rbf_runs, ar_generate, load_rbf_model
+from chat.chat_utils import discover_runs, RunInfo, load_model, discover_rbf_runs, ar_generate, load_rbf_model
 
 
 def _make_run(root: Path, name: str, steps: list[dict]) -> Path:

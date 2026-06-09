@@ -13,19 +13,19 @@ class IDLMConfig:
     # LoRA
     lora_rank: int = 8
     lora_alpha: float = 16.0
-    lora_target_modules: list[str] = field(default_factory=lambda: ["q_proj", "v_proj"])
+    lora_target_modules: list[str] = field(default_factory=lambda: ["q_proj", "k_proj", "v_proj"])
 
     # Training
     seq_len: int = 512
     batch_size: int = 8
-    max_steps: int = 10_000
+    max_epochs: int = 10
     lr: float = 3e-4
     warmup_steps: int = 200
     grad_clip: float = 1.0
     seed: int = 42
 
     # Evaluation / ISD
-    eval_every: int = 500
+    eval_every_epochs: int = 1
     stride: int = 4
     num_eval_examples: int = 200
     prompt_len: int = 64

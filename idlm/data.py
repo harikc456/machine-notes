@@ -36,13 +36,20 @@ def _load_split(split: str, seq_len: int) -> torch.Tensor:
     if cache_file.exists():
         return torch.load(cache_file, weights_only=True)
 
+    import os
     import tiktoken
     from datasets import load_dataset
 
     enc = tiktoken.get_encoding("r50k_base")
     dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split=split)
     texts = [row["text"] for row in dataset if row["text"].strip() != ""]
-    tokens = enc.encode("\n".join(texts))
+    # encode_batch parallelises across threads; flatten and join with newline token
+    nl_tok = enc.encode("\n")[0]
+    encoded = enc.encode_batch(texts, num_threads=os.cpu_count() or 4)
+    tokens: list[int] = []
+    for toks in encoded:
+        tokens.extend(toks)
+        tokens.append(nl_tok)
     chunks = chunk_tokens(tokens, seq_len)
     torch.save(chunks, cache_file)
     print(f"Cached {len(chunks):,} sequences → {cache_file}")
@@ -54,19 +61,18 @@ def get_dataloaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
     g = torch.Generator()
     g.manual_seed(cfg.seed)
 
-    def _make(split: str, shuffle: bool, drop_last: bool,
-               persistent: bool = False, prefetch: int | None = None) -> DataLoader:
+    def _make(split: str, shuffle: bool, drop_last: bool) -> DataLoader:
         ds = TokenDataset(_load_split(split, cfg.seq_len))
+        # Dataset is fully in-memory: num_workers=0 avoids spawning worker processes
+        # and the IPC overhead they introduce for simple index lookups.
         return DataLoader(
             ds, batch_size=cfg.batch_size, shuffle=shuffle, drop_last=drop_last,
-            num_workers=4, pin_memory=True,
+            num_workers=0, pin_memory=True,
             generator=g if shuffle else None,
-            persistent_workers=persistent,
-            prefetch_factor=prefetch,
         )
 
     return (
-        _make("train",      shuffle=True,  drop_last=True,  persistent=True, prefetch=2),
+        _make("train",      shuffle=True,  drop_last=True),
         _make("validation", shuffle=False, drop_last=False),
         _make("test",       shuffle=False, drop_last=False),
     )

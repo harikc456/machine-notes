@@ -169,7 +169,8 @@ def evaluate_isd(
             ppl = math.exp(ppl_loss.item())
             tpf_oh = compute_tpf_oh(alpha, cfg.stride)
 
-            results.append({"alpha": alpha, "ppl": ppl, "tpf_oh": tpf_oh})
+            results.append({"alpha": alpha, "ppl": ppl, "tpf_oh": tpf_oh,
+                             "prompt_ids": prompt, "generated_ids": generated})
             count += 1
 
         if count >= cfg.num_eval_examples:
@@ -209,8 +210,8 @@ if __name__ == "__main__":
     from idlm.models.idlm_model import IDLMCausalLM
 
     ckpt_path = Path(args.checkpoint)
-    config_yaml = ckpt_path.parent / "config.yaml"
-    ar_cfg = load_ar_config(config_yaml)
+    ar_config_yaml = Path(cfg.ar_checkpoint).parent / "config.yaml"
+    ar_cfg = load_ar_config(ar_config_yaml)
     ar_model = CausalLM(ar_cfg).to(device)
 
     ar_ckpt = torch.load(cfg.ar_checkpoint, map_location=device, weights_only=True)

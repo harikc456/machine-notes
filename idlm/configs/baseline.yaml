@@ -5,19 +5,19 @@ ar_checkpoint: rbf_ffn/experiments/20260404_105557_877306_standard_swiglu_qknorm
 # LoRA
 lora_rank: 8
 lora_alpha: 16.0
-lora_target_modules: [q_proj, v_proj]
+lora_target_modules: [q_proj, k_proj, v_proj]
 
 # Training
 seq_len: 512
-batch_size: 8
-max_steps: 10000
+batch_size: 16
+max_epochs: 3
 lr: 0.0003
 warmup_steps: 200
 grad_clip: 1.0
 seed: 42
 
 # Evaluation / ISD
-eval_every: 500
+eval_every_epochs: 1
 stride: 4
 num_eval_examples: 200
 prompt_len: 64

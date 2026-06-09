@@ -8,15 +8,15 @@ def test_defaults():
     cfg = IDLMConfig(ar_checkpoint="dummy.pt")
     assert cfg.lora_rank == 8
     assert cfg.lora_alpha == 16.0
-    assert cfg.lora_target_modules == ["q_proj", "v_proj"]
+    assert cfg.lora_target_modules == ["q_proj", "k_proj", "v_proj"]
     assert cfg.seq_len == 512
     assert cfg.batch_size == 8
-    assert cfg.max_steps == 10_000
+    assert cfg.max_epochs == 10
     assert cfg.lr == 3e-4
     assert cfg.warmup_steps == 200
     assert cfg.grad_clip == 1.0
     assert cfg.seed == 42
-    assert cfg.eval_every == 500
+    assert cfg.eval_every_epochs == 1
     assert cfg.stride == 4
     assert cfg.num_eval_examples == 200
     assert cfg.prompt_len == 64

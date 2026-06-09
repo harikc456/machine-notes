@@ -1,7 +1,7 @@
 ---
 title: I-DLM (Introspective Diffusion Language Model)
 created: 2026-05-16
-updated: 2026-05-16
+updated: 2026-06-07
 type: entity
 tags: [architecture, inference, training]
 sources: [raw/papers/2604.11035v1.pdf]
@@ -72,6 +72,43 @@ Only I-DLM crosses the break-even line where parallel generation actually saves 
 ## Relationship to Block Diffusion
 
 [[block-diffusion]] (ICLR 2025) takes a structural approach: autoregressive over blocks, diffusion within. I-DLM takes a training approach: convert AR models into DLMs by enforcing introspective consistency. Both close the AR/DLM quality gap, but I-DLM achieves stronger results at the same scale and is more directly deployable on existing AR infrastructure.
+
+## Small-Scale Reproduction (WikiText-103)
+
+A reproduction of I-DLM at small scale uses a frozen `rbf_ffn` AR checkpoint (SwiGLU + QK-norm + weight-norm, val PPL ≈ 58.16) as the base model, with per-position LoRA adapters on Q and V projections (rank=8, α=16). Training runs the all-masked + auto-balanced loss on WikiText-103 sequences of length 512 (model sees 2×seq_len: `[x_0 | x_t]` concatenation).
+
+### Key Implementation Note: Concatenation Order
+
+The I-DLM training concatenation must be **`[x_0 | x_t]`** (clean first, masked second), not `[x_t | x_0]`. With causal attention:
+- Placing `x_0` first allows masked positions (right half) to attend to clean tokens — which is the introspection signal
+- Placing `x_t` first makes each masked position attend only to other mask tokens (no clean context), rendering L_clean useless
+- LoRA adapters are active only on the `x_t` half (right half); the `x_0` half uses base model weights for L_clean
+
+This ordering is not explicit in the paper but follows necessarily from causal-attention + logit-shift design.
+
+### Baseline Config
+
+| Key | Value |
+|-----|-------|
+| `lora_rank` | 8 |
+| `lora_target_modules` | `[q_proj, v_proj]` |
+| `seq_len` | 512 |
+| `batch_size` | 8 |
+| `max_epochs` | 3 |
+| `lr` | 3e-4 |
+| `stride` | 4 |
+
+### First Experiment Results
+
+**Run:** `20260606_193642_930058_idlm_r8_s4` (3 epochs, rank=8, stride=4, WikiText-103, d=256)
+
+| Metric | Value |
+|--------|-------|
+| α (introspective acceptance rate) | 0.34 |
+| PPL (generated continuations) | 155.7 |
+| TPF/OH | 1.11 |
+
+Generations are incoherent at d=256 scale with only 3 epochs of LoRA fine-tuning — expected. α=0.34 is well below the ≥0.83 threshold needed for ISD compute break-even; at α=0.34, ISD generates tokens faster (TPF/OH=1.11>1) but quality is poor. Base AR PPL is ~58, so LoRA has not catastrophically degraded the AR model. The gap between α=0.34 (reproduction) and α≈0.85 (paper, 8B + 4.5B tokens) is consistent with scale.
 
 ## See Also
 

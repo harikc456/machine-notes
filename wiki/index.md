@@ -2,7 +2,7 @@
 
 > Content catalog. Every wiki page listed under its type with a one-line summary.
 > Read this first to find relevant pages for any query.
-> Last updated: 2026-05-31 | Total pages: 51
+> Last updated: 2026-06-07 | Total pages: 51
 
 ## Entities
 
@@ -24,7 +24,7 @@
 - [[deepseek-v3-2]] — DeepSeek-V3.2: DSA attention, scalable RL, agentic task synthesis, gold-medal IMO/IOI performance
 - [[engram]] — Conditional memory module using N-gram lookup; complement to MoE sparsity for static knowledge retrieval
 - [[h2o]] — H₂O Heavy-Hitter Oracle: KV cache eviction policy retaining "heavy hitter" tokens via attention score accumulation
-- [[i-dlm]] — I-DLM: introspective consistency training converts AR models to DLMs; ISD decoding; first DLM to match same-scale AR quality
+- [[i-dlm]] — I-DLM: introspective consistency training converts AR models to DLMs; ISD decoding; first DLM to match same-scale AR quality; WikiText-103 reproduction (α=0.34, PPL=155.7, TPF/OH=1.11 at d=256)
 - [[kromhc]] — KromHC: Manifold-constrained HC via Kronecker-product residual matrices — exact doubly-stochastic, parameter-efficient
 - [[mhc]] — mHC (Manifold-Constrained Hyper-Connections): projects HC residual matrices onto Birkhoff polytope via Sinkhorn-Knopp
 - [[mhc-lite]] — mHC-lite: replaces SK iterations with convex combination of permutation matrices for exact doubly-stochastic residuals

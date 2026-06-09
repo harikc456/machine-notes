@@ -252,3 +252,8 @@
   - queries/memory-inference-techniques.md → added [[inference-kv-speculative]] to See Also
   - queries/memory-inference-research-gaps.md → added [[inference-kv-speculative]] to See Also
   - concepts/weight-norm-training.md → added [[derf]] and [[normalization-free-transformers]] to See Also
+
+## [2026-06-07] update | I-DLM small-scale reproduction results
+- Pages updated:
+  - entities/i-dlm.md — added "Small-Scale Reproduction" section: WikiText-103 setup (frozen rbf_ffn + per-position LoRA, rank=8, stride=4), key implementation note on [x_0|x_t] concatenation order (causal attention requires clean-first), baseline config table, first experiment results (run 20260606_193642_930058_idlm_r8_s4: α=0.34, PPL=155.7, TPF/OH=1.11 at d=256/3 epochs); bumped updated date to 2026-06-07
+  - index.md — updated last-updated date and i-dlm summary with reproduction metrics

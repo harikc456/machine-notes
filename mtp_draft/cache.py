@@ -26,7 +26,7 @@ def _quantise_int8(t: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     scale = t.float().abs().max() / 127.0
     if scale == 0:
         scale = torch.tensor(1.0)
-    q = (t.float() / scale).clamp(-128, 127).to(torch.int8)
+    q = (t.float() / scale).clamp(-127, 127).to(torch.int8)
     return q, scale
 
 
@@ -79,7 +79,7 @@ def extract_and_cache(cfg: MTPConfig, split: str = "train") -> None:
             continue
 
         handoff = len(prompt_ids) - 1  # index of last prompt token (0-based)
-        n_pos = min(cfg.cache_n_answer_positions, len(answer_ids) + 1)
+        n_pos = min(cfg.cache_n_answer_positions, len(answer_ids))
 
         # Positions to cache: handoff, handoff+1, ..., handoff+n_pos-1
         # (handoff = last prompt token; handoff+k = k-th answer token)
@@ -115,7 +115,7 @@ def extract_and_cache(cfg: MTPConfig, split: str = "train") -> None:
 
         shard_data.append({
             "features_int8": q_feat.cpu(),
-            "scale": scale.cpu() if isinstance(scale, torch.Tensor) else torch.tensor(scale, dtype=torch.float32),
+            "scale": scale.cpu(),
             "prompt_ids": torch.tensor(prompt_ids, dtype=torch.long),
             "answer_ids": torch.tensor(list(answer_ids), dtype=torch.long),
             "handoff": torch.tensor(handoff, dtype=torch.long),

@@ -3,6 +3,7 @@ import torch
 import pytest
 from rbf_ffn.config import ModelConfig
 from rbf_ffn.models.transformer_block import FFN_REGISTRY, TransformerBlock
+from rbf_ffn.models.attention import ATTN_REGISTRY
 
 D, H, B, N = 32, 4, 2, 16
 
@@ -167,3 +168,24 @@ def test_gqa_polar_gradient_flows():
     x = torch.randn(B, N, D, requires_grad=True)
     block(x).sum().backward()
     assert x.grad is not None
+
+
+@pytest.mark.parametrize("attn_type", list(ATTN_REGISTRY.keys()))
+def test_gqa_all_registry_variants_shape(attn_type):
+    """Every ATTN_REGISTRY entry must forward correctly with n_kv_heads=2."""
+    block = TransformerBlock(make_gqa_cfg(attn_type))
+    x = torch.randn(B, N, D)
+    assert block(x).shape == (B, N, D)
+
+
+@pytest.mark.parametrize("attn_type", list(ATTN_REGISTRY.keys()))
+def test_mqa_all_registry_variants_shape(attn_type):
+    """n_kv_heads=1 (MQA) must forward correctly for every variant."""
+    cfg = ModelConfig(
+        d_model=D, n_heads=H, n_kv_heads=1, dropout=0.0,
+        attn_type=attn_type, ffn_type="swiglu",
+        ffn_hidden=86, pfd_n=4,
+    )
+    block = TransformerBlock(cfg)
+    x = torch.randn(B, N, D)
+    assert block(x).shape == (B, N, D)

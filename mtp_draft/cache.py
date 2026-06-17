@@ -9,16 +9,11 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
-
 import torch
 from tqdm import tqdm
 
 from mtp_draft.config import MTPConfig, load_config
 from mtp_draft.data import build_prompt
-
-if TYPE_CHECKING:
-    pass
 
 
 def _quantise_int8(t: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:

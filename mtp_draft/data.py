@@ -96,7 +96,8 @@ class FeatureDataset(Dataset):
 
         # --- context: prompt tokens up to handoff + j, left-padded ---
         handoff: int = int(entry["handoff"].item())
-        raw_ctx = entry["prompt_ids"][: handoff + j]
+        full_ids = torch.cat([entry["prompt_ids"], entry["answer_ids"]])
+        raw_ctx = full_ids[: handoff + j]
         L = len(raw_ctx)
         if L >= cfg.max_prompt_len:
             context_ids = raw_ctx[-cfg.max_prompt_len :]
@@ -105,7 +106,6 @@ class FeatureDataset(Dataset):
             context_ids = torch.cat([pad, raw_ctx])
 
         # --- targets: tokens immediately after anchor ---
-        full_ids = torch.cat([entry["prompt_ids"], entry["answer_ids"]])
         start = handoff + j + 1
         raw_targets = full_ids[start : start + cfg.max_draft]
         valid_len = len(raw_targets)

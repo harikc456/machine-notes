@@ -27,5 +27,6 @@ class LoRALMHead(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """x: (B, S, d_teacher) → (B, S, vocab)"""
-        W = self.weight + self.lora_B @ self.lora_A   # (vocab, d_teacher)
-        return x @ W.T
+        # Decomposed LoRA: avoids materialising the full (vocab, d_teacher) weight matrix.
+        # Equivalent to x @ (W + B @ A).T but allocates only (B, S, r) intermediates.
+        return x @ self.weight.T + (x @ self.lora_A.T) @ self.lora_B.T

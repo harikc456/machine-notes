@@ -81,7 +81,7 @@ def _make_shard(cfg, tmp_path: Path) -> Path:
     for _ in range(3):
         features = torch.randn(cfg.cache_n_answer_positions, n_layers, cfg.d_teacher)
         scale = features.abs().max() / 127.0
-        features_int8 = (features / scale).clamp(-128, 127).to(torch.int8)
+        features_int8 = (features / scale).clamp(-127, 127).to(torch.int8)
         shard.append(
             {
                 "features_int8": features_int8,

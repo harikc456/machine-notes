@@ -108,3 +108,27 @@ def test_n_kv_heads_mqa():
 def test_n_kv_heads_indivisible_raises():
     with pytest.raises(ValueError, match="n_kv_heads"):
         ModelConfig(d_model=32, n_heads=4, n_kv_heads=3)
+
+
+# ── GQA shape tests ───────────────────────────────────────────────────────────
+
+def make_gqa_cfg(attn_type: str) -> ModelConfig:
+    return ModelConfig(
+        d_model=D, n_heads=H, n_kv_heads=2, dropout=0.0,
+        attn_type=attn_type, ffn_type="swiglu",
+        ffn_hidden=86, pfd_n=4,
+    )
+
+
+@pytest.mark.parametrize("attn_type", ["standard", "xsa"])
+def test_gqa_sdpa_output_shape(attn_type):
+    block = TransformerBlock(make_gqa_cfg(attn_type))
+    x = torch.randn(B, N, D)
+    assert block(x).shape == (B, N, D)
+
+
+def test_gqa_standard_gradient_flows():
+    block = TransformerBlock(make_gqa_cfg("standard"))
+    x = torch.randn(B, N, D, requires_grad=True)
+    block(x).sum().backward()
+    assert x.grad is not None

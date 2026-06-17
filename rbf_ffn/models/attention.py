@@ -152,21 +152,17 @@ class PolarAttention(nn.Module):
 
 class ExclusiveSelfAttention(nn.Module):
     """
-    Exclusive Self-Attention (XSA).
+    Exclusive Self-Attention (XSA) with GQA support.
 
-    Runs standard causal multi-head attention to produce Y, then projects each
-    output vector onto the subspace orthogonal to the corresponding normalised
-    value vector:
+    Runs causal MHA to produce Y, then projects each output vector onto the
+    subspace orthogonal to the normalised value vector:
 
-        Vn = V / ||V||          (per head, per position)
-        Z  = Y - (Y · Vn) Vn   (Gram-Schmidt step)
+        Vn = V / ||V||          (per head, per position, post-expansion)
+        Z  = Y - (Y · Vn) Vn
 
-    The subtraction removes the component of the attention output that lies in
-    the direction of the value, so each head's output is "exclusive" of its own
-    value direction.  The output projection is then applied to Z.
-
-    Supports RoPE, QK-norm, and optional SiLU on projections — same flags as
-    CausalSelfAttention.
+    Supports GQA via cfg.n_kv_heads — K and V are projected to
+    n_kv_heads * head_dim then expanded before SDPA. The Gram-Schmidt step
+    uses the expanded V so each Q head is orthogonalised against its KV group.
 
     Input/output: (B, N, d_model)
     """
@@ -175,16 +171,189 @@ class ExclusiveSelfAttention(nn.Module):
         super().__init__()
         D, H = cfg.d_model, cfg.n_heads
         assert D % H == 0, f"d_model ({D}) must be divisible by n_heads ({H})"
-        self.n_heads  = H
+        self.n_heads = H
         self.head_dim = D // H
+        self.n_kv_heads = cfg.n_kv_heads
+        self.n_groups = H // self.n_kv_heads
+        KV = self.n_kv_heads * self.head_dim
         self.q_proj = nn.Linear(D, D, bias=False)
-        self.k_proj = nn.Linear(D, D, bias=False)
-        self.v_proj = nn.Linear(D, D, bias=False)
+        self.k_proj = nn.Linear(D, KV, bias=False)
+        self.v_proj = nn.Linear(D, KV, bias=False)
         self.o_proj = nn.Linear(D, D, bias=False)
         self.rope = RotaryEmbedding(self.head_dim)
-        self._dropout  = cfg.dropout
+        self._dropout = cfg.dropout
         self._use_flash = _flash_available()
-        self._qk_norm  = cfg.qk_norm
+        self._qk_norm = cfg.qk_norm
+        self._qkv_silu = cfg.qkv_silu
+        if self._qk_norm:
+            self.q_norm = nn.RMSNorm(self.head_dim)
+            self.k_norm = nn.RMSNorm(self.head_dim)
+        _gain_targets = set(cfg.qkv_gain_targets) if cfg.qkv_gain else set()
+        if "q" in _gain_targets:
+            self.q_gain = nn.Parameter(torch.zeros(H))
+        if "k" in _gain_targets:
+            self.k_gain = nn.Parameter(torch.zeros(self.n_kv_heads))
+        if "v" in _gain_targets:
+            self.v_gain = nn.Parameter(torch.zeros(self.n_kv_heads))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """x: (B, N, d_model)"""
+        B, N, D = x.shape
+
+        def split_q(t):
+            return t.view(B, N, self.n_heads, self.head_dim).transpose(1, 2)
+
+        def split_kv(t):
+            return t.view(B, N, self.n_kv_heads, self.head_dim).transpose(1, 2)
+
+        q_raw = self.q_proj(x)
+        k_raw = self.k_proj(x)
+        v_raw = self.v_proj(x)
+        if self._qkv_silu:
+            q_raw = F.silu(q_raw)
+            k_raw = F.silu(k_raw)
+            v_raw = F.silu(v_raw)
+
+        q = self.rope(split_q(q_raw))
+        k = self.rope(split_kv(k_raw))
+        v = split_kv(v_raw)
+
+        if hasattr(self, "q_gain"):
+            q = q * (1 + self.q_gain.view(1, -1, 1, 1))
+        if hasattr(self, "k_gain"):
+            k = k * (1 + self.k_gain.view(1, -1, 1, 1))
+        if hasattr(self, "v_gain"):
+            v = v * (1 + self.v_gain.view(1, -1, 1, 1))
+
+        if self._qk_norm:
+            q = self.q_norm(q)
+            k = self.k_norm(k)
+
+        k = k.repeat_interleave(self.n_groups, dim=1)
+        v = v.repeat_interleave(self.n_groups, dim=1)
+
+        dp = self._dropout if self.training else 0.0
+        if self._use_flash:
+            with sdpa_kernel(_FLASH_BACKENDS):
+                Y = F.scaled_dot_product_attention(q, k, v, dropout_p=dp, is_causal=True)
+        else:
+            Y = F.scaled_dot_product_attention(q, k, v, dropout_p=dp, is_causal=True)
+
+        Vn = F.normalize(v, dim=-1)
+        Z  = Y - (Y * Vn).sum(dim=-1, keepdim=True) * Vn
+
+        out = Z.transpose(1, 2).contiguous().view(B, N, D)
+        return self.o_proj(out)
+
+
+class CausalSelfAttention(nn.Module):
+    """
+    Multi-head causal self-attention with RoPE.
+
+    Supports Grouped Query Attention (GQA) via cfg.n_kv_heads. When
+    n_kv_heads < n_heads, K and V projections output n_kv_heads * head_dim
+    and are expanded to n_heads via repeat_interleave before SDPA.
+    n_kv_heads == n_heads is standard MHA (no overhead).
+
+    Input/output: (B, N, d_model)
+    """
+
+    def __init__(self, cfg: ModelConfig):
+        super().__init__()
+        D, H = cfg.d_model, cfg.n_heads
+        assert D % H == 0, f"d_model ({D}) must be divisible by n_heads ({H})"
+        self.n_heads = H
+        self.head_dim = D // H
+        self.n_kv_heads = cfg.n_kv_heads
+        self.n_groups = H // self.n_kv_heads
+        KV = self.n_kv_heads * self.head_dim
+        self.q_proj = nn.Linear(D, D, bias=False)
+        self.k_proj = nn.Linear(D, KV, bias=False)
+        self.v_proj = nn.Linear(D, KV, bias=False)
+        self.o_proj = nn.Linear(D, D, bias=False)
+        self.rope = RotaryEmbedding(self.head_dim)
+        self._dropout = cfg.dropout
+        self._use_flash = _flash_available()
+        self._qk_norm = cfg.qk_norm
+        self._qkv_silu = cfg.qkv_silu
+        if self._qk_norm:
+            self.q_norm = nn.RMSNorm(self.head_dim)
+            self.k_norm = nn.RMSNorm(self.head_dim)
+        _gain_targets = set(cfg.qkv_gain_targets) if cfg.qkv_gain else set()
+        if "q" in _gain_targets:
+            self.q_gain = nn.Parameter(torch.zeros(H))
+        if "k" in _gain_targets:
+            self.k_gain = nn.Parameter(torch.zeros(self.n_kv_heads))
+        if "v" in _gain_targets:
+            self.v_gain = nn.Parameter(torch.zeros(self.n_kv_heads))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """x: (B, N, d_model)"""
+        B, N, D = x.shape
+
+        def split_q(t):
+            return t.view(B, N, self.n_heads, self.head_dim).transpose(1, 2)
+
+        def split_kv(t):
+            return t.view(B, N, self.n_kv_heads, self.head_dim).transpose(1, 2)
+
+        q = self.rope(split_q(F.silu(self.q_proj(x)) if self._qkv_silu else self.q_proj(x)))
+        k = self.rope(split_kv(F.silu(self.k_proj(x)) if self._qkv_silu else self.k_proj(x)))
+        v = split_kv(F.silu(self.v_proj(x)) if self._qkv_silu else self.v_proj(x))
+
+        if hasattr(self, "q_gain"):
+            q = q * (1 + self.q_gain.view(1, -1, 1, 1))
+        if hasattr(self, "k_gain"):
+            k = k * (1 + self.k_gain.view(1, -1, 1, 1))
+        if hasattr(self, "v_gain"):
+            v = v * (1 + self.v_gain.view(1, -1, 1, 1))
+
+        if self._qk_norm:
+            q = self.q_norm(q)
+            k = self.k_norm(k)
+
+        k = k.repeat_interleave(self.n_groups, dim=1)
+        v = v.repeat_interleave(self.n_groups, dim=1)
+
+        dp = self._dropout if self.training else 0.0
+        if self._use_flash:
+            with sdpa_kernel(_FLASH_BACKENDS):
+                out = F.scaled_dot_product_attention(q, k, v, dropout_p=dp, is_causal=True)
+        else:
+            out = F.scaled_dot_product_attention(q, k, v, dropout_p=dp, is_causal=True)
+        out = out.transpose(1, 2).contiguous().view(B, N, D)
+        return self.o_proj(out)
+
+
+class KVSharedExclusiveSelfAttention(nn.Module):
+    """
+    Exclusive Self-Attention (XSA) with K = V (shared projection).
+
+    Combines KVSharedAttention's projection scheme (Q from its own
+    projection, K and V both from a single shared `kv_proj`) with XSA's
+    Gram-Schmidt orthogonalisation step:
+
+        Vn = V / ||V||
+        Z  = Y - (Y · Vn) Vn
+
+    Same flags as KVSharedAttention: RoPE, QK-norm, qkv_silu, qkv_gain.
+
+    Input/output: (B, N, d_model)
+    """
+
+    def __init__(self, cfg: ModelConfig):
+        super().__init__()
+        D, H = cfg.d_model, cfg.n_heads
+        assert D % H == 0, f"d_model ({D}) must be divisible by n_heads ({H})"
+        self.n_heads = H
+        self.head_dim = D // H
+        self.q_proj = nn.Linear(D, D, bias=False)
+        self.kv_proj = nn.Linear(D, D, bias=False)
+        self.o_proj = nn.Linear(D, D, bias=False)
+        self.rope = RotaryEmbedding(self.head_dim)
+        self._dropout = cfg.dropout
+        self._use_flash = _flash_available()
+        self._qk_norm = cfg.qk_norm
         self._qkv_silu = cfg.qkv_silu
         if self._qk_norm:
             self.q_norm = nn.RMSNorm(self.head_dim)
@@ -200,21 +369,18 @@ class ExclusiveSelfAttention(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """x: (B, N, d_model)"""
         B, N, D = x.shape
-
-        def split_heads(t: torch.Tensor) -> torch.Tensor:
+        def split_heads(t):
             return t.view(B, N, self.n_heads, self.head_dim).transpose(1, 2)
 
         q_raw = self.q_proj(x)
-        k_raw = self.k_proj(x)
-        v_raw = self.v_proj(x)
+        kv_raw = self.kv_proj(x)
         if self._qkv_silu:
             q_raw = F.silu(q_raw)
-            k_raw = F.silu(k_raw)
-            v_raw = F.silu(v_raw)
+            kv_raw = F.silu(kv_raw)
 
-        q = self.rope(split_heads(q_raw))   # (B, H, N, head_dim)
-        k = self.rope(split_heads(k_raw))
-        v = split_heads(v_raw)
+        q = self.rope(split_heads(q_raw))    # (B, H, N, head_dim)
+        v = split_heads(kv_raw)
+        k = self.rope(v)
 
         if hasattr(self, "q_gain"):
             q = q * (1 + self.q_gain.view(1, -1, 1, 1))
@@ -242,16 +408,16 @@ class ExclusiveSelfAttention(nn.Module):
         return self.o_proj(out)
 
 
-class CausalSelfAttention(nn.Module):
+class KVSharedAttention(nn.Module):
     """
-    Multi-head causal self-attention with RoPE.
+    Multi-head causal self-attention with K = V (shared projection).
 
-    No bias on any projection. Causal mask via F.scaled_dot_product_attention
-    with is_causal=True (no explicit mask tensor stored).
+    Q is produced by its own projection; K and V both come from a single
+    shared `kv_proj`, so the same vector is used both to compute attention
+    scores and to form the weighted output. RoPE is applied to Q and K
+    (the rotated K is used only for scoring, V remains un-rotated).
 
-    On CUDA when FlashAttention is available, uses sdp_kernel to explicitly
-    prefer the FlashAttention backend with graceful fallback to MemEfficient
-    and Math backends. On CPU, delegates backend selection to PyTorch.
+    Same flags as CausalSelfAttention: RoPE, QK-norm, qkv_silu, qkv_gain.
 
     Input/output: (B, N, d_model)
     """
@@ -263,8 +429,7 @@ class CausalSelfAttention(nn.Module):
         self.n_heads = H
         self.head_dim = D // H
         self.q_proj = nn.Linear(D, D, bias=False)
-        self.k_proj = nn.Linear(D, D, bias=False)
-        self.v_proj = nn.Linear(D, D, bias=False)
+        self.kv_proj = nn.Linear(D, D, bias=False)
         self.o_proj = nn.Linear(D, D, bias=False)
         self.rope = RotaryEmbedding(self.head_dim)
         self._dropout = cfg.dropout
@@ -288,9 +453,15 @@ class CausalSelfAttention(nn.Module):
         def split_heads(t):
             return t.view(B, N, self.n_heads, self.head_dim).transpose(1, 2)
 
-        q = self.rope(split_heads(F.silu(self.q_proj(x)) if self._qkv_silu else self.q_proj(x)))   # (B, H, N, head_dim)
-        k = self.rope(split_heads(F.silu(self.k_proj(x)) if self._qkv_silu else self.k_proj(x)))
-        v = split_heads(F.silu(self.v_proj(x)) if self._qkv_silu else self.v_proj(x))
+        q_raw = self.q_proj(x)
+        kv_raw = self.kv_proj(x)
+        if self._qkv_silu:
+            q_raw = F.silu(q_raw)
+            kv_raw = F.silu(kv_raw)
+
+        q = self.rope(split_heads(q_raw))    # (B, H, N, head_dim)
+        v = split_heads(kv_raw)
+        k = self.rope(v)
 
         if hasattr(self, "q_gain"):
             q = q * (1 + self.q_gain.view(1, -1, 1, 1))
@@ -299,7 +470,6 @@ class CausalSelfAttention(nn.Module):
         if hasattr(self, "v_gain"):
             v = v * (1 + self.v_gain.view(1, -1, 1, 1))
 
-        # Apply QK normalization if enabled
         if self._qk_norm:
             q = self.q_norm(q)
             k = self.k_norm(k)
@@ -315,7 +485,9 @@ class CausalSelfAttention(nn.Module):
 
 
 ATTN_REGISTRY: dict[str, type] = {
-    "standard": CausalSelfAttention,
-    "polar":    PolarAttention,
-    "xsa":      ExclusiveSelfAttention,
+    "standard":      CausalSelfAttention,
+    "polar":         PolarAttention,
+    "xsa":           ExclusiveSelfAttention,
+    "kv_shared":     KVSharedAttention,
+    "xsa_kv_shared": KVSharedExclusiveSelfAttention,
 }

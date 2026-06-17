@@ -57,7 +57,7 @@ def training_step(
         weight = cfg.lambda_decay ** i
         loss_i = F.cross_entropy(logits[:, i, :], targets[:, i], ignore_index=-100)
         weighted_sum = weighted_sum + weight * loss_i
-    loss = weighted_sum / cfg.max_draft
+    loss = weighted_sum
 
     optimizer.zero_grad()
     loss.backward()
@@ -135,7 +135,7 @@ def train(cfg: MTPConfig) -> None:
                     batch_loss += w * F.cross_entropy(
                         logits[:, i, :], targets[:, i], ignore_index=-100
                     ).item()
-                val_loss_sum += batch_loss / cfg.max_draft
+                val_loss_sum += batch_loss
                 n_val += 1
 
         avg_val = val_loss_sum / max(1, n_val)

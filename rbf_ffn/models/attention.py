@@ -61,15 +61,17 @@ class RotaryEmbedding(nn.Module):
 
 class PolarAttention(nn.Module):
     """
-    Polar-coordinates causal self-attention.
+    Polar-coordinates causal self-attention with GQA support.
 
     Decomposes Q and K into direction (unit vector) and magnitude, computes
     cosine similarity as the base geometric score, then re-weights by the
     outer product of magnitudes scaled by per-head learnable confidence
-    parameters q_scale and k_scale.  Causal masking is applied via an
-    additive -inf mask before softmax.
+    parameters q_scale (shape: n_heads) and k_scale (shape: n_kv_heads).
 
-    q_scale / k_scale (shape: n_heads) are 1-D and go to AdamW.
+    With GQA (n_kv_heads < n_heads), K and V projections output
+    n_kv_heads * head_dim. Polar decomposition runs at n_kv_heads size;
+    k_scale is applied before expansion; k_dir, r_k, and v are then
+    expanded to n_heads via repeat_interleave before the attention matmul.
 
     Input/output: (B, N, d_model)
     """
@@ -78,23 +80,25 @@ class PolarAttention(nn.Module):
         super().__init__()
         D, H = cfg.d_model, cfg.n_heads
         assert D % H == 0, f"d_model ({D}) must be divisible by n_heads ({H})"
-        self.n_heads  = H
+        self.n_heads = H
         self.head_dim = D // H
+        self.n_kv_heads = cfg.n_kv_heads
+        self.n_groups = H // self.n_kv_heads
+        KV = self.n_kv_heads * self.head_dim
         self.q_proj = nn.Linear(D, D, bias=False)
-        self.k_proj = nn.Linear(D, D, bias=False)
-        self.v_proj = nn.Linear(D, D, bias=False)
+        self.k_proj = nn.Linear(D, KV, bias=False)
+        self.v_proj = nn.Linear(D, KV, bias=False)
         self.o_proj = nn.Linear(D, D, bias=False)
-        # Per-head learnable confidence scalars for the magnitude contribution
         self.q_scale = nn.Parameter(torch.ones(H))
-        self.k_scale = nn.Parameter(torch.ones(H))
+        self.k_scale = nn.Parameter(torch.ones(self.n_kv_heads))
         self._qkv_silu = cfg.qkv_silu
         _gain_targets = set(cfg.qkv_gain_targets) if cfg.qkv_gain else set()
         if "q" in _gain_targets:
             self.q_gain = nn.Parameter(torch.zeros(H))
         if "k" in _gain_targets:
-            self.k_gain = nn.Parameter(torch.zeros(H))
+            self.k_gain = nn.Parameter(torch.zeros(self.n_kv_heads))
         if "v" in _gain_targets:
-            self.v_gain = nn.Parameter(torch.zeros(H))
+            self.v_gain = nn.Parameter(torch.zeros(self.n_kv_heads))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """x: (B, N, d_model)"""
@@ -107,20 +111,21 @@ class PolarAttention(nn.Module):
             q_raw = F.silu(q_raw)
             k_raw = F.silu(k_raw)
             v_raw = F.silu(v_raw)
-        q = q_raw.view(B, N, self.n_heads, self.head_dim)
-        k = k_raw.view(B, N, self.n_heads, self.head_dim)
-        v = v_raw.view(B, N, self.n_heads, self.head_dim)
 
-        # --- Polar decomposition ---
+        q = q_raw.view(B, N, self.n_heads, self.head_dim)
+        k = k_raw.view(B, N, self.n_kv_heads, self.head_dim)
+        v = v_raw.view(B, N, self.n_kv_heads, self.head_dim)
+
         r_q = torch.norm(q, p=2, dim=-1, keepdim=True)   # (B, N, H, 1)
-        r_k = torch.norm(k, p=2, dim=-1, keepdim=True)
-        q_dir = q / (r_q + 1e-6)                          # unit vectors
+        r_k = torch.norm(k, p=2, dim=-1, keepdim=True)   # (B, N, n_kv_heads, 1)
+        q_dir = q / (r_q + 1e-6)
         k_dir = k / (r_k + 1e-6)
 
-        # Reshape to (B, H, N, .) for batch matmul
-        q_dir = q_dir.transpose(1, 2)          # (B, H, N, head_dim)
-        k_dir = k_dir.transpose(1, 2)
-        v     = v.transpose(1, 2)
+        q_dir = q_dir.transpose(1, 2)   # (B, H, N, head_dim)
+        k_dir = k_dir.transpose(1, 2)   # (B, n_kv_heads, N, head_dim)
+        v     = v.transpose(1, 2)        # (B, n_kv_heads, N, head_dim)
+        r_q   = r_q.transpose(1, 2)     # (B, H, N, 1)
+        r_k   = r_k.transpose(1, 2)     # (B, n_kv_heads, N, 1)
 
         if hasattr(self, "q_gain"):
             q_dir = q_dir * (1 + self.q_gain.view(1, -1, 1, 1))
@@ -128,23 +133,28 @@ class PolarAttention(nn.Module):
             k_dir = k_dir * (1 + self.k_gain.view(1, -1, 1, 1))
         if hasattr(self, "v_gain"):
             v = v * (1 + self.v_gain.view(1, -1, 1, 1))
-        r_q   = r_q.transpose(1, 2)            # (B, H, N, 1)
-        r_k   = r_k.transpose(1, 2)
+
+        # Apply k_scale before expansion (one scalar per KV head)
+        r_k = r_k * self.k_scale.view(1, -1, 1, 1)
+
+        # Expand KV tensors to full head count
+        k_dir = k_dir.repeat_interleave(self.n_groups, dim=1)   # (B, H, N, head_dim)
+        v     = v.repeat_interleave(self.n_groups, dim=1)        # (B, H, N, head_dim)
+        r_k   = r_k.repeat_interleave(self.n_groups, dim=1)     # (B, H, N, 1)
 
         # Cosine similarity: (B, H, N, N)
         attn_weights = torch.matmul(q_dir, k_dir.transpose(-2, -1))
 
         # Re-weight by magnitude product with per-head confidence scalars
-        scale_q = self.q_scale.view(1, -1, 1, 1)          # (1, H, 1, 1)
-        scale_k = self.k_scale.view(1, -1, 1, 1)
-        attn_weights = attn_weights * (r_q * scale_q) * (r_k.transpose(-2, -1) * scale_k)
+        scale_q = self.q_scale.view(1, -1, 1, 1)                # (1, H, 1, 1)
+        attn_weights = attn_weights * (r_q * scale_q) * r_k.transpose(-2, -1)
 
         # Causal mask
         mask = torch.ones(N, N, device=x.device, dtype=torch.bool).tril()
         attn_weights = attn_weights.masked_fill(~mask, float("-inf"))
 
         attn_probs = F.softmax(attn_weights, dim=-1)
-        out = torch.matmul(attn_probs, v)                  # (B, H, N, head_dim)
+        out = torch.matmul(attn_probs, v)                        # (B, H, N, head_dim)
 
         out = out.transpose(1, 2).contiguous().view(B, N, D)
         return self.o_proj(out)

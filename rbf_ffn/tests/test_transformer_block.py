@@ -154,3 +154,16 @@ def test_gqa_kv_shared_kv_proj_size(attn_type):
 
     expected_kv_output = cfg.n_kv_heads * (cfg.d_model // cfg.n_heads)
     assert attn.kv_proj.out_features == expected_kv_output
+
+
+def test_gqa_polar_output_shape():
+    block = TransformerBlock(make_gqa_cfg("polar"))
+    x = torch.randn(B, N, D)
+    assert block(x).shape == (B, N, D)
+
+
+def test_gqa_polar_gradient_flows():
+    block = TransformerBlock(make_gqa_cfg("polar"))
+    x = torch.randn(B, N, D, requires_grad=True)
+    block(x).sum().backward()
+    assert x.grad is not None

@@ -37,7 +37,7 @@ def build_prompt(
     a_sep_ids = tokenizer.encode(a_suffix)
     answer_ids = tokenizer.encode(answer, add_special_tokens=False)
 
-    budget = max_prompt_len - len(q_ids) - len(a_sep_ids) - 2
+    budget = max_prompt_len - len(q_ids) - len(a_sep_ids)
 
     ctx_ids: list[int] = []
     for title, sent_list in zip(titles, sentences):

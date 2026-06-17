@@ -1,5 +1,4 @@
 import torch
-import tempfile
 from pathlib import Path
 import pytest
 
@@ -55,6 +54,25 @@ def test_build_prompt_truncates_to_max(cfg):
     tok = _MockTokenizer()
     prompt_ids, _ = build_prompt(_make_example(), tok, max_prompt_len=cfg.max_prompt_len)
     assert len(prompt_ids) <= cfg.max_prompt_len
+
+
+def test_build_prompt_truncates_paragraphs():
+    """Truncation fires when paragraphs exceed the budget."""
+    tok = _MockTokenizer()
+    # Make an example with 20 identical long paragraphs
+    long_para = " ".join([f"word{i}" for i in range(50)])
+    example = {
+        "question": "What?",
+        "context": {
+            "title": [f"Title{i}" for i in range(20)],
+            "sentences": [[long_para] for _ in range(20)],
+        },
+        "answer": "yes",
+    }
+    prompt_ids, _ = build_prompt(example, tok, max_prompt_len=64)
+    assert len(prompt_ids) <= 64
+    # At most 2-3 paragraphs can fit in 64 tokens; 20 paragraphs means truncation fired
+    assert len(prompt_ids) < 64  # paragraphs were cut off
 
 
 def _make_shard(cfg, tmp_path: Path) -> Path:

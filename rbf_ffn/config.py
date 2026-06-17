@@ -36,6 +36,9 @@ class ModelConfig:
     qkv_gain: bool = False
     qkv_gain_targets: list[str] = field(default_factory=lambda: ["q", "k", "v"])  # subset of {"q","k","v"}
 
+    # Grouped Query Attention (GQA) / Multi-Query Attention (MQA)
+    n_kv_heads: int = 0            # 0 = match n_heads (MHA). 1 = MQA. 1 < n < n_heads = GQA.
+
     # Sequence / vocab
     seq_len: int = 512
     vocab_size: int = 50257
@@ -126,6 +129,13 @@ class ModelConfig:
                     f"Prefer attn_type + ffn_type directly."
                 )
             self.attn_type, self.ffn_type = _MODEL_TYPE_MAP[self.model_type]
+
+        if self.n_kv_heads == 0:
+            self.n_kv_heads = self.n_heads
+        if self.n_heads % self.n_kv_heads != 0:
+            raise ValueError(
+                f"n_heads ({self.n_heads}) must be divisible by n_kv_heads ({self.n_kv_heads})"
+            )
 
         if self.qkv_gain:
             valid_targets = {"q", "k", "v"}

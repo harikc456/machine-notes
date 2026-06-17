@@ -34,7 +34,7 @@ def test_ffn_registry_swiglu_is_swiglu_ffn():
 
 # ── TransformerBlock shape and basic behaviour ────────────────────────────────
 
-@pytest.mark.parametrize("attn_type", ["standard", "polar", "xsa"])
+@pytest.mark.parametrize("attn_type", ["standard", "polar", "xsa", "kv_shared", "xsa_kv_shared"])
 @pytest.mark.parametrize("ffn_type", ["swiglu", "rational", "rationalglu", "pfd_rational", "pfd_rationalglu", "first_order_pfd_rational", "polar"])
 def test_transformer_block_output_shape(attn_type, ffn_type):
     block = TransformerBlock(make_cfg(attn_type=attn_type, ffn_type=ffn_type))
@@ -81,3 +81,30 @@ def test_transformer_block_rational_residual():
         block.attn.o_proj.weight.zero_()
     x = torch.randn(B, N, D)
     assert torch.allclose(block(x), x, atol=1e-5)
+
+
+# ── n_kv_heads config ─────────────────────────────────────────────────────────
+
+def test_n_kv_heads_default_resolves_to_n_heads():
+    cfg = ModelConfig(d_model=32, n_heads=4)
+    assert cfg.n_kv_heads == 4
+
+
+def test_n_kv_heads_zero_resolves_to_n_heads():
+    cfg = ModelConfig(d_model=32, n_heads=4, n_kv_heads=0)
+    assert cfg.n_kv_heads == 4
+
+
+def test_n_kv_heads_explicit():
+    cfg = ModelConfig(d_model=32, n_heads=4, n_kv_heads=2)
+    assert cfg.n_kv_heads == 2
+
+
+def test_n_kv_heads_mqa():
+    cfg = ModelConfig(d_model=32, n_heads=4, n_kv_heads=1)
+    assert cfg.n_kv_heads == 1
+
+
+def test_n_kv_heads_indivisible_raises():
+    with pytest.raises(ValueError, match="n_kv_heads"):
+        ModelConfig(d_model=32, n_heads=4, n_kv_heads=3)

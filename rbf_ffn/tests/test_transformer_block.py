@@ -132,3 +132,25 @@ def test_gqa_standard_gradient_flows():
     x = torch.randn(B, N, D, requires_grad=True)
     block(x).sum().backward()
     assert x.grad is not None
+
+
+@pytest.mark.parametrize("attn_type", ["kv_shared", "xsa_kv_shared"])
+def test_gqa_kv_shared_output_shape(attn_type):
+    block = TransformerBlock(make_gqa_cfg(attn_type))
+    x = torch.randn(B, N, D)
+    assert block(x).shape == (B, N, D)
+
+
+@pytest.mark.parametrize("attn_type", ["kv_shared", "xsa_kv_shared"])
+def test_gqa_kv_shared_kv_proj_size(attn_type):
+    """Verify kv_proj outputs n_kv_heads * head_dim, not d_model."""
+    cfg = make_gqa_cfg(attn_type)
+    if attn_type == "kv_shared":
+        from rbf_ffn.models.attention import KVSharedAttention
+        attn = KVSharedAttention(cfg)
+    else:
+        from rbf_ffn.models.attention import KVSharedExclusiveSelfAttention
+        attn = KVSharedExclusiveSelfAttention(cfg)
+
+    expected_kv_output = cfg.n_kv_heads * (cfg.d_model // cfg.n_heads)
+    assert attn.kv_proj.out_features == expected_kv_output

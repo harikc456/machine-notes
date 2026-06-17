@@ -327,16 +327,12 @@ class CausalSelfAttention(nn.Module):
 
 class KVSharedExclusiveSelfAttention(nn.Module):
     """
-    Exclusive Self-Attention (XSA) with K = V (shared projection).
+    Exclusive Self-Attention (XSA) with K = V (shared projection) and GQA support.
 
-    Combines KVSharedAttention's projection scheme (Q from its own
-    projection, K and V both from a single shared `kv_proj`) with XSA's
-    Gram-Schmidt orthogonalisation step:
-
-        Vn = V / ||V||
-        Z  = Y - (Y · Vn) Vn
-
-    Same flags as KVSharedAttention: RoPE, QK-norm, qkv_silu, qkv_gain.
+    Combines KVSharedAttention's projection scheme (kv_proj outputs
+    n_kv_heads * head_dim) with XSA's Gram-Schmidt orthogonalisation step.
+    K and V are expanded from n_kv_heads to n_heads before SDPA; the XSA
+    step uses the expanded V.
 
     Input/output: (B, N, d_model)
     """
@@ -347,8 +343,11 @@ class KVSharedExclusiveSelfAttention(nn.Module):
         assert D % H == 0, f"d_model ({D}) must be divisible by n_heads ({H})"
         self.n_heads = H
         self.head_dim = D // H
+        self.n_kv_heads = cfg.n_kv_heads
+        self.n_groups = H // self.n_kv_heads
+        KV = self.n_kv_heads * self.head_dim
         self.q_proj = nn.Linear(D, D, bias=False)
-        self.kv_proj = nn.Linear(D, D, bias=False)
+        self.kv_proj = nn.Linear(D, KV, bias=False)
         self.o_proj = nn.Linear(D, D, bias=False)
         self.rope = RotaryEmbedding(self.head_dim)
         self._dropout = cfg.dropout
@@ -362,15 +361,19 @@ class KVSharedExclusiveSelfAttention(nn.Module):
         if "q" in _gain_targets:
             self.q_gain = nn.Parameter(torch.zeros(H))
         if "k" in _gain_targets:
-            self.k_gain = nn.Parameter(torch.zeros(H))
+            self.k_gain = nn.Parameter(torch.zeros(self.n_kv_heads))
         if "v" in _gain_targets:
-            self.v_gain = nn.Parameter(torch.zeros(H))
+            self.v_gain = nn.Parameter(torch.zeros(self.n_kv_heads))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """x: (B, N, d_model)"""
         B, N, D = x.shape
-        def split_heads(t):
+
+        def split_q(t):
             return t.view(B, N, self.n_heads, self.head_dim).transpose(1, 2)
+
+        def split_kv(t):
+            return t.view(B, N, self.n_kv_heads, self.head_dim).transpose(1, 2)
 
         q_raw = self.q_proj(x)
         kv_raw = self.kv_proj(x)
@@ -378,8 +381,8 @@ class KVSharedExclusiveSelfAttention(nn.Module):
             q_raw = F.silu(q_raw)
             kv_raw = F.silu(kv_raw)
 
-        q = self.rope(split_heads(q_raw))    # (B, H, N, head_dim)
-        v = split_heads(kv_raw)
+        q = self.rope(split_q(q_raw))
+        v = split_kv(kv_raw)
         k = self.rope(v)
 
         if hasattr(self, "q_gain"):
@@ -392,6 +395,9 @@ class KVSharedExclusiveSelfAttention(nn.Module):
         if self._qk_norm:
             q = self.q_norm(q)
             k = self.k_norm(k)
+
+        k = k.repeat_interleave(self.n_groups, dim=1)
+        v = v.repeat_interleave(self.n_groups, dim=1)
 
         dp = self._dropout if self.training else 0.0
         if self._use_flash:
@@ -400,9 +406,8 @@ class KVSharedExclusiveSelfAttention(nn.Module):
         else:
             Y = F.scaled_dot_product_attention(q, k, v, dropout_p=dp, is_causal=True)
 
-        # XSA: subtract the component of Y along the normalised value direction
-        Vn = F.normalize(v, dim=-1)                                  # (B, H, N, head_dim)
-        Z  = Y - (Y * Vn).sum(dim=-1, keepdim=True) * Vn            # (B, H, N, head_dim)
+        Vn = F.normalize(v, dim=-1)
+        Z  = Y - (Y * Vn).sum(dim=-1, keepdim=True) * Vn
 
         out = Z.transpose(1, 2).contiguous().view(B, N, D)
         return self.o_proj(out)
@@ -410,14 +415,11 @@ class KVSharedExclusiveSelfAttention(nn.Module):
 
 class KVSharedAttention(nn.Module):
     """
-    Multi-head causal self-attention with K = V (shared projection).
+    Multi-head causal self-attention with K = V (shared projection) and GQA support.
 
-    Q is produced by its own projection; K and V both come from a single
-    shared `kv_proj`, so the same vector is used both to compute attention
-    scores and to form the weighted output. RoPE is applied to Q and K
-    (the rotated K is used only for scoring, V remains un-rotated).
-
-    Same flags as CausalSelfAttention: RoPE, QK-norm, qkv_silu, qkv_gain.
+    Q is produced by its own projection; K and V both come from a single shared
+    `kv_proj` (output size n_kv_heads * head_dim). RoPE is applied to Q and K.
+    K and V are expanded from n_kv_heads to n_heads via repeat_interleave before SDPA.
 
     Input/output: (B, N, d_model)
     """
@@ -428,8 +430,11 @@ class KVSharedAttention(nn.Module):
         assert D % H == 0, f"d_model ({D}) must be divisible by n_heads ({H})"
         self.n_heads = H
         self.head_dim = D // H
+        self.n_kv_heads = cfg.n_kv_heads
+        self.n_groups = H // self.n_kv_heads
+        KV = self.n_kv_heads * self.head_dim
         self.q_proj = nn.Linear(D, D, bias=False)
-        self.kv_proj = nn.Linear(D, D, bias=False)
+        self.kv_proj = nn.Linear(D, KV, bias=False)
         self.o_proj = nn.Linear(D, D, bias=False)
         self.rope = RotaryEmbedding(self.head_dim)
         self._dropout = cfg.dropout
@@ -443,15 +448,19 @@ class KVSharedAttention(nn.Module):
         if "q" in _gain_targets:
             self.q_gain = nn.Parameter(torch.zeros(H))
         if "k" in _gain_targets:
-            self.k_gain = nn.Parameter(torch.zeros(H))
+            self.k_gain = nn.Parameter(torch.zeros(self.n_kv_heads))
         if "v" in _gain_targets:
-            self.v_gain = nn.Parameter(torch.zeros(H))
+            self.v_gain = nn.Parameter(torch.zeros(self.n_kv_heads))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """x: (B, N, d_model)"""
         B, N, D = x.shape
-        def split_heads(t):
+
+        def split_q(t):
             return t.view(B, N, self.n_heads, self.head_dim).transpose(1, 2)
+
+        def split_kv(t):
+            return t.view(B, N, self.n_kv_heads, self.head_dim).transpose(1, 2)
 
         q_raw = self.q_proj(x)
         kv_raw = self.kv_proj(x)
@@ -459,8 +468,8 @@ class KVSharedAttention(nn.Module):
             q_raw = F.silu(q_raw)
             kv_raw = F.silu(kv_raw)
 
-        q = self.rope(split_heads(q_raw))    # (B, H, N, head_dim)
-        v = split_heads(kv_raw)
+        q = self.rope(split_q(q_raw))
+        v = split_kv(kv_raw)
         k = self.rope(v)
 
         if hasattr(self, "q_gain"):
@@ -473,6 +482,9 @@ class KVSharedAttention(nn.Module):
         if self._qk_norm:
             q = self.q_norm(q)
             k = self.k_norm(k)
+
+        k = k.repeat_interleave(self.n_groups, dim=1)
+        v = v.repeat_interleave(self.n_groups, dim=1)
 
         dp = self._dropout if self.training else 0.0
         if self._use_flash:

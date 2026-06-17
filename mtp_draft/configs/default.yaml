@@ -1,0 +1,25 @@
+d_draft: 512
+n_blocks: 4
+ffn_hidden: 1366
+n_heads: 8
+dropout: 0.0
+use_xsa: false
+teacher_model_id: "google/gemma-4-e2b-it"
+teacher_layers: [3, 8, 14, 17]
+d_teacher: 2048
+max_draft: 8
+lambda_decay: 0.8
+lora_rank: 16
+max_prompt_len: 256
+tau: 2.0
+max_tree_nodes: 256
+lr: 3.0e-4
+weight_decay: 0.1
+grad_clip: 1.0
+batch_size: 16
+n_epochs: 3
+warmup_steps: 200
+seed: 42
+cache_dir: "mtp_draft/cache"
+cache_n_answer_positions: 8
+cache_shard_size: 5000

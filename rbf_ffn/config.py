@@ -132,6 +132,8 @@ class ModelConfig:
 
         if self.n_kv_heads == 0:
             self.n_kv_heads = self.n_heads
+        if self.n_kv_heads < 1:
+            raise ValueError(f"n_kv_heads must be >= 1 (got {self.n_kv_heads})")
         if self.n_heads % self.n_kv_heads != 0:
             raise ValueError(
                 f"n_heads ({self.n_heads}) must be divisible by n_kv_heads ({self.n_kv_heads})"

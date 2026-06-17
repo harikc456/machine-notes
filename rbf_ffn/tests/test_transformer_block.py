@@ -111,6 +111,27 @@ def test_n_kv_heads_indivisible_raises():
         ModelConfig(d_model=32, n_heads=4, n_kv_heads=3)
 
 
+def test_n_kv_heads_negative_raises():
+    with pytest.raises(ValueError, match="n_kv_heads must be >= 1"):
+        ModelConfig(d_model=32, n_heads=4, n_kv_heads=-1)
+
+
+def test_mha_noop_identical_output():
+    """n_kv_heads=0 must produce bit-identical output to default (unset)."""
+    torch.manual_seed(0)
+    cfg_default = ModelConfig(d_model=D, n_heads=H, dropout=0.0,
+                              ffn_type="swiglu", ffn_hidden=86, pfd_n=4)
+    torch.manual_seed(0)
+    cfg_zero = ModelConfig(d_model=D, n_heads=H, n_kv_heads=0, dropout=0.0,
+                           ffn_type="swiglu", ffn_hidden=86, pfd_n=4)
+    b1 = TransformerBlock(cfg_default)
+    b2 = TransformerBlock(cfg_zero)
+    b2.load_state_dict(b1.state_dict())
+    x = torch.randn(B, N, D)
+    with torch.no_grad():
+        assert torch.allclose(b1(x), b2(x))
+
+
 # ── GQA shape tests ───────────────────────────────────────────────────────────
 
 def make_gqa_cfg(attn_type: str) -> ModelConfig:

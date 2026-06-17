@@ -23,4 +23,5 @@ def test_quantise_int8_range():
 def test_scale_positive():
     x = torch.randn(4, 2048)
     _, scale = _quantise_int8(x)
+    assert isinstance(scale, torch.Tensor)
     assert scale > 0

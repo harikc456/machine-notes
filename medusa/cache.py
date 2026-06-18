@@ -81,7 +81,7 @@ def extract_and_cache(cfg: MedusaConfig, split: str = "train") -> None:
 
     raw = load_dataset(cfg.dataset_id, split="train")
     splits = raw.train_test_split(test_size=cfg.val_split, seed=cfg.seed)
-    dataset = splits["train"] if split == "train" else splits["test"]
+    dataset = splits["train"] if split == "train" else splits["test"]  # HF names this "test"
 
     tokenizer = AutoTokenizer.from_pretrained(cfg.teacher_model_id)
     model = AutoModelForCausalLM.from_pretrained(

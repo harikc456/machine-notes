@@ -21,10 +21,14 @@ class MedusaDataset(Dataset):
     """
 
     def __init__(self, shard_paths: list[Path], cfg: MedusaConfig) -> None:
+        self.cfg = cfg
         self.items: list[tuple[dict, int]] = []
         for path in shard_paths:
             shard: list[dict] = torch.load(path, weights_only=False)
             for entry in shard:
+                assert entry["hidden_int8"].shape[-1] == cfg.d_model, (
+                    f"Shard {path}: hidden dim {entry['hidden_int8'].shape[-1]} != cfg.d_model {cfg.d_model}"
+                )
                 n_pos = entry["hidden_int8"].shape[0]
                 for i in range(n_pos):
                     self.items.append((entry, i))
@@ -59,15 +63,13 @@ def get_dataloaders(cfg: MedusaConfig) -> tuple[DataLoader, DataLoader]:
         train_ds,
         batch_size=cfg.batch_size,
         shuffle=True,
-        num_workers=2,
-        pin_memory=True,
+        num_workers=0,
         generator=g,
     )
     val_loader = DataLoader(
         val_ds,
         batch_size=cfg.batch_size,
         shuffle=False,
-        num_workers=2,
-        pin_memory=True,
+        num_workers=0,
     )
     return train_loader, val_loader

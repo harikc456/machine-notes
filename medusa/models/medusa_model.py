@@ -9,7 +9,7 @@ class MedusaHead(nn.Module):
     """Single Medusa decoding head.
 
     Implements: logits = W2 · SiLU(W1 · h + h)
-    W1 init: zero  (head starts as LM head copy, learns residual correction)
+    W1 initialized to zero — at init, output is W2(SiLU(h)); heads learn a residual correction
     W2 init: clone of frozen teacher LM head weight
     """
 

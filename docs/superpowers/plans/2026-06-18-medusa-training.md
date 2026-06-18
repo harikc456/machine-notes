@@ -6,7 +6,7 @@
 
 **Architecture:** Phase 1 (`cache.py`) runs Gemma 4 E2B on ShareGPT52K conversations, extracts per-position last hidden states, int8-quantizes them per-vector, and writes sharded `.pt` files. Phase 2 (`train.py`) loads those shards and trains K single-layer residual MLP heads with distance-weighted cross-entropy loss (Medusa-1). No backbone fine-tuning.
 
-**Tech Stack:** PyTorch, HuggingFace `transformers` + `datasets`, tqdm, PyYAML, pytest.
+**Tech Stack:** PyTorch, HuggingFace `transformers` + `datasets`, tqdm, PyYAML, pytest. (Muon is `torch.optim.Muon`.)
 
 ## Global Constraints
 
@@ -87,8 +87,10 @@ class MedusaConfig:
     cache_shard_size: int = 5000
     val_split: float = 0.05
 
-    # Optimiser
-    lr: float = 3e-4
+    # Optimiser — Muon for W1 (d_model×d_model), AdamW for W2 (vocab×d_model)
+    muon_lr: float = 0.02
+    muon_momentum: float = 0.95
+    lr: float = 3e-4          # AdamW lr for W2 params
     weight_decay: float = 0.1
     grad_clip: float = 1.0
     batch_size: int = 32
@@ -115,6 +117,8 @@ max_seq_len: 768
 cache_dir: "medusa/cache"
 cache_shard_size: 5000
 val_split: 0.05
+muon_lr: 0.02
+muon_momentum: 0.95
 lr: 3.0e-4
 weight_decay: 0.1
 grad_clip: 1.0
@@ -761,7 +765,13 @@ git commit -m "feat(medusa): cache.py — extract last hidden states from ShareG
 
 **Interfaces:**
 - Consumes: `MedusaConfig` (Task 1), `MedusaModel` (Task 2), `get_dataloaders` (Task 3)
-- Produces: `medusa/checkpoints/best.pt` with keys `model_state`, `optimizer_state`, `cfg`, `epoch`
+- Produces: `medusa/checkpoints/best.pt` with keys `model_state`, `muon_state`, `adamw_state`, `cfg`, `epoch`
+
+**Optimizer split:**
+- `W1` params (named `*.W1.weight`, shape `d_model × d_model`) → `torch.optim.Muon`
+- `W2` params (named `*.W2.weight`, shape `vocab × d_model`) → `AdamW`
+- Both get cosine LR schedules with linear warmup.
+- `training_step` takes `optimizers: list[Optimizer]` and steps all of them.
 
 - [ ] **Step 1: Write failing smoke test**
 
@@ -769,9 +779,7 @@ git commit -m "feat(medusa): cache.py — extract last hidden states from ShareG
 # medusa/tests/test_train.py
 from __future__ import annotations
 import math
-from pathlib import Path
 import torch
-import torch.nn.functional as F
 import pytest
 
 from medusa.config import MedusaConfig
@@ -798,33 +806,32 @@ def model(cfg):
 def test_training_step_returns_scalar(cfg, model):
     from medusa.train import training_step
     from torch.optim import AdamW
-    optimizer = AdamW(model.parameters(), lr=1e-3)
+    opt = AdamW(model.parameters(), lr=1e-3)
     hidden = torch.randn(B, D_MODEL)
     targets = torch.randint(0, VOCAB, (B, N_HEADS))
-    loss = training_step(model, hidden, targets, cfg, optimizer)
+    loss = training_step(model, hidden, targets, cfg, [opt])
     assert loss.shape == ()
     assert loss.item() > 0
 
 
-def test_training_step_updates_weights(cfg, model):
+def test_training_step_updates_w1(cfg, model):
     from medusa.train import training_step
     from torch.optim import AdamW
-    optimizer = AdamW(model.parameters(), lr=1e-3)
+    opt = AdamW(model.parameters(), lr=1e-3)
     w_before = model.heads[0].W1.weight.clone()
     hidden = torch.randn(B, D_MODEL)
     targets = torch.randint(0, VOCAB, (B, N_HEADS))
-    training_step(model, hidden, targets, cfg, optimizer)
+    training_step(model, hidden, targets, cfg, [opt])
     assert not torch.equal(model.heads[0].W1.weight, w_before)
 
 
 def test_training_step_ignores_minus100(cfg, model):
     from medusa.train import training_step
     from torch.optim import AdamW
-    optimizer = AdamW(model.parameters(), lr=1e-3)
+    opt = AdamW(model.parameters(), lr=1e-3)
     hidden = torch.randn(B, D_MODEL)
-    # All targets padded
     targets = torch.full((B, N_HEADS), -100, dtype=torch.long)
-    loss = training_step(model, hidden, targets, cfg, optimizer)
+    loss = training_step(model, hidden, targets, cfg, [opt])
     assert not torch.isnan(loss)
 
 
@@ -864,7 +871,8 @@ from typing import Callable
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.optim import AdamW
+from torch.optim import AdamW, Optimizer
+from torch.optim import Muon
 from torch.optim.lr_scheduler import LambdaLR
 from tqdm import tqdm
 
@@ -888,15 +896,16 @@ def training_step(
     hidden: torch.Tensor,
     targets: torch.Tensor,
     cfg: MedusaConfig,
-    optimizer: AdamW,
+    optimizers: list[Optimizer],
 ) -> torch.Tensor:
     """
     Single training step. Computes distance-weighted cross-entropy loss,
-    back-propagates, clips gradients, steps optimizer.
+    back-propagates, clips gradients, steps all optimizers.
 
-    hidden:  (B, d_model)
-    targets: (B, n_heads) — -100 for padding positions
-    Returns: scalar loss (detached)
+    hidden:     (B, d_model)
+    targets:    (B, n_heads) — -100 for padding positions
+    optimizers: list of optimizers to zero/step (Muon + AdamW in practice)
+    Returns:    scalar loss (detached)
     """
     model.train()
     logits = model(hidden)  # (B, n_heads, vocab)
@@ -906,10 +915,12 @@ def training_step(
         w = cfg.lambda_decay ** k
         loss = loss + w * F.cross_entropy(logits[:, k, :], targets[:, k], ignore_index=-100)
 
-    optimizer.zero_grad()
+    for opt in optimizers:
+        opt.zero_grad()
     loss.backward()
     nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
-    optimizer.step()
+    for opt in optimizers:
+        opt.step()
     return loss.detach()
 
 
@@ -930,11 +941,21 @@ def train(cfg: MedusaConfig) -> None:
     n_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Trainable parameters: {n_trainable:,}")
 
+    # W1 (d_model×d_model square matrices) → Muon
+    # W2 (vocab×d_model large matrices) → AdamW
+    muon_params = [p for name, p in model.named_parameters() if name.endswith("W1.weight")]
+    adamw_params = [p for name, p in model.named_parameters() if not name.endswith("W1.weight")]
+
     train_loader, val_loader = get_dataloaders(cfg)
     total_steps = cfg.n_epochs * len(train_loader)
+    lr_lambda = make_lr_lambda(cfg.warmup_steps, total_steps)
 
-    optimizer = AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
-    scheduler = LambdaLR(optimizer, make_lr_lambda(cfg.warmup_steps, total_steps))
+    muon_opt = Muon(muon_params, lr=cfg.muon_lr, momentum=cfg.muon_momentum)
+    adamw_opt = AdamW(adamw_params, lr=cfg.lr, weight_decay=cfg.weight_decay)
+    muon_sched = LambdaLR(muon_opt, lr_lambda)
+    adamw_sched = LambdaLR(adamw_opt, lr_lambda)
+
+    optimizers = [muon_opt, adamw_opt]
 
     best_val_loss = float("inf")
     ckpt_dir = Path(cfg.cache_dir).parent / "checkpoints"
@@ -948,8 +969,9 @@ def train(cfg: MedusaConfig) -> None:
         for hidden, targets in tqdm(train_loader, desc=f"Epoch {epoch + 1}/{cfg.n_epochs}"):
             hidden = hidden.to(device)
             targets = targets.to(device)
-            loss = training_step(model, hidden, targets, cfg, optimizer)
-            scheduler.step()
+            loss = training_step(model, hidden, targets, cfg, optimizers)
+            muon_sched.step()
+            adamw_sched.step()
             total_train_loss += loss.item()
             n_batches += 1
 
@@ -980,7 +1002,8 @@ def train(cfg: MedusaConfig) -> None:
             ckpt = {
                 "epoch": epoch,
                 "model_state": model.state_dict(),
-                "optimizer_state": optimizer.state_dict(),
+                "muon_state": muon_opt.state_dict(),
+                "adamw_state": adamw_opt.state_dict(),
                 "cfg": cfg,
             }
             torch.save(ckpt, ckpt_dir / "best.pt")
@@ -1014,7 +1037,7 @@ Expected: all tests PASS (no teacher required — all tests use random tensors o
 
 ```bash
 git add medusa/train.py medusa/tests/test_train.py
-git commit -m "feat(medusa): Medusa-1 training loop — distance-weighted MTP loss, cosine LR, checkpoint"
+git commit -m "feat(medusa): Medusa-1 training loop — Muon/AdamW param split, cosine LR, checkpoint"
 ```
 
 ---

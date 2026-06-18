@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 import yaml
 
@@ -27,7 +27,7 @@ class MedusaConfig:
     # Optimiser — Muon for W1 (d_model×d_model), AdamW for W2 (vocab×d_model)
     muon_lr: float = 0.02
     muon_momentum: float = 0.95
-    lr: float = 3e-4          # AdamW lr for W2 params
+    lr: float = 3e-4
     weight_decay: float = 0.1
     grad_clip: float = 1.0
     batch_size: int = 32

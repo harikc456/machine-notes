@@ -133,9 +133,9 @@ def train(cfg: MedusaConfig) -> None:
                 batch_loss = 0.0
                 for k in range(logits.shape[1]):
                     w = cfg.lambda_decay ** k
-                    batch_loss += w * F.cross_entropy(
-                        logits[:, k, :], targets[:, k], ignore_index=-100
-                    ).item()
+                    head_loss = F.cross_entropy(logits[:, k, :], targets[:, k], ignore_index=-100)
+                    if not torch.isnan(head_loss):
+                        batch_loss += w * head_loss.item()
                 val_loss_sum += batch_loss
                 n_val += 1
 

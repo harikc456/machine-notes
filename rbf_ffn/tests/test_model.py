@@ -1,4 +1,5 @@
 # rbf_ffn/tests/test_model.py
+import math as _math
 import torch
 import pytest
 from rbf_ffn.config import ModelConfig
@@ -599,9 +600,6 @@ def test_kromhc_gradient_flows():
         for gen in block.head_mixer.weight_gens:
             for p in gen.parameters():
                 assert p.grad is not None
-
-
-import math as _math
 
 
 def _make_mup_model(d_model: int = D, base_width: int = 64, init_std: float = 0.02) -> CausalLM:

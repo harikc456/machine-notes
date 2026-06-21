@@ -58,7 +58,7 @@ def build_optimizer_groups(
 def _apply_mup_init(model: "CausalLM", cfg: ModelConfig) -> None:
     """Reinit all nn.Linear hidden weights with muP std = mup_init_std * sqrt(base/d_model).
 
-    Skips the tied embedding weight (input layer — init unchanged).
+    Skips the tied embedding weight (input layer — init unchanged). When tie_embeddings=False, lm_head is a separate nn.Linear and IS reinited — this is correct muP behavior (output layer = hidden layer under muP).
     Biases and non-Linear params are untouched.
     Kronecker-factored layers are not nn.Linear, so they are skipped automatically.
     """

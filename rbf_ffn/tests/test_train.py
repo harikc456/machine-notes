@@ -401,3 +401,79 @@ def test_non_kromhc_metrics_have_no_H_keys(tmp_path):
     exp_dir = _run_train(cfg, tmp_path)
     rows = [json.loads(l) for l in (exp_dir / "metrics.jsonl").read_text().splitlines()]
     assert "kromhc/H_row_entropy_mean" not in rows[0]
+
+
+# ── muP optimizer LR scaling ──────────────────────────────────────────────────
+
+def test_mup_muon_lr_is_scaled():
+    """Muon LR must be muon_lr * (mup_base_width / d_model) when mup=True."""
+    try:
+        from torch.optim import Muon
+    except ImportError:
+        pytest.skip("Muon not available")
+    from rbf_ffn.models.model import build_optimizer_groups
+
+    cfg = _tiny_cfg(mup=True, mup_base_width=64, muon_lr=0.02, adamw_lr=3e-4)
+    model = CausalLM(cfg)
+    muon_params, _ = build_optimizer_groups(model)
+    mup_scale = cfg.mup_base_width / cfg.d_model
+    muon = Muon(muon_params, lr=cfg.muon_lr * mup_scale, momentum=0.95)
+    assert muon.param_groups[0]["lr"] == pytest.approx(0.02 * mup_scale)
+
+
+def test_mup_adamw_hidden_lr_is_scaled():
+    """Non-embedding AdamW params must get lr = adamw_lr * (mup_base_width / d_model)."""
+    from rbf_ffn.models.model import build_optimizer_groups
+
+    cfg = _tiny_cfg(mup=True, mup_base_width=64, adamw_lr=3e-4)
+    model = CausalLM(cfg)
+    _, adamw_params = build_optimizer_groups(model)
+    mup_scale = cfg.mup_base_width / cfg.d_model
+    emb_id = id(model.token_embedding.weight)
+    adamw = AdamW([
+        {"params": [p for p in adamw_params if id(p) != emb_id],
+         "lr": cfg.adamw_lr * mup_scale},
+        {"params": [p for p in adamw_params if id(p) == emb_id],
+         "lr": cfg.adamw_lr},
+    ], weight_decay=cfg.adamw_wd, betas=(0.9, 0.95))
+    hidden_group = next(g for g in adamw.param_groups
+                        if any(id(p) != emb_id for p in g["params"]))
+    assert hidden_group["lr"] == pytest.approx(3e-4 * mup_scale)
+
+
+def test_mup_adamw_embedding_lr_unscaled():
+    """Embedding must get the raw adamw_lr, not the scaled one."""
+    from rbf_ffn.models.model import build_optimizer_groups
+
+    cfg = _tiny_cfg(mup=True, mup_base_width=64, adamw_lr=3e-4)
+    model = CausalLM(cfg)
+    _, adamw_params = build_optimizer_groups(model)
+    mup_scale = cfg.mup_base_width / cfg.d_model
+    emb_id = id(model.token_embedding.weight)
+    adamw = AdamW([
+        {"params": [p for p in adamw_params if id(p) != emb_id],
+         "lr": cfg.adamw_lr * mup_scale},
+        {"params": [p for p in adamw_params if id(p) == emb_id],
+         "lr": cfg.adamw_lr},
+    ], weight_decay=cfg.adamw_wd, betas=(0.9, 0.95))
+    emb_group = next(g for g in adamw.param_groups
+                     if any(id(p) == emb_id for p in g["params"]))
+    assert emb_group["lr"] == pytest.approx(3e-4)
+
+
+def test_mup_disabled_lrs_unchanged():
+    """When mup=False, both LRs must be exactly as configured."""
+    try:
+        from torch.optim import Muon
+    except ImportError:
+        pytest.skip("Muon not available")
+    from rbf_ffn.models.model import build_optimizer_groups
+
+    cfg = _tiny_cfg(mup=False, muon_lr=0.02, adamw_lr=3e-4)
+    model = CausalLM(cfg)
+    muon_params, adamw_params = build_optimizer_groups(model)
+    muon = Muon(muon_params, lr=cfg.muon_lr * 1.0, momentum=0.95)
+    adamw_opt = AdamW(adamw_params, lr=cfg.adamw_lr,
+                      weight_decay=cfg.adamw_wd, betas=(0.9, 0.95))
+    assert muon.param_groups[0]["lr"] == pytest.approx(0.02)
+    assert adamw_opt.param_groups[0]["lr"] == pytest.approx(3e-4)

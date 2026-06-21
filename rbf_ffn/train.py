@@ -53,6 +53,8 @@ def get_experiment_dir(cfg: ModelConfig) -> Path:
         norm_tags += f"_loralm{cfg.lm_head_lora_rank}"
     if cfg.qkv_gain:
         norm_tags += f"_gain{''.join(sorted(cfg.qkv_gain_targets))}"
+    if cfg.mup:
+        norm_tags += f"_mup{cfg.mup_base_width}"
     name = f"{stamp}_{cfg.attn_type}_{cfg.ffn_type}{norm_tags}_d{cfg.d_model}"
     path = Path(__file__).parent / "experiments" / name
     path.mkdir(parents=True, exist_ok=True)
@@ -269,9 +271,21 @@ def train(
 
     # ── Optimisers ────────────────────────────────────────────────────────────
     muon_params, adamw_params = build_optimizer_groups(model)
-    muon  = Muon( muon_params,  lr=cfg.muon_lr, momentum=0.95)
-    adamw = AdamW(adamw_params, lr=cfg.adamw_lr,
-                  weight_decay=cfg.adamw_wd, betas=(0.9, 0.95))
+    mup_scale = (cfg.mup_base_width / cfg.d_model) if cfg.mup else 1.0
+
+    muon  = Muon(muon_params, lr=cfg.muon_lr * mup_scale, momentum=0.95)
+
+    if cfg.mup:
+        emb_id = id(model.token_embedding.weight)
+        adamw = AdamW([
+            {"params": [p for p in adamw_params if id(p) != emb_id],
+             "lr": cfg.adamw_lr * mup_scale},
+            {"params": [p for p in adamw_params if id(p) == emb_id],
+             "lr": cfg.adamw_lr},
+        ], weight_decay=cfg.adamw_wd, betas=(0.9, 0.95))
+    else:
+        adamw = AdamW(adamw_params, lr=cfg.adamw_lr,
+                      weight_decay=cfg.adamw_wd, betas=(0.9, 0.95))
 
     # ── Resume ────────────────────────────────────────────────────────────────
     # Load into the uncompiled CausalLM so checkpoint keys always match.

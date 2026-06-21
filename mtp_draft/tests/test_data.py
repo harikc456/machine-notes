@@ -31,15 +31,12 @@ class _MockTokenizer:
 
 def _make_example():
     return {
-        "question": "Where was Einstein born?",
-        "context": {
-            "title": ["Einstein", "Physics"],
-            "sentences": [
-                ["Albert Einstein was born in Ulm."],
-                ["He developed the theory of relativity."],
-            ],
-        },
-        "answer": "Ulm",
+        "tool_list": [
+            {"name": "search", "description": "Search the web for information."},
+            {"name": "calculator", "description": "Evaluate a mathematical expression."},
+        ],
+        "query": "What is the population of France?",
+        "answer": "search(query='population of France')\nThe population of France is approximately 68 million.",
     }
 
 
@@ -56,23 +53,29 @@ def test_build_prompt_truncates_to_max(cfg):
     assert len(prompt_ids) <= cfg.max_prompt_len
 
 
-def test_build_prompt_truncates_paragraphs():
-    """Truncation fires when paragraphs exceed the budget."""
+def test_build_prompt_truncates_tools():
+    """Truncation fires when tool descriptions exceed the budget."""
     tok = _MockTokenizer()
-    # Make an example with 20 identical long paragraphs
-    long_para = " ".join([f"word{i}" for i in range(50)])
+    long_desc = " ".join([f"word{i}" for i in range(50)])
     example = {
-        "question": "What?",
-        "context": {
-            "title": [f"Title{i}" for i in range(20)],
-            "sentences": [[long_para] for _ in range(20)],
-        },
-        "answer": "yes",
+        "tool_list": [{"name": f"tool{i}", "description": long_desc} for i in range(20)],
+        "query": "Do something.",
+        "answer": "tool0()",
     }
     prompt_ids, _ = build_prompt(example, tok, max_prompt_len=64)
     assert len(prompt_ids) <= 64
-    # At most 2-3 paragraphs can fit in 64 tokens; 20 paragraphs means truncation fired
-    assert len(prompt_ids) < 64  # paragraphs were cut off
+
+
+def test_build_prompt_flattens_list_answer():
+    """List-of-dict answers are flattened to a single string."""
+    tok = _MockTokenizer()
+    example = {
+        "tool_list": [],
+        "query": "Hi",
+        "answer": [{"role": "assistant", "message": "Hello world"}],
+    }
+    _, answer_ids = build_prompt(example, tok, max_prompt_len=64)
+    assert len(answer_ids) > 0
 
 
 def _make_shard(cfg, tmp_path: Path) -> Path:

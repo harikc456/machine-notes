@@ -1,5 +1,5 @@
 """
-Phase 2: train the MTP draft model on pre-cached HotpotQA features.
+Phase 2: train the MTP draft model on pre-cached ToolAlpaca features.
 
 Usage:
     python -m mtp_draft.train --config mtp_draft/configs/default.yaml
@@ -77,8 +77,8 @@ def train(cfg: MTPConfig) -> None:
         cfg.teacher_model_id,
         torch_dtype=torch.bfloat16,
     )
-    teacher_embed_w = teacher.model.embed_tokens.weight.detach().clone().float()
-    teacher_lm_head_w = teacher.lm_head.weight.detach().clone().float()
+    teacher_embed_w = teacher.get_input_embeddings().weight.detach().clone().float()
+    teacher_lm_head_w = teacher.get_output_embeddings().weight.detach().clone().float()
     del teacher
     print("Teacher weights extracted, model offloaded.")
 

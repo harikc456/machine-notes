@@ -13,41 +13,29 @@ def build_prompt(
     tokenizer,
     max_prompt_len: int,
 ) -> tuple[list[int], list[int]]:
-    """Format a HotpotQA example into (prompt_ids, answer_ids).
+    """Format a ToolAlpaca example into (prompt_ids, answer_ids).
 
-    Prompt format:
-        Question: {q}\\n\\nContext:\\n{para_1}\\n...{para_n}\\n\\nAnswer:
-
-    Context paragraphs are truncated (last paragraphs dropped first) to fit
-    within max_prompt_len. The question is always preserved.
+    Uses the pre-formatted ``prompt`` field as the prompt and
+    ``golden_response`` (list of response turns) as the answer.
 
     Returns:
-        prompt_ids:  token ids for the full prompt (len <= max_prompt_len)
-        answer_ids:  token ids for the answer string (no special tokens)
+        prompt_ids:  token ids for the prompt, truncated to max_prompt_len
+        answer_ids:  token ids for the answer (no special tokens)
     """
-    question = example["question"]
-    titles = example["context"]["title"]
-    sentences = example["context"]["sentences"]
-    answer = example["answer"]
+    prompt_text = example.get("prompt", "")
+    answer = example.get("golden_response", "")
 
-    q_prefix = f"Question: {question}\n\nContext:\n"
-    a_suffix = "\n\nAnswer:"
+    if isinstance(answer, list):
+        answer = " ".join(str(t) for t in answer)
 
-    q_ids = tokenizer.encode(q_prefix)
-    a_sep_ids = tokenizer.encode(a_suffix)
-    answer_ids = tokenizer.encode(answer, add_special_tokens=False)
+    if not prompt_text or not answer:
+        return [], []
 
-    budget = max_prompt_len - len(q_ids) - len(a_sep_ids)
+    prompt_ids = tokenizer.encode(prompt_text)
+    if len(prompt_ids) > max_prompt_len:
+        prompt_ids = prompt_ids[-max_prompt_len:]
 
-    ctx_ids: list[int] = []
-    for title, sent_list in zip(titles, sentences):
-        para = title + ": " + " ".join(sent_list) + "\n"
-        para_ids = tokenizer.encode(para, add_special_tokens=False)
-        if len(ctx_ids) + len(para_ids) > budget:
-            break
-        ctx_ids.extend(para_ids)
-
-    prompt_ids = q_ids + ctx_ids + a_sep_ids
+    answer_ids = tokenizer.encode(str(answer), add_special_tokens=False)
     return prompt_ids, answer_ids
 
 

@@ -37,12 +37,16 @@ class TeacherFeatureFusion(nn.Module):
             head_dim=d_draft,
             mixer_hidden=mixer_hidden,
         )
+        # Zero-init → uniform weights at start (equivalent to prior mean pooling)
+        self.layer_weights = nn.Parameter(torch.zeros(n_teacher_layers))
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         """hidden_states: (B, n_teacher_layers, d_teacher) → (B, d_draft)"""
+        hidden_states = hidden_states.to(self.layer_projs[0].weight.dtype)
         projected = torch.stack(
             [self.layer_projs[i](hidden_states[:, i, :]) for i in range(self.n_layers)],
             dim=1,
         )  # (B, n_layers, d_draft)
         mixed, _ = self.head_mixer(projected)  # (B, n_layers, d_draft)
-        return mixed.mean(dim=1)  # (B, d_draft)
+        w = torch.softmax(self.layer_weights, dim=0)  # (n_layers,)
+        return (mixed * w.unsqueeze(-1)).sum(dim=1)  # (B, d_draft)

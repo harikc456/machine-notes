@@ -1,5 +1,5 @@
 """
-Phase 1: extract teacher hidden states from HotpotQA and save int8 shards.
+Phase 1: extract teacher hidden states from ToolAlpaca and save int8 shards.
 
 Usage:
     python -m mtp_draft.cache --config mtp_draft/configs/default.yaml --split train
@@ -32,9 +32,11 @@ def _dequantise_int8(t: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
 
 def extract_and_cache(cfg: MTPConfig, split: str = "train") -> None:
     """
-    Load Gemma 4 E2b, run over HotpotQA `split`, extract hidden states at
+    Load Gemma 4 E2b, run over ToolAlpaca `split`, extract hidden states at
     cfg.teacher_layers for up to cfg.cache_n_answer_positions per example,
     quantise to int8, and write sharded .pt files to cfg.cache_dir.
+
+    ToolAlpaca only has a train split; validation is carved out as the last 10%.
 
     Shard file format (list of dicts):
         {
@@ -50,7 +52,9 @@ def extract_and_cache(cfg: MTPConfig, split: str = "train") -> None:
 
     os.makedirs(cfg.cache_dir, exist_ok=True)
 
-    dataset = load_dataset("hotpotqa/hotpot_qa", "fullwiki", split=split)
+    raw = load_dataset("Ahren09/ToolAlpaca", split="train")
+    splits = raw.train_test_split(test_size=0.1, seed=cfg.seed)
+    dataset = splits["train"] if split == "train" else splits["test"]
     tokenizer = AutoTokenizer.from_pretrained(cfg.teacher_model_id)
 
     model = AutoModelForCausalLM.from_pretrained(

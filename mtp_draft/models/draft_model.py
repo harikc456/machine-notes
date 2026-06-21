@@ -15,7 +15,7 @@ class MTPDraftModel(nn.Module):
     Forward pass:
       1. Fuse teacher hidden states → Q_fused (B, d_draft) via KromHC
       2. Add per-position step embeddings → Q (B, max_draft, d_draft)
-      3. Embed context_ids with frozen teacher embedding, project to d_draft → context
+      3. Prepend anchor hidden (last cached layer → d_draft) to token embeddings → context
       4. N cross-attention blocks: query = Q, context = context
       5. Project output back to d_teacher, apply frozen LM head + LoRA
 
@@ -42,6 +42,8 @@ class MTPDraftModel(nn.Module):
 
         # Context projection: d_teacher → d_draft (trained)
         self.ctx_proj = nn.Linear(cfg.d_teacher, cfg.d_draft, bias=False)
+        # Projects anchor position's last-layer hidden → d_draft global context token
+        self.anchor_proj = nn.Linear(cfg.d_teacher, cfg.d_draft, bias=False)
 
         # KromHC multi-layer feature fusion
         self.fusion = TeacherFeatureFusion(
@@ -87,9 +89,13 @@ class MTPDraftModel(nn.Module):
         step_embs = self.step_embed(steps)                 # (B, max_draft, d_draft)
         query = q_fused.unsqueeze(1) + step_embs           # (B, max_draft, d_draft)
 
-        # 3. Context: embed tokens (frozen) then project to d_draft
+        # 3. Context: anchor hidden (last cached layer) + token embeddings
+        anchor = self.anchor_proj(
+            teacher_hiddens[:, -1, :].to(self.anchor_proj.weight.dtype)
+        ).unsqueeze(1)                                     # (B, 1, d_draft)
         ctx_emb = self.token_embedding(context_ids)        # (B, seq_len, d_teacher)
-        context = self.ctx_proj(ctx_emb)                   # (B, seq_len, d_draft)
+        ctx_proj = self.ctx_proj(ctx_emb)                  # (B, seq_len, d_draft)
+        context = torch.cat([anchor, ctx_proj], dim=1)     # (B, 1+seq_len, d_draft)
 
         # 4. Cross-attention blocks
         for block in self.blocks:

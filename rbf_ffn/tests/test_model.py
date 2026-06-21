@@ -599,3 +599,114 @@ def test_kromhc_gradient_flows():
         for gen in block.head_mixer.weight_gens:
             for p in gen.parameters():
                 assert p.grad is not None
+
+
+import math as _math
+
+
+def _make_mup_model(d_model: int = D, base_width: int = 64, init_std: float = 0.02) -> CausalLM:
+    cfg = ModelConfig(
+        d_model=d_model, n_heads=H, n_layers=L,
+        vocab_size=VOCAB, seq_len=N,
+        ffn_hidden=d_model * 3 // 2,
+        dropout=0.0,
+        mup=True,
+        mup_base_width=base_width,
+        mup_init_std=init_std,
+    )
+    return CausalLM(cfg)
+
+
+def test_mup_scale_attribute():
+    """mup_scale == mup_base_width / d_model."""
+    model = _make_mup_model(d_model=D, base_width=64)
+    assert model.mup_scale == pytest.approx(64 / D)
+
+
+def test_mup_scale_is_one_when_disabled():
+    """mup=False (default) must set mup_scale to 1.0."""
+    model = make_model("baseline")
+    assert model.mup_scale == pytest.approx(1.0)
+
+
+def test_mup_hidden_weight_std():
+    """All hidden nn.Linear weights must have std ≈ mup_init_std * sqrt(base_width / d_model)."""
+    base_width, init_std = 64, 0.02
+    expected_std = init_std * _math.sqrt(base_width / D)
+    model = _make_mup_model(d_model=D, base_width=base_width, init_std=init_std)
+    tied_id = id(model.token_embedding.weight)
+    stds = [
+        m.weight.data.std().item()
+        for m in model.modules()
+        if isinstance(m, torch.nn.Linear) and id(m.weight) != tied_id
+    ]
+    assert stds, "No hidden Linear layers found"
+    mean_std = sum(stds) / len(stds)
+    # 30% relative tolerance: small matrices have high sample variance
+    assert mean_std == pytest.approx(expected_std, rel=0.3)
+
+
+def test_mup_embedding_weight_not_reinited():
+    """_apply_mup_init must leave the token embedding weight alone (it's the input layer).
+
+    nn.Embedding default init is N(0,1) → std close to 1.0.
+    muP init std is 0.02 * sqrt(64/32) ≈ 0.028, which is far below 0.5.
+    """
+    model = _make_mup_model(d_model=D, base_width=64, init_std=0.02)
+    emb_std = model.token_embedding.weight.data.std().item()
+    assert emb_std > 0.5, f"Embedding std unexpectedly small ({emb_std}): was it reinited?"
+
+
+def test_mup_logit_scaling():
+    """Logits with mup=True must equal unscaled logits * (mup_base_width / d_model)."""
+    torch.manual_seed(0)
+    base_width = 64
+    expected_scale = base_width / D
+
+    cfg = ModelConfig(
+        d_model=D, n_heads=H, n_layers=L,
+        vocab_size=VOCAB, seq_len=N,
+        ffn_hidden=D * 3 // 2, dropout=0.0,
+        mup=True, mup_base_width=base_width, mup_init_std=0.02,
+    )
+    model = CausalLM(cfg)
+    model.eval()
+    tokens = torch.randint(0, VOCAB, (1, N))
+
+    with torch.no_grad():
+        logits_scaled, _ = model(tokens)
+        # Bypass the multiplier by temporarily patching mup_scale to 1.0
+        orig = model.mup_scale
+        model.mup_scale = 1.0
+        logits_raw, _ = model(tokens)
+        model.mup_scale = orig
+
+    assert torch.allclose(logits_scaled, logits_raw * expected_scale, atol=1e-5)
+
+
+def test_mup_output_shape_unchanged():
+    model = _make_mup_model()
+    tokens = torch.randint(0, VOCAB, (B, N))
+    logits, hs = model(tokens)
+    assert logits.shape == (B, N, VOCAB)
+    assert hs == []
+
+
+def test_mup_gradient_flows():
+    model = _make_mup_model()
+    tokens = torch.randint(0, VOCAB, (B, N))
+    logits, _ = model(tokens)
+    logits.sum().backward()
+    assert model.token_embedding.weight.grad is not None
+
+
+def test_mup_base_equals_width_is_numerically_identical():
+    """When mup_base_width == d_model, mup_scale == 1.0."""
+    cfg = ModelConfig(
+        d_model=D, n_heads=H, n_layers=L,
+        vocab_size=VOCAB, seq_len=N,
+        ffn_hidden=D * 3 // 2, dropout=0.0,
+        mup=True, mup_base_width=D,
+    )
+    model = CausalLM(cfg)
+    assert model.mup_scale == pytest.approx(1.0)

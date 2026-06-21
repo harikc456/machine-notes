@@ -1,5 +1,6 @@
 # rbf_ffn/models/model.py
 from __future__ import annotations
+import math
 import torch
 import torch.nn as nn
 from rbf_ffn.config import ModelConfig
@@ -52,6 +53,20 @@ def build_optimizer_groups(
             adamw.append(param)
 
     return muon, adamw
+
+
+def _apply_mup_init(model: "CausalLM", cfg: ModelConfig) -> None:
+    """Reinit all nn.Linear hidden weights with muP std = mup_init_std * sqrt(base/d_model).
+
+    Skips the tied embedding weight (input layer — init unchanged).
+    Biases and non-Linear params are untouched.
+    Kronecker-factored layers are not nn.Linear, so they are skipped automatically.
+    """
+    std = cfg.mup_init_std * math.sqrt(cfg.mup_base_width / cfg.d_model)
+    tied_id = id(model.token_embedding.weight)
+    for module in model.modules():
+        if isinstance(module, nn.Linear) and id(module.weight) != tied_id:
+            nn.init.normal_(module.weight, mean=0.0, std=std)
 
 
 class CausalLM(nn.Module):
@@ -115,6 +130,10 @@ class CausalLM(nn.Module):
             if cfg.tie_embeddings:
                 self.lm_head.weight = self.token_embedding.weight
 
+        self.mup_scale: float = (cfg.mup_base_width / cfg.d_model) if cfg.mup else 1.0
+        if cfg.mup:
+            _apply_mup_init(self, cfg)
+
     def forward(self, tokens: torch.Tensor) -> tuple[torch.Tensor, list]:
         """
         tokens: (B, N) integer token ids
@@ -140,4 +159,4 @@ class CausalLM(nn.Module):
         x = self.norm(x)
         if self.pre_lm_head_silu:
             x = torch.nn.functional.silu(x)
-        return self.lm_head(x), hs
+        return self.lm_head(x) * self.mup_scale, hs

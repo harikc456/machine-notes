@@ -1,10 +1,10 @@
 ---
 title: Speculative Decoding
 created: 2026-05-14
-updated: 2026-05-31
+updated: 2026-06-17
 type: concept
 tags: [inference, speculative]
-sources: [raw/papers/2211.17192v2.pdf, raw/papers/2603.03251v3.pdf, raw/papers/2401.15077v3.pdf, raw/papers/2406.16858v2.pdf, raw/papers/2503.01840v3.pdf, raw/papers/2602.06036v2.pdf]
+sources: [raw/papers/2211.17192v2.pdf, raw/papers/2603.03251v3.pdf, raw/papers/2401.15077v3.pdf, raw/papers/2406.16858v2.pdf, raw/papers/2503.01840v3.pdf, raw/papers/2602.06036v2.pdf, raw/papers/2401.10774v3.md]
 confidence: high
 ---
 
@@ -29,6 +29,20 @@ Autoregressive decoding from large Transformers is slow: generating K tokens req
 4. **Guarantee**: The joint distribution of accepted tokens is *identical* to M_p's autoregressive distribution
 
 The number of serial target model passes is at most 1 per generation step (and often fewer). The *expected* number of new tokens per target pass is >1 whenever the draft model is a reasonable approximator.
+
+## Medusa: Multi-Head Decoding (ICML 2024)
+
+[[medusa]] (Cai et al., Princeton/Together AI, ICML 2024) eliminates the draft model entirely by adding K **single-layer decoding heads** on top of the backbone's last hidden state h_t. Head k predicts the token k+1 steps ahead. All K predictions are made in one forward pass.
+
+**Tree attention**: top-s_k predictions from each head form a candidate tree via Cartesian product. A tree-structured attention mask processes all candidates simultaneously in one backbone forward pass, then accepts the longest consistent prefix.
+
+**Two training modes**:
+- Medusa-1 (frozen backbone): trains only the heads with exponentially decayed loss weights (λ_k = 0.8^k). >2.2× speedup, trainable on a single GPU in hours.
+- Medusa-2 (joint training): combined LM + Medusa loss with differential LRs and heads warmup. 2.83× speedup on Vicuna-7B with no quality loss.
+
+**Typical acceptance**: replaces rejection sampling with an entropy-aware threshold that accepts "typical" (not exceedingly improbable) tokens — degrades more gracefully at high temperatures.
+
+Draft accuracy ~0.6 (vs. EAGLE's ~0.8), which explains the speedup gap. Medusa's advantage is simplicity: no autoregressive drafting at inference, no separate serving infrastructure.
 
 ## EAGLE Family: Feature-Level Speculative Decoding
 
@@ -98,6 +112,7 @@ Key challenge: predicting the bonus token (sampled from residual distribution) w
 
 ## See Also
 
+- [[medusa]] — multi-head decoding; no draft model; 2.2–2.83×; simpler than EAGLE
 - [[kv-cache]] — orthogonal memory bottleneck technique
 - [[layerskip]] — self-speculative decoding via early exit layers
 - [[early-exit-inference]] — concept page for early exit and layer skipping

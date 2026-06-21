@@ -1,7 +1,7 @@
 ---
 title: KV Cache
 created: 2026-05-14
-updated: 2026-05-16
+updated: 2026-06-17
 type: concept
 tags: [kv-cache, inference, attention, quantization]
 sources: [raw/papers/2306.14048v3.pdf, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf, raw/papers/2604.04921v1.pdf]
@@ -45,6 +45,7 @@ Modify the model to produce fewer K/V pairs:
 - **Grouped-Query Attention (GQA)**: groups of query heads share one K/V head
 - **Multi-Head Latent Attention (MLA)**: compress K/V into low-rank latent space (DeepSeek)
 - **CSA/HCA** in [[deepseek-v4]]: 3.7–9.8× reduction in KV cache vs DeepSeek-V3.2
+- **Projection sharing (Q-K=V)**: force K=V at the projection level — only K needs to be cached, V is reused. [[qkv-projection-sharing]] (ICML 2026): 50% cache, +3.1% PPL at 300M. Orthogonal to head sharing — combined Q-MQA achieves 96.9% cache reduction at +4.8% PPL.
 
 ### Offloading
 Move KV cache from GPU HBM to CPU RAM or disk:
@@ -70,4 +71,5 @@ These are **complementary** — quantization + eviction can be combined.
 - [[turboquant]] — vector quantization
 - [[kv-cache-compression-comparison]] — detailed comparison
 - [[quantization]] — broader quantization context
+- [[qkv-projection-sharing]] — architectural reduction via K=V projection constraint; 50% cache, orthogonal to GQA/MQA
 - [[speculative-decoding]] — orthogonal inference speedup technique

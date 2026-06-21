@@ -257,3 +257,19 @@
 - Pages updated:
   - entities/i-dlm.md — added "Small-Scale Reproduction" section: WikiText-103 setup (frozen rbf_ffn + per-position LoRA, rank=8, stride=4), key implementation note on [x_0|x_t] concatenation order (causal attention requires clean-first), baseline config table, first experiment results (run 20260606_193642_930058_idlm_r8_s4: α=0.34, PPL=155.7, TPF/OH=1.11 at d=256/3 epochs); bumped updated date to 2026-06-07
   - index.md — updated last-updated date and i-dlm summary with reproduction metrics
+
+## [2026-06-17] ingest | Batch ingest: 2 new papers — QKV Projection Sharing + Medusa
+- Sources ingested:
+  - 2606.04032v2.pdf → "Do Transformers Need Three Projections? Systematic Study of QKV Variants" (Kayyam, Madan Gopal, Lewis — BrainChip Inc., ICML 2026)
+  - 2401.10774v3.pdf → "Medusa: Simple LLM Inference Acceleration Framework with Multiple Decoding Heads" (Cai, Li, Geng, Peng, Lee, Chen, Dao — Princeton/Together AI, ICML 2024)
+- Raw source files created:
+  - wiki/raw/papers/2606.04032v2.md
+  - wiki/raw/papers/2401.10774v3.md
+- Pages created:
+  - entities/qkv-projection-sharing.md — Q-K=V (K=V shared) wins with 50% cache at +3.1% PPL; Q=K-V fails (symmetric attention, zero cache benefit); Q=K=V catastrophic (+25.4% PPL); compound Q-MQA achieves 96.9% cache; validated at 1.2B/10B tokens; directly grounds the new KVSharedAttention and KVSharedExclusiveSelfAttention classes in rbf_ffn
+  - entities/medusa.md — K extra single-layer decoding heads predict tokens in parallel; tree attention verifies all candidates in one backbone forward pass; Medusa-1 (frozen backbone) 2.2×, Medusa-2 (joint training) 2.83×; typical acceptance vs rejection sampling; draft accuracy ~0.6 vs EAGLE's ~0.8
+- Pages updated:
+  - concepts/speculative-decoding.md — added Medusa section (before EAGLE family); added [[medusa]] to See Also; bumped sources and updated date
+  - concepts/kv-cache.md — added Q-K=V projection sharing to Architectural Reduction section; added [[qkv-projection-sharing]] to See Also; bumped updated date
+  - entities/xsa.md — added "KV-Shared XSA Variant (In Progress)" section documenting KVSharedExclusiveSelfAttention; added [[qkv-projection-sharing]] to See Also; bumped updated date
+  - index.md — total pages 51 → 53; added medusa and qkv-projection-sharing entries; bumped last-updated date

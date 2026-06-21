@@ -1,7 +1,7 @@
 ---
 title: XSA (Exclusive Self-Attention)
 created: 2026-05-14
-updated: 2026-05-14
+updated: 2026-06-17
 type: entity
 tags: [attention, architecture, training]
 sources: [raw/papers/2603.09078v1.pdf]
@@ -76,9 +76,14 @@ XSA and `OrthogonalMLPWrapper` are the same inductive bias applied to different 
 
 Both constrain residual stream writes to be *information-adding* rather than information-recycling. See [[orthogonal-residual-streams]] for the unified view.
 
+## KV-Shared XSA Variant (In Progress)
+
+`KVSharedExclusiveSelfAttention` in `rbf_ffn/models/attention.py` combines the Q-K=V projection sharing from [[qkv-projection-sharing]] with XSA's Gram-Schmidt step. Q uses its own projection; K and V share `kv_proj`; after computing attention output Y, the component along the normalised value direction is subtracted (`Z = Y - (Y·V̂)V̂`). This stacks KV cache compression (50%) with XSA's inductive bias. Configs exist (`baseline_xsa_kv_shared.yaml`); no leaderboard results yet.
+
 ## See Also
 
 - [[orthogonal-residual-streams]] — unified view of XSA, OrthogonalMLPWrapper, and mHC
 - [[qknorm]] — normalization technique typically paired with XSA in experiments
 - [[weight-normalization]] — the dominant training technique in the same experimental context
 - [[hyper-connections]] — a different approach to constraining residual stream writes
+- [[qkv-projection-sharing]] — Q-K=V projection sharing stacked with XSA in `KVSharedExclusiveSelfAttention`

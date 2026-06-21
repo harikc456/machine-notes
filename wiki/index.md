@@ -2,7 +2,7 @@
 
 > Content catalog. Every wiki page listed under its type with a one-line summary.
 > Read this first to find relevant pages for any query.
-> Last updated: 2026-06-07 | Total pages: 51
+> Last updated: 2026-06-17 | Total pages: 53
 
 ## Entities
 
@@ -12,6 +12,7 @@
 - [[clip-to-grok]] — Clip to Grok: per-row weight norm clipping accelerates grokking 39–249× without weight decay
 - [[flash-attention]] — Flash Attention (Dao et al.): IO-aware tiled attention; 7.6× speedup on GPT-2; O(N) memory via online softmax
 - [[layerskip]] — LayerSkip (Meta): layer dropout training + early exit inference + self-speculative decoding; up to 2.16× speedup
+- [[medusa]] — Medusa (ICML 2024): K extra decoding heads on backbone; tree attention verifies candidates; Medusa-1 2.18×, Medusa-2 2.83×; no draft model needed
 - [[paged-attention]] — PagedAttention (vLLM): OS-style paged KV cache management; eliminates fragmentation; 2–4× throughput over TGI
 - [[radix-attention]] — RadixAttention (SGLang): radix tree cross-request prefix caching with LRU eviction; 2–4× throughput over vLLM
 - [[derf]] — Derf: `erf(αx+s)` point-wise replacement for normalization layers; surpasses LayerNorm across vision, speech, DNA
@@ -30,6 +31,7 @@
 - [[mhc-lite]] — mHC-lite: replaces SK iterations with convex combination of permutation matrices for exact doubly-stochastic residuals
 - [[polarquant]] — PolarQuant: KV cache quantization using polar coordinate transformation to eliminate normalization overhead
 - [[qknorm]] — QKNorm: cosine-similarity attention (ℓ₂-normalize Q and K) prevents softmax saturation; +0.7 ppl in LM experiments
+- [[qkv-projection-sharing]] — Q-K=V (ICML 2026): shared key-value projection; 50% KV cache at +3.1% PPL; Q=K-V fails (zero cache benefit); orthogonal to GQA/MQA
 - [[saguaro]] — Saguaro (SSD): speculative speculative decoding — parallelizes drafting and verification on separate hardware; 30% faster than SD, up to 5× over AR
 - [[spectralquant]] — SpectralQuant (Gopinath, Apr 2026): calibrated eigenvector rotation + selective QJL on 3% signal dims; +1.7–2.8 pp cosine sim, 5.95× compression vs TurboQuant's 5.02×
 - [[triattention]] — TriAttention: KV cache compression via trigonometric series in pre-RoPE space; 2.5× throughput or 10.7× KV reduction at matched accuracy on AIME25

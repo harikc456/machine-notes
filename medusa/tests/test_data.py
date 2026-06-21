@@ -36,35 +36,40 @@ def _make_shard(path: Path, n_entries: int = 4) -> None:
 def test_dataset_len(cfg, tmp_path):
     _make_shard(tmp_path / "train_shard_0000.pt", n_entries=3)
     ds = MedusaDataset([tmp_path / "train_shard_0000.pt"], cfg)
-    assert len(ds) == 3 * N_POS
+    # __len__ returns number of complete batches (partial batch dropped)
+    assert len(ds) == (3 * N_POS) // cfg.batch_size
 
 
 def test_dataset_item_shapes(cfg, tmp_path):
     _make_shard(tmp_path / "train_shard_0000.pt")
     ds = MedusaDataset([tmp_path / "train_shard_0000.pt"], cfg)
-    h, targets = ds[0]
-    assert h.shape == (D_MODEL,)
-    assert targets.shape == (N_HEADS,)
+    h, targets = next(iter(ds))
+    assert h.shape == (cfg.batch_size, D_MODEL)
+    assert targets.shape == (cfg.batch_size, N_HEADS)
 
 
 def test_dataset_dequantize(cfg, tmp_path):
-    shard = [{
-        "hidden_int8": torch.full((1, D_MODEL), 63, dtype=torch.int8),
-        "scale": torch.tensor([2.0]),
-        "targets": torch.zeros(1, N_HEADS, dtype=torch.long),
-    }]
+    # Use batch_size entries so a full batch is emitted (partial batches are dropped)
+    shard = [
+        {
+            "hidden_int8": torch.full((1, D_MODEL), 63, dtype=torch.int8),
+            "scale": torch.tensor([2.0]),
+            "targets": torch.zeros(1, N_HEADS, dtype=torch.long),
+        }
+        for _ in range(cfg.batch_size)
+    ]
     path = tmp_path / "train_shard_0000.pt"
     torch.save(shard, path)
     ds = MedusaDataset([path], cfg)
-    h, _ = ds[0]
+    h, _ = next(iter(ds))
     assert h.dtype == torch.float32
-    assert torch.allclose(h, torch.full((D_MODEL,), 126.0))
+    assert torch.allclose(h, torch.full((cfg.batch_size, D_MODEL), 126.0))
 
 
 def test_dataset_targets_dtype(cfg, tmp_path):
     _make_shard(tmp_path / "train_shard_0000.pt")
     ds = MedusaDataset([tmp_path / "train_shard_0000.pt"], cfg)
-    _, targets = ds[0]
+    _, targets = next(iter(ds))
     assert targets.dtype == torch.long
 
 

@@ -8,12 +8,14 @@ max_seq_len: 768
 cache_dir: "medusa/cache"
 cache_shard_size: 5000
 val_split: 0.05
-muon_lr: 0.02
+max_samples: 50000
+muon_lr: 0.01
 muon_momentum: 0.95
 lr: 3.0e-4
 weight_decay: 0.1
 grad_clip: 1.0
-batch_size: 32
-n_epochs: 3
+batch_size: 1024
+num_workers: 4
+n_epochs: 10
 warmup_steps: 200
 seed: 42

@@ -7,13 +7,18 @@ Usage:
 from __future__ import annotations
 import argparse
 import math
+import os
+import time
 from pathlib import Path
 from typing import Callable
+
+# Must be set before the CUDA allocator is first initialised.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.optim import AdamW, Optimizer
+from torch.optim import Optimizer
 from torch.optim import Muon
 from torch.optim.lr_scheduler import LambdaLR
 from tqdm import tqdm
@@ -33,6 +38,46 @@ def make_lr_lambda(warmup_steps: int, total_steps: int) -> Callable[[int], float
     return lr_lambda
 
 
+
+class _BF16Linear(torch.autograd.Function):
+    """F.linear with bf16-cast backward.
+
+    Forward identical to F.linear (bf16 under autocast).
+    Backward casts grad_output to bf16 before the lm_head matmul so it runs
+    on bf16 tensor cores instead of fp32. Weight is a frozen buffer — no
+    grad_weight needed.
+    """
+
+    @staticmethod
+    def forward(ctx, input: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
+        ctx.save_for_backward(weight)
+        return F.linear(input, weight)
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor):
+        (weight,) = ctx.saved_tensors
+        grad_input = grad_output.to(weight.dtype) @ weight
+        return grad_input, None
+
+
+def _weighted_ce_loss(
+    logits: torch.Tensor,   # (B*K, V)
+    targets: torch.Tensor,  # (B, K)
+    lambda_decay: float,
+) -> torch.Tensor:
+    B, K = targets.shape
+    loss_per = F.cross_entropy(
+        logits,
+        targets.reshape(B * K),
+        ignore_index=-100,
+        reduction="none",
+    ).reshape(B, K)
+    valid = (targets != -100).float()
+    n_valid = valid.sum(0).clamp(min=1)
+    weights = logits.new_tensor([lambda_decay ** k for k in range(K)])
+    return ((loss_per * valid).sum(0) / n_valid * weights).sum()
+
+
 def training_step(
     model: MedusaModel,
     hidden: torch.Tensor,
@@ -41,23 +86,23 @@ def training_step(
     optimizers: list[Optimizer],
 ) -> torch.Tensor:
     """
-    Single training step. Computes distance-weighted cross-entropy loss,
-    back-propagates, clips gradients, steps all optimizers.
-
     hidden:     (B, d_model)
     targets:    (B, n_heads) — -100 for padding positions
-    optimizers: list of optimizers to zero/step (Muon + AdamW in practice)
     Returns:    scalar loss (detached)
     """
     model.train()
-    logits = model(hidden)  # (B, n_heads, vocab)
+    B, D = hidden.shape
+    K = cfg.n_heads
+    with torch.autocast("cuda", dtype=torch.bfloat16, enabled=hidden.is_cuda):
+        h = hidden.to(torch.bfloat16) if hidden.is_cuda else hidden
+        hidden_states = model(h)                          # (B, K, D) bf16
+        hidden_flat = hidden_states.reshape(B * K, D)
+        if hidden.is_cuda:
+            logits = _BF16Linear.apply(hidden_flat, model.lm_head_weight)
+        else:
+            logits = F.linear(hidden_flat, model.lm_head_weight)
 
-    loss = torch.zeros((), device=logits.device)
-    for k in range(logits.shape[1]):
-        w = cfg.lambda_decay ** k
-        head_loss = F.cross_entropy(logits[:, k, :], targets[:, k], ignore_index=-100)
-        if not torch.isnan(head_loss):
-            loss = loss + w * head_loss
+    loss = _weighted_ce_loss(logits, targets, cfg.lambda_decay)
 
     for opt in optimizers:
         opt.zero_grad()
@@ -69,56 +114,99 @@ def training_step(
     return loss.detach()
 
 
-def train(cfg: MedusaConfig) -> None:
+def _sync_time(profiling: bool) -> float:
+    """Wall time, with CUDA sync only when actively profiling."""
+    if profiling and torch.cuda.is_available():
+        torch.cuda.synchronize()
+    return time.perf_counter()
+
+
+def train(cfg: MedusaConfig, resume: bool = False) -> None:
     torch.manual_seed(cfg.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    if torch.cuda.is_available():
+        props = torch.cuda.get_device_properties(device)
+        print(f"GPU: {props.name}  ({props.total_memory / 1e9:.1f} GB)")
+        print(f"Compute capability: {props.major}.{props.minor}")
 
     print("Loading teacher LM head weight...")
     from transformers import AutoModelForCausalLM
     teacher = AutoModelForCausalLM.from_pretrained(
-        cfg.teacher_model_id, torch_dtype=torch.bfloat16
+        cfg.teacher_model_id, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True
     )
-    lm_head_w = teacher.get_output_embeddings().weight.detach().clone().float()
+    lm_head_w = teacher.get_output_embeddings().weight.detach().clone().bfloat16()
     del teacher
-    print(f"LM head weight: {lm_head_w.shape}")
+    print(f"LM head weight: {lm_head_w.shape}  dtype={lm_head_w.dtype}")
 
     model = MedusaModel(cfg, lm_head_w).to(device)
     n_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Trainable parameters: {n_trainable:,}")
 
-    # W1 (d_model×d_model square matrices) → Muon
-    # W2 (vocab×d_model large matrices) → AdamW
-    muon_params = [p for name, p in model.named_parameters() if name.endswith("W1.weight")]
-    adamw_params = [p for name, p in model.named_parameters() if not name.endswith("W1.weight")]
+    muon_params = list(model.parameters())
 
     train_loader, val_loader = get_dataloaders(cfg)
     total_steps = cfg.n_epochs * len(train_loader)
     lr_lambda = make_lr_lambda(cfg.warmup_steps, total_steps)
 
     muon_opt = Muon(muon_params, lr=cfg.muon_lr, momentum=cfg.muon_momentum)
-    adamw_opt = AdamW(adamw_params, lr=cfg.lr, weight_decay=cfg.weight_decay)
     muon_sched = LambdaLR(muon_opt, lr_lambda)
-    adamw_sched = LambdaLR(adamw_opt, lr_lambda)
 
-    optimizers = [muon_opt, adamw_opt]
+    optimizers = [muon_opt]
 
     best_val_loss = float("inf")
+    start_epoch = 0
     ckpt_dir = Path(cfg.cache_dir).parent / "checkpoints"
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-    for epoch in range(cfg.n_epochs):
+    ckpt_path = ckpt_dir / "best.pt"
+    if resume and ckpt_path.exists():
+        ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
+        model.load_state_dict(ckpt["model_state"])
+        muon_opt.load_state_dict(ckpt["muon_state"])
+        start_epoch = ckpt["epoch"] + 1
+        best_val_loss = ckpt.get("best_val_loss", float("inf"))
+        # Advance the LR scheduler to match the resumed epoch
+        for _ in range(start_epoch * len(train_loader)):
+            muon_sched.step()
+        print(f"Resumed from epoch {ckpt['epoch']} (best_val_loss={best_val_loss:.4f})")
+
+    epoch_bar = tqdm(range(start_epoch, cfg.n_epochs), desc="Training", unit="epoch")
+    for epoch in epoch_bar:
         model.train()
         total_train_loss = 0.0
         n_batches = 0
+        profile_batches = 10  # print per-component timing for the first N batches
 
-        for hidden, targets in tqdm(train_loader, desc=f"Epoch {epoch + 1}/{cfg.n_epochs}"):
-            hidden = hidden.to(device)
-            targets = targets.to(device)
+        train_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{cfg.n_epochs}",
+                         leave=False, unit="batch")
+        t_data = time.perf_counter()
+        for hidden, targets in train_bar:
+            profiling = epoch == 0 and n_batches < profile_batches
+            t0 = _sync_time(profiling)
+            hidden = hidden.to(device, non_blocking=True)
+            targets = targets.to(device, non_blocking=True)
+            t1 = _sync_time(profiling)
             loss = training_step(model, hidden, targets, cfg, optimizers)
+            t2 = _sync_time(profiling)
             muon_sched.step()
-            adamw_sched.step()
+            t3 = _sync_time(profiling)
+
             total_train_loss += loss.item()
             n_batches += 1
+
+            if profiling:
+                print(
+                    f"  [profile batch {n_batches}] "
+                    f"data={t0-t_data:.3f}s  transfer={t1-t0:.3f}s  "
+                    f"step={t2-t1:.3f}s  sched={t3-t2:.3f}s"
+                )
+
+            train_bar.set_postfix(
+                loss=f"{loss.item():.4f}",
+                lr=f"{muon_sched.get_last_lr()[0]:.2e}",
+            )
+            t_data = t3
 
         avg_train = total_train_loss / max(1, n_batches)
 
@@ -126,20 +214,23 @@ def train(cfg: MedusaConfig) -> None:
         val_loss_sum = 0.0
         n_val = 0
         with torch.no_grad():
-            for hidden, targets in val_loader:
-                hidden = hidden.to(device)
-                targets = targets.to(device)
-                logits = model(hidden)  # (B, n_heads, vocab)
-                batch_loss = 0.0
-                for k in range(logits.shape[1]):
-                    w = cfg.lambda_decay ** k
-                    head_loss = F.cross_entropy(logits[:, k, :], targets[:, k], ignore_index=-100)
-                    if not torch.isnan(head_loss):
-                        batch_loss += w * head_loss.item()
+            val_bar = tqdm(val_loader, desc="  Val", leave=False, unit="batch")
+            for hidden, targets in val_bar:
+                hidden = hidden.to(device, non_blocking=True)
+                targets = targets.to(device, non_blocking=True)
+                B_v, D_v = hidden.shape
+                K_v = cfg.n_heads
+                with torch.autocast("cuda", dtype=torch.bfloat16, enabled=hidden.is_cuda):
+                    h = hidden.to(torch.bfloat16) if hidden.is_cuda else hidden
+                    hidden_states = model(h)
+                    logits_v = F.linear(hidden_states.reshape(B_v * K_v, D_v), model.lm_head_weight)
+                batch_loss = _weighted_ce_loss(logits_v, targets, cfg.lambda_decay).item()
                 val_loss_sum += batch_loss
                 n_val += 1
+                val_bar.set_postfix(loss=f"{batch_loss:.4f}")
 
         avg_val = val_loss_sum / max(1, n_val)
+        epoch_bar.set_postfix(train=f"{avg_train:.4f}", val=f"{avg_val:.4f}")
         print(f"Epoch {epoch + 1}: train_loss={avg_train:.4f}  val_loss={avg_val:.4f}")
 
         if avg_val < best_val_loss:
@@ -148,15 +239,19 @@ def train(cfg: MedusaConfig) -> None:
                 "epoch": epoch,
                 "model_state": model.state_dict(),
                 "muon_state": muon_opt.state_dict(),
-                "adamw_state": adamw_opt.state_dict(),
+                "best_val_loss": avg_val,
                 "cfg": cfg,
             }
             torch.save(ckpt, ckpt_dir / "best.pt")
             print(f"  Checkpoint saved (val_loss={best_val_loss:.4f})")
 
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="medusa/configs/default.yaml")
+    parser.add_argument("--resume", action="store_true", help="Resume from best.pt checkpoint")
     args = parser.parse_args()
-    train(load_config(args.config))
+    train(load_config(args.config), resume=args.resume)

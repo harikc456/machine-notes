@@ -19,28 +19,36 @@ def cfg():
     return MedusaConfig(n_heads=3, d_model=D_MODEL)
 
 
-def test_head_output_shape(lm_weight):
-    head = MedusaHead(D_MODEL, lm_weight)
+def test_head_output_shape():
+    head = MedusaHead(D_MODEL)
     h = torch.randn(4, D_MODEL)
     out = head(h)
-    assert out.shape == (4, VOCAB)
+    assert out.shape == (4, D_MODEL)
 
 
-def test_head_w1_init_zero(lm_weight):
-    head = MedusaHead(D_MODEL, lm_weight)
+def test_head_w1_init_zero():
+    head = MedusaHead(D_MODEL)
     assert head.W1.weight.abs().max().item() == 0.0
 
 
-def test_head_w2_init_from_lm_head(lm_weight):
-    head = MedusaHead(D_MODEL, lm_weight)
-    assert torch.allclose(head.W2.weight, lm_weight.float())
+def test_model_lm_head_frozen(cfg, lm_weight):
+    model = MedusaModel(cfg, lm_weight)
+    assert torch.allclose(model.lm_head_weight, lm_weight)
+    assert not model.lm_head_weight.requires_grad
 
 
 def test_model_output_shape(cfg, lm_weight):
     model = MedusaModel(cfg, lm_weight)
     h = torch.randn(4, D_MODEL)
     out = model(h)
-    assert out.shape == (4, cfg.n_heads, VOCAB)
+    assert out.shape == (4, cfg.n_heads, D_MODEL)
+
+
+def test_model_get_logits_shape(cfg, lm_weight):
+    model = MedusaModel(cfg, lm_weight)
+    h = torch.randn(4, D_MODEL)
+    logits = model.get_logits(h)
+    assert logits.shape == (4, cfg.n_heads, VOCAB)
 
 
 def test_model_head_count(cfg, lm_weight):
@@ -51,6 +59,6 @@ def test_model_head_count(cfg, lm_weight):
 def test_model_trainable_params(cfg, lm_weight):
     model = MedusaModel(cfg, lm_weight)
     n = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    # Each head: W1 (d_model*d_model) + W2 (vocab*d_model)
-    expected = cfg.n_heads * (D_MODEL * D_MODEL + VOCAB * D_MODEL)
+    # Each head: W1 only (d_model × d_model); lm_head_weight is a frozen buffer
+    expected = cfg.n_heads * D_MODEL * D_MODEL
     assert n == expected

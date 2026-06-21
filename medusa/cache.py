@@ -80,6 +80,8 @@ def extract_and_cache(cfg: MedusaConfig, split: str = "train") -> None:
     os.makedirs(cfg.cache_dir, exist_ok=True)
 
     raw = load_dataset(cfg.dataset_id, split="train")
+    if cfg.max_samples and len(raw) > cfg.max_samples:
+        raw = raw.select(range(cfg.max_samples))
     splits = raw.train_test_split(test_size=cfg.val_split, seed=cfg.seed)
     dataset = splits["train"] if split == "train" else splits["test"]  # HF names this "test"
 

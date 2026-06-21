@@ -19,10 +19,14 @@ class MedusaConfig:
     max_answer_len: int = 256
     max_seq_len: int = 768
 
+    # Data loading
+    num_workers: int = 4
+
     # Cache
     cache_dir: str = "medusa/cache"
     cache_shard_size: int = 5000
     val_split: float = 0.05
+    max_samples: int = 50_000
 
     # Optimiser — Muon for W1 (d_model×d_model), AdamW for W2 (vocab×d_model)
     muon_lr: float = 0.02

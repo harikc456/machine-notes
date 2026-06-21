@@ -272,3 +272,36 @@ def test_load_config_attn_ffn_type(tmp_path):
     cfg = load_config(yaml_path)
     assert cfg.attn_type == "xsa"
     assert cfg.ffn_type == "pfd_rationalglu"
+
+
+# ── muP fields ────────────────────────────────────────────────────────────────
+
+def test_mup_defaults():
+    cfg = ModelConfig()
+    assert cfg.mup is False
+    assert cfg.mup_base_width == 256
+    assert cfg.mup_init_std == pytest.approx(0.02)
+
+
+def test_mup_zero_base_width_raises():
+    with pytest.raises(ValueError, match="mup_base_width"):
+        ModelConfig(mup=True, mup_base_width=0)
+
+
+def test_mup_negative_base_width_raises():
+    with pytest.raises(ValueError, match="mup_base_width"):
+        ModelConfig(mup=True, mup_base_width=-1)
+
+
+def test_mup_base_width_not_validated_when_disabled():
+    cfg = ModelConfig(mup=False, mup_base_width=0)
+    assert cfg.mup_base_width == 0
+
+
+def test_mup_yaml_roundtrip(tmp_path):
+    p = tmp_path / "cfg.yaml"
+    p.write_text("mup: true\nmup_base_width: 128\nmup_init_std: 0.01\n")
+    cfg = load_config(p)
+    assert cfg.mup is True
+    assert cfg.mup_base_width == 128
+    assert cfg.mup_init_std == pytest.approx(0.01)

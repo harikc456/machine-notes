@@ -120,6 +120,11 @@ class ModelConfig:
     grad_clip: float = 1.0
     grad_accum_steps: int = 1      # mini-batches per optimizer step; 1 = no accumulation
 
+    # Maximal Update Parameterization (muP)
+    mup: bool = False
+    mup_base_width: int = 256    # proxy model width at which muon_lr/adamw_lr were tuned
+    mup_init_std: float = 0.02   # init std at base width; hidden matrices scaled by sqrt(base/d)
+
     def __post_init__(self) -> None:
         if self.model_type is not None:
             if self.model_type not in _MODEL_TYPE_MAP:
@@ -171,6 +176,11 @@ class ModelConfig:
                     f"adaptive_norm_early must be > adaptive_norm_late, "
                     f"got adaptive_norm_early={self.adaptive_norm_early} <= adaptive_norm_late={self.adaptive_norm_late}"
                 )
+
+        if self.mup and self.mup_base_width <= 0:
+            raise ValueError(
+                f"mup_base_width must be > 0 when mup=True, got {self.mup_base_width}"
+            )
 
 
 def load_config(path: str | Path) -> ModelConfig:

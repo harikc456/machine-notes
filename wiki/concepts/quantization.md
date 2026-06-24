@@ -1,10 +1,10 @@
 ---
 title: Quantization
 created: 2026-05-14
-updated: 2026-05-19
+updated: 2026-06-24
 type: concept
-tags: [quantization, inference, training]
-sources: [raw/papers/A Visual Guide to Quantization.md, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf]
+tags: [quantization, inference, training, attention]
+sources: [raw/papers/A Visual Guide to Quantization.md, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf, raw/papers/2410.02367v9.md, raw/papers/2411.10958v7.md, raw/papers/2505.11594v3.md]
 confidence: high
 ---
 
@@ -44,6 +44,25 @@ Quantize the K/V tensors stored during inference:
 - [[spectralquant]]: calibrated eigenvector rotation + selective QJL on signal dims only; exploits 97% spectral gap in KV keys; 15s calibration; strictly better than TurboQuant (+1.7–2.8 pp, 18.6% better compression)
 - Challenge: per-block normalization parameters add overhead — addressed by all three via rotation preconditioning
 
+### Attention Computation Quantization
+
+Quantize the Matmul operations *within* the attention forward pass (distinct from storing KV tensors — see KV Cache Quantization above). Targets the O(N²) attention cost at long sequences.
+
+**SageAttention family** (Tsinghua, ICLR/ICML/NeurIPS 2025): plug-and-play drop-in for [[flash-attention]]; no model modification required.
+
+| Version | Q,K dtype | P,V dtype | Peak TOPS | Speedup vs FA2 | Hardware |
+|---|---|---|---|---|---|
+| [[sageattention]] | INT8 | FP16/FP16-acc | 340 | 2.1× | RTX4090/3090+ |
+| [[sageattention2]] | INT4 (per-thread) | FP8 (2-level acc) | 481 | 3× | RTX4090/L20+ |
+| [[sageattention3]] | FP4 (NVFP4 micro) | FP4 | 1038 | 5× | RTX5090 (Blackwell only) |
+
+**Shared insight across the series**: outliers in Q and K are the main precision challenge.
+- [[sageattention]]: smooth K by subtracting per-channel mean (K-smoothing)
+- [[sageattention2]]: additionally smooth Q; use per-thread INT4 quantization (zero dequant overhead)
+- [[sageattention3]]: FP4 microscaling (1×16 group); two-level quantization for attention map P̃
+
+All three achieve near-zero end-to-end accuracy loss across LLM, image-gen, and video-gen models.
+
 ### Activation Quantization
 Quantize activations (inputs/outputs of layers) during inference — most challenging due to outliers.
 
@@ -75,3 +94,7 @@ KV cache key vectors exhibit d_eff ≈ 3–4% of head dimension as effective dim
 - [[spectralquant]] — calibrated spectral quantization for KV
 - [[h2o]] — complementary eviction approach
 - [[kv-cache-compression-comparison]] — methods compared
+- [[sageattention]] — INT8 attention compute quantization; 2.1× FA2
+- [[sageattention2]] — INT4/FP8 attention compute quantization; 3× FA2
+- [[sageattention3]] — FP4 microscaling; 5× FA2 on Blackwell
+- [[flash-attention]] — base kernel that SageAttention builds on

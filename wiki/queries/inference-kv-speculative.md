@@ -1,9 +1,9 @@
 ---
 title: KV Cache Compression and Speculative Decoding — Detail
 created: 2026-05-19
-updated: 2026-05-31
+updated: 2026-06-24
 type: query
-tags: [inference, kv-cache, quantization, speculative, survey]
+tags: [inference, kv-cache, quantization, speculative, attention, survey]
 sources: []
 confidence: high
 ---
@@ -116,6 +116,42 @@ See [[triattention]] for the full method; [[kv-cache-compression-comparison]] fo
 5. Decompression: reverse quantization + inverse rotation
 
 **Results vs TurboQuant (3-bit)**: +1.7–2.8 pp cosine similarity across all four models; 5.95× vs 5.02× compression (−0.50 bits/element); 4.5× faster attention decoding at 512 tokens. Perplexity identical to uncompressed inference (9.51). Perfect needle-in-haystack to 8K tokens.
+
+---
+
+### 3d. Attention Compute Quantization (SageAttention Family)
+
+Distinct from KV *storage* compression: these methods quantize the Q×Kᵀ and P×V Matmuls during the attention forward pass, reducing compute cost while keeping all tokens in cache.
+
+#### [[sageattention]] — INT8 Q/K (ICLR 2025, Tsinghua)
+
+Builds on FlashAttention-2 tiling. Q,K → INT8 (per-block); P,V kept in FP16 with FP16-accumulator (2× faster than FP32-accumulator on RTX4090/3090).
+
+**Key challenge**: K has channel-wise outliers. Fix: K-smoothing — subtract per-channel mean of K before quantization (doesn't affect softmax output since constant row offsets cancel). Per-block scale aligned to FA2 tile granularity.
+
+**Results**: 2.1× FA2, 2.7× xformers; 340 TOPS on RTX4090; near-zero end-to-end loss across LLMs, image-gen, video-gen.
+
+#### [[sageattention2]] — INT4 Q/K + FP8 P/V (ICML 2025, Tsinghua)
+
+**INT4 challenge C1 — narrow range [-7,+7]**: Per-thread quantization (groups tokens by GPU thread per PTX mma layout) with one scale per thread — no extra dequantization instruction. Plus Q-smoothing (subtract per-block Q mean). Combined `smooth Q+K > smooth Q > smooth K > no smoothing`.
+
+**FP8 challenge C2 — FP22 accumulator**: The FP8 mma instruction uses FP22 internally. Fix: two-level accumulation — accumulate each P̃ block into a real FP32 buffer; correct at block boundaries.
+
+**Results**: 3× FA2, 4.5× xformers; 481 TOPS on RTX4090. Hopper variant (SA2-8b) matches FlashAttention3(fp8) speed at higher accuracy.
+
+#### [[sageattention3]] — FP4 NVFP4 Microscaling (NeurIPS 2025, Tsinghua / Shengshu)
+
+Targets Blackwell GPUs (RTX5090 / GB200) with native FP4 Tensor Cores. NVFP4 = E2M1 encoding, 1×16 group quantization, E4M3 scale factors.
+
+**P̃ quantization**: values in [0,1] → poor E4M3 scale factor range. Fix: two-level quantization (per-token normalize to [0, 448×6], then FP4 microscaling). Also explores 8-bit backward pass (SageBwd): lossless for fine-tuning, slower pretraining convergence.
+
+**Results**: 1038 TOPS on RTX5090 — **5× FlashAttention2** on same hardware.
+
+| Version | Q/K | P/V | TOPS | Speedup vs FA2 | Notes |
+|---|---|---|---|---|---|
+| SA1 | INT8 | FP16 | 340 | 2.1× | RTX4090+ |
+| SA2 | INT4 (per-thread) | FP8 (2-level) | 481 | 3× | RTX4090/L20+ |
+| SA3 | FP4 (microscaling) | FP4 | 1038 | 5× | Blackwell only |
 
 ---
 
@@ -258,3 +294,6 @@ Trade-off: no extra model memory, but draft quality bounded by early-exit repres
 - [[early-exit-inference]] — early exit and layer skipping (LayerSkip, SWIFT, DASH)
 - [[block-diffusion]] — BD3-LM: DFlash's draft engine architecture
 - [[diffusion-language-models]] — DLMs as AR model accelerators (DFlash)
+- [[sageattention]] — INT8 attention compute quantization; 2.1× FA2
+- [[sageattention2]] — INT4/FP8 attention compute quantization; 3× FA2
+- [[sageattention3]] — FP4 attention compute quantization; 5× FA2 (Blackwell)

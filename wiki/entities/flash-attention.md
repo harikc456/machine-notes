@@ -61,6 +61,18 @@ This enables training on much longer sequences within the same GPU memory budget
 
 A variant for decoding (inference) at long contexts: parallelizes across the sequence length dimension rather than batch/heads, enabling efficient long-context generation even with small batch sizes.
 
+## Quantized Attention Kernels (SageAttention family)
+
+The SageAttention series builds on FlashAttention-2's tiling structure and adds quantization to further accelerate the attention Matmuls:
+
+| Kernel | Quantization | TOPS (RTX4090) | Speedup vs FA2 |
+|---|---|---|---|
+| [[sageattention]] | INT8 Q/K, FP16 P/V | 340 | 2.1× |
+| [[sageattention2]] | INT4 Q/K (per-thread), FP8 P/V (2-level) | 481 | 3× |
+| [[sageattention3]] | FP4 NVFP4 microscaling (Blackwell only) | 1038 | 5× |
+
+All three are plug-and-play replacements for FlashAttention-2 with near-zero end-to-end accuracy loss.
+
 ## Relationship to Other Work
 
 - [[paged-attention]] manages where KV tensors are stored; Flash Attention manages how attention is computed over them — they compose
@@ -72,3 +84,6 @@ A variant for decoding (inference) at long contexts: parallelizes across the seq
 - [[paged-attention]] — memory management for KV cache; orthogonal to attention compute
 - [[kv-cache]] — KV cache fundamentals
 - [[continuous-batching]] — serving-level optimization that Flash Attention enables
+- [[sageattention]] — INT8 quantized attention built on FA2 tiling; 2.1× speedup
+- [[sageattention2]] — INT4/FP8 quantized attention; 3× speedup
+- [[sageattention3]] — FP4 quantized attention for Blackwell; 5× speedup

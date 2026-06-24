@@ -69,9 +69,10 @@ grokking/experiments
 hyberbolic_embeddings/experiments/results/
 hyberbolic_embeddings/experiments/*/data/
 hyberbolic_embeddings/checkpoints/
+idlm/experiments/
 
-# Papers (PDFs, never commit)
-papers/
+# Papers (PDFs, never commit — anchor to repo root so wiki/raw/papers/ is still tracked)
+/papers/
 
 # CCE (code-context-engine)
 # CCE local cache (per-machine, not for version control)

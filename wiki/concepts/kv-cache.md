@@ -1,10 +1,10 @@
 ---
 title: KV Cache
 created: 2026-05-14
-updated: 2026-06-17
+updated: 2026-06-24
 type: concept
 tags: [kv-cache, inference, attention, quantization]
-sources: [raw/papers/2306.14048v3.pdf, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf, raw/papers/2604.04921v1.pdf]
+sources: [raw/papers/2306.14048v3.pdf, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf, raw/papers/2604.04921v1.pdf, raw/papers/2602.21548v2.md, raw/papers/2606.20945v2.md]
 confidence: high
 ---
 
@@ -52,6 +52,16 @@ Move KV cache from GPU HBM to CPU RAM or disk:
 - [[engram]] prefetching demonstrates <3% overhead for 100B parameter lookup table
 - [[deepseek-v4]] supports on-disk KV cache storage
 
+### Serving-Layer Loading (Agentic Workloads)
+At the infrastructure level, KV cache loading bandwidth — not compression — becomes the bottleneck for agentic (multi-turn) inference:
+- KV-cache hit rates ≥95%; cache-compute ratio ~22 GB/PFLOP (DeepSeek-V3.2); storage NICs saturate on prefill engines
+- [[dualpath]]: dual-path KV-cache loading in PD-disaggregated systems — adds storage-to-decode path + RDMA to prefill; 1.87× offline throughput, 1.96× online without SLO violation
+
+### Sparse Query Computation (GQE)
+Rather than compressing stored KV tensors, [[gqe]] reduces the Q-side compute that reads the KV cache at long context:
+- MoE routing within GQA groups selects top-k query-head experts per token; KV heads stay dense
+- 1.7–1.8× prefill speedup at ≥32k context with no KV cache profile change
+
 ## Quantization vs. Eviction Trade-offs
 
 | Property | Eviction (H₂O) | Quantization (PolarQuant/TurboQuant) |
@@ -73,3 +83,5 @@ These are **complementary** — quantization + eviction can be combined.
 - [[quantization]] — broader quantization context
 - [[qkv-projection-sharing]] — architectural reduction via K=V projection constraint; 50% cache, orthogonal to GQA/MQA
 - [[speculative-decoding]] — orthogonal inference speedup technique
+- [[dualpath]] — serving-layer KV loading bottleneck in agentic inference; 1.87× offline throughput
+- [[gqe]] — MoE routing on GQA query heads; 1.7–1.8× prefill speedup at long context

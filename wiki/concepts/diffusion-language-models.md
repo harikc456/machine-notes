@@ -1,10 +1,10 @@
 ---
 title: Diffusion Language Models
 created: 2026-05-16
-updated: 2026-05-31
+updated: 2026-06-24
 type: concept
 tags: [architecture, training, inference]
-sources: [raw/papers/2503.09573v3.pdf, raw/papers/2604.11035v1.pdf, raw/papers/2602.06036v2.pdf]
+sources: [raw/papers/2503.09573v3.pdf, raw/papers/2604.11035v1.pdf, raw/papers/2602.06036v2.pdf, raw/papers/llada-mercury-blog.md, raw/papers/optimal-architecture-slm-blog.md]
 confidence: high
 ---
 
@@ -65,6 +65,8 @@ I-DLM specifically addresses this by using causal attention throughout, enabling
 - Can the BD3-LM block structure and I-DLM introspective training be combined for further gains?
 - What is the optimal block size for BD3-LMs across different task types?
 - Does introspective consistency training transfer to models beyond the masked diffusion framework?
+- How does the DLM accuracy gap evolve at 7B+ scale? (70M empirics may not extrapolate)
+- Can Mercury's confidence-based adaptive refinement be replicated open-source?
 
 ## See Also
 

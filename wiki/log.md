@@ -273,3 +273,75 @@
   - concepts/kv-cache.md — added Q-K=V projection sharing to Architectural Reduction section; added [[qkv-projection-sharing]] to See Also; bumped updated date
   - entities/xsa.md — added "KV-Shared XSA Variant (In Progress)" section documenting KVSharedExclusiveSelfAttention; added [[qkv-projection-sharing]] to See Also; bumped updated date
   - index.md — total pages 51 → 53; added medusa and qkv-projection-sharing entries; bumped last-updated date
+
+## [2026-06-24] ingest | Batch ingest: 7 new sources — SageAttention family, DualPath, GQE, DLM empirics
+- Sources ingested:
+  - 2410.02367v9.pdf → SageAttention (Zhang et al., Tsinghua, ICLR 2025)
+  - 2411.10958v7.pdf → SageAttention2 (Zhang et al., Tsinghua, ICML 2025)
+  - 2505.11594v3.pdf → SageAttention3 (Zhang et al., Tsinghua, NeurIPS 2025)
+  - 2602.21548v2.pdf → DualPath: Breaking the Storage Bandwidth Bottleneck in Agentic LLM Inference (Wu et al., Peking U / Tsinghua / DeepSeek-AI, Feb 2026)
+  - 2606.20945v2.pdf → Grouped Query Experts: MoE on GQA Self-Attention (Tripathi & Kumar, FrontiersMind, Jun 2026)
+  - LLaDa and Mercury...md → Blog post (Sae-Hwan Park, Medium, Mar 2025) — confidence: low
+  - The Optimal Architecture for Small Language Models.md → Blog post (Sharma, HF, Dec 2025) — confidence: medium
+- Raw source files created:
+  - wiki/raw/papers/2410.02367v9.md
+  - wiki/raw/papers/2411.10958v7.md
+  - wiki/raw/papers/2505.11594v3.md
+  - wiki/raw/papers/2602.21548v2.md
+  - wiki/raw/papers/2606.20945v2.md
+  - wiki/raw/papers/llada-mercury-blog.md
+  - wiki/raw/papers/optimal-architecture-slm-blog.md
+- Pages created:
+  - entities/sageattention.md — INT8 Q/K attention quantization; K-smoothing; 2.1× FA2; plug-and-play
+  - entities/sageattention2.md — INT4 Q/K (per-thread) + FP8 P/V (2-level acc); 3× FA2, 481 TOPS
+  - entities/sageattention3.md — FP4 NVFP4 microscaling; 5× FA2 on RTX5090; also SageBwd (8-bit fine-tuning)
+  - entities/dualpath.md — dual-path KV-Cache loading; agentic I/O bottleneck; 1.87× offline, 1.96× online
+  - entities/gqe.md — MoE on GQA query heads; KV dense; 1.7–1.8× prefill speedup; matches GQA quality
+- Pages updated:
+  - concepts/quantization.md — added Attention Computation Quantization section (SageAttention family table + analysis); updated sources, tags, date
+  - concepts/kv-cache.md — added §Serving-Layer Loading (DualPath) + §Sparse Query Computation (GQE); updated See Also, sources, date
+  - concepts/mixture-of-experts.md — added MoE Beyond FFN Layers section (GQE); updated See Also, sources, date
+  - concepts/diffusion-language-models.md — added Production Systems section (Mercury/LLaDA, confidence: low) + Small-Scale Architecture Empirics section (Sharma study); extended Open Questions; updated sources, date
+  - entities/flash-attention.md — added Quantized Attention Kernels section (SageAttention table); extended See Also
+  - queries/inference-improvements-summary.md — added Attention Computation Quantization §2 subsection; added DualPath to §5; added SA*/DualPath/GQE rows to cross-cutting table; extended See Also; updated date
+  - queries/inference-kv-speculative.md — added §3d Attention Compute Quantization (full SA1/SA2/SA3 detail + comparison table); extended See Also; updated date, tags
+- index.md updated: total pages 53 → 58; added entries for sageattention, sageattention2, sageattention3, dualpath, gqe; bumped date
+
+## [2026-06-24] backfill | Raw source files for all 35 previously-uncovered papers
+- All files written to wiki/raw/papers/ — one compact summary per paper with frontmatter
+- Papers covered (in ingestion order):
+  - 1602.07868v3.md — Weight Normalization (Salimans & Kingma, OpenAI, NIPS 2016)
+  - 2010.04245v1.md — QKNorm: Query-Key Normalization for Transformers (Henry et al., 2020)
+  - 2201.02177v1.md — Grokking: Generalization Beyond Overfitting (Power et al., OpenAI, 2022)
+  - 2205.14135v2.md — FlashAttention v1 (Dao et al., Stanford, NeurIPS 2022)
+  - 2211.17192v2.md — Fast Inference via Speculative Decoding (Leviathan et al., Google, ICML 2023)
+  - 2306.14048v3.md — H₂O: Heavy-Hitter Oracle for KV Eviction (Zhang et al., NeurIPS 2023)
+  - 2308.16369v2.md — SARATHI: Chunked Prefill + Decode-Maximal Batching (Agrawal et al., MSR India, 2023)
+  - 2309.06180v1.md — PagedAttention / vLLM (Kwon et al., UC Berkeley, SOSP 2023)
+  - 2312.07104v1.md — SGLang: Structured LM Programs + RadixAttention (Zheng et al., Stanford/UCB, 2024)
+  - 2401.15077v3.md — EAGLE: Feature-Level Speculative Sampling (Li et al., Peking U/MSR, 2025)
+  - 2404.16710v2.md — LayerSkip: Early Exit + Self-Speculative Decoding (Elhoushi et al., Meta FAIR, 2024)
+  - 2406.16858v2.md — EAGLE-2: Dynamic Draft Trees via Calibrated Confidence (Li et al., 2024)
+  - 2502.02617v1.md — PolarQuant: KV Cache via Polar Transformation (Han et al., KAIST/Google/Yale, 2025)
+  - 2503.01840v3.md — EAGLE-3: Direct Token Prediction + Training-Time Test (Li et al., 2025)
+  - 2503.09573v3.md — Block Diffusion / BD3-LM (Arriola et al., Cornell/Stanford, ICLR 2025)
+  - 2504.19874v1.md — TurboQuant: Online VQ with Near-Optimal Distortion (Zandieh et al., Google/NYU, 2025)
+  - 2505.17420v1.md — DASH: Dynamic Layer Skipping via MDP (Yang et al., SJTU, 2025)
+  - 2511.08544v3.md — LeJEPA: Provable SSL Without the Heuristics (Balestriero & LeCun, Brown/NYU/Meta, 2025)
+  - 2512.02556v1.md — Engram: Conditional Memory as N-gram Lookup (Cheng et al., Peking U/DeepSeek, 2026)
+  - 2512.10938v2.md — DeepSeek-V3.2: DSA + Scalable RL + Agentic Synthesis (DeepSeek-AI, 2025)
+  - 2512.24880v2.md — mHC: Manifold-Constrained Hyper-Connections (Xie et al., DeepSeek-AI, 2026)
+  - 2601.05732v1.md — mHC-lite: Convex Combination of Permutations (Yang & Gao, Michigan/NTU, 2026)
+  - 2601.07372v1.md — Derf: erf(αx+s) Normalization-Free Transformer (Chen et al., Princeton/NYU/CMU, 2026)
+  - 2601.21579v1.md — KromHC: Kronecker-Product Residual Matrices (Zhou et al., Imperial College, 2026)
+  - 2602.06036v2.md — DFlash: Block Diffusion for Flash Speculative Decoding (Chen et al., UCSD, ICML 2026)
+  - 2603.03251v3.md — Speculative Speculative Decoding / Saguaro (Kumar et al., Stanford/Princeton, 2026)
+  - 2603.09078v1.md — Exclusive Self Attention (XSA) (Zhai, Apple, 2026)
+  - 2603.15031v1.md — Attention Residuals (AttnRes) (Kimi Team, Moonshot AI, 2026)
+  - 2603.19312v2.md — LeWorldModel: Stable E2E JEPA from Pixels (Maes et al., Mila/NYU/Brown, 2026)
+  - 2604.04921v1.md — TriAttention: Trigonometric KV Compression (Mao et al., MIT/NVIDIA/ZJU, 2026)
+  - 2604.11035v1.md — I-DLM: Introspective Diffusion Language Model (Yu et al., Together AI/UIUC, 2026)
+  - cliptogrok.md — Clip to Grok: Weight Norm Clipping for Grokking (Volchkov & Rivlin, 2026)
+  - DeepSeek_V4.md — DeepSeek-V4: CSA/HCA + mHC + Muon + 1M context (DeepSeek-AI, 2026)
+  - spectralquant.md — SpectralQuant: 3% Spectral Gap Beats TurboQuant (Gopinath, MIT/Sentra, 2026)
+  - visual-guide-quantization.md — A Visual Guide to Quantization (Grootendorst, 2024)

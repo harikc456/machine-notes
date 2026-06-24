@@ -1,7 +1,7 @@
 ---
 title: LLM Inference Improvements — Structured Survey
 created: 2026-05-14
-updated: 2026-05-31
+updated: 2026-06-24
 type: query
 tags: [inference, architecture, quantization, kv-cache, speculative, attention, survey, training]
 sources: []
@@ -73,6 +73,18 @@ Large transformer weights have outlier activations in specific channels that cau
 - **GPTQ**: layer-wise second-order quantization — minimizes weight perturbation effect on output
 - **AWQ**: activation-aware; identifies and protects important weights
 
+### Attention Computation Quantization
+
+Orthogonal to weight quantization: quantize the Matmuls *within* the attention forward pass. The SageAttention series from Tsinghua applies this as a drop-in replacement for [[flash-attention]]:
+
+| Version | Precision | TOPS (RTX4090) | Speedup vs FA2 | Hardware |
+|---|---|---|---|---|
+| [[sageattention]] (ICLR 2025) | INT8 Q/K, FP16 P/V | 340 | 2.1× | RTX4090/3090+ |
+| [[sageattention2]] (ICML 2025) | INT4 Q/K, FP8 P/V | 481 | 3× | RTX4090/L20+ |
+| [[sageattention3]] (NeurIPS 2025) | FP4 Q/K/P/V (microscaling) | 1038 | 5× | RTX5090 (Blackwell) |
+
+Key technique shared across all: outlier smoothing (K-smoothing in SA1; Q+K-smoothing in SA2+). Near-zero end-to-end accuracy loss across LLMs, image-gen, video-gen. See [[quantization]] for full analysis.
+
 ---
 
 ## 3. KV Cache
@@ -113,6 +125,10 @@ Scheduling and memory management techniques that improve throughput at the servi
 
 [[continuous-batching]]: swap finished requests out at the token level (not request level); split long prompts into fixed-size chunks interleaved with decode steps. Results (SARATHI): **1.25–1.91× end-to-end**, **4–10× decode throughput**, 6.29× pipeline bubble reduction for GPT-3.
 
+### DualPath (Agentic KV Loading)
+
+[[dualpath]] (Peking U / DeepSeek-AI, Feb 2026): for agentic (multi-turn) inference in PD-disaggregated systems, KV-cache loading — not compute — dominates. Hit rates ≥95%, cache-compute ratio ~22 GB/PFLOP (DeepSeek-V3.2) saturate prefill-side storage NICs while decode NICs sit idle. DualPath adds a storage-to-decode path + RDMA to prefill, doubling effective storage bandwidth with no hardware changes. **1.87× offline throughput, 1.96× online** without SLO violation.
+
 ---
 
 ## 6. Early Exit / Layer Skipping
@@ -143,6 +159,11 @@ DLMs offer **parallel token generation** — a fundamentally different inference
 
 | Technique | What it trades | Gain |
 |---|---|---|
+| SageAttention (INT8) | ~0% accuracy; plug-and-play | Attention compute 2.1× FA2; 340 TOPS RTX4090 |
+| SageAttention2 (INT4/FP8) | ~0% accuracy; plug-and-play | Attention compute 3× FA2; 481 TOPS RTX4090 |
+| SageAttention3 (FP4, Blackwell) | ~0% accuracy; Blackwell only | Attention compute 5× FA2; 1038 TOPS RTX5090 |
+| DualPath (agentic KV loading) | System complexity (dual-path infra) | 1.87× offline throughput; 1.96× online (agentic) |
+| GQE (query-head MoE) | Router training overhead | 1.7–1.8× prefill speedup at ≥32k (matches GQA quality) |
 | AttnRes (Block) | O(Nd) depth-attention memory; architectural change at training time | 1.25× compute advantage; +7.5 GPQA-Diamond; mitigates PreNorm dilution |
 | GQA/DSA/CSA+HCA | Model quality (marginal) | KV cache ↓ 10–90% |
 | MoE | Memory (all experts must load) | FLOPs/token ↓ |
@@ -184,13 +205,18 @@ DLMs offer **parallel token generation** — a fundamentally different inference
 - [[saguaro]] — SSD: parallel drafting + verification on separate hardware
 - [[early-exit-inference]] — early exit and layer skipping (LayerSkip, SWIFT, DASH)
 - [[layerskip]] — Meta's self-speculative decoding via layer dropout
-- [[diffusion-language-models]] — DLM landscape: BD3-LM, I-DLM, DFlash
+- [[diffusion-language-models]] — DLM landscape: BD3-LM, I-DLM, DFlash, Mercury
 - [[block-diffusion]] — BD3-LM: AR-over-blocks + within-block diffusion
 - [[i-dlm]] — introspective DLM: ISD decoding, AR-compatible serving
 - [[flash-attention]] — IO-aware tiled attention kernel
+- [[sageattention]] — INT8 quantized attention; 2.1× FA2, plug-and-play
+- [[sageattention2]] — INT4/FP8 quantized attention; 3× FA2
+- [[sageattention3]] — FP4 quantized attention; 5× FA2 (Blackwell)
+- [[dualpath]] — dual-path KV loading for agentic inference; 1.87× offline throughput
+- [[gqe]] — MoE on GQA query heads; 1.7–1.8× prefill at long context
 - [[paged-attention]] — OS-style KV cache memory management
 - [[radix-attention]] — radix tree cross-request prefix caching (SGLang)
 - [[continuous-batching]] — iteration-level scheduling + chunked prefill
 - [[mixture-of-experts]] — MoE fundamentals
-- [[quantization]] — weight quantization overview
+- [[quantization]] — weight and attention quantization overview
 - [[deepseek-v4]] — CSA+HCA and MoE at production scale

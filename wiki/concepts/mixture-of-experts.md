@@ -1,10 +1,10 @@
 ---
 title: Mixture of Experts (MoE)
 created: 2026-05-14
-updated: 2026-05-14
+updated: 2026-06-24
 type: concept
 tags: [sparsity, architecture, model, training]
-sources: [raw/papers/2601.07372v1.pdf, raw/papers/DeepSeek_V4.pdf, raw/papers/2512.02556v1.pdf]
+sources: [raw/papers/2601.07372v1.pdf, raw/papers/DeepSeek_V4.pdf, raw/papers/2512.02556v1.pdf, raw/papers/2606.20945v2.md]
 confidence: high
 ---
 
@@ -50,10 +50,19 @@ Given a fixed parameter budget: how much should go to MoE experts vs. static mem
 - **Communication**: Expert parallelism requires all-to-all communication across GPUs
 - [[deepseek-v4]] addresses this with fine-grained expert parallelism + communication-computation overlap
 
+## MoE Beyond FFN Layers: Attention Query Experts
+
+The MoE idea is not limited to FFN layers. [[gqe]] (Grouped Query Experts, Jun 2026) applies it to the query-head computation within grouped-query attention (GQA):
+- Each GQA group's query heads become experts; a router selects top-k per token
+- KV heads remain dense (GQA memory savings preserved)
+- Matches all-active GQA quality at 250M params, 30B tokens; 1.7–1.8× prefill speedup at long context
+- A complementary sparsity axis: MoE in FFN reduces parameter-compute cost; GQE reduces attention-compute cost at long context
+
 ## See Also
 
-- [[conditional-memory]] — complementary sparsity axis
+- [[conditional-memory]] — complementary sparsity axis (static lookup vs. routed compute)
 - [[engram]] — conditional memory instantiation
 - [[deepseek-v4]] — trillion-parameter MoE
 - [[deepseek-v3-2]] — MoE with scalable RL
 - [[hyper-connections]] — architectural improvement to residual connections within MoE layers
+- [[gqe]] — MoE routing applied to GQA query heads (attention sparsity)

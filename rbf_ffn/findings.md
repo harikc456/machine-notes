@@ -97,6 +97,10 @@ All three σ variants perform within ~1 perplexity point of each other. Per-dim 
 | SwiGLU at 4× FFN width (ffn_hidden=2752) | Complete the parameter-matched comparison with dense baseline | **Done** — 44.33 ep2 (§9.5); beats MoE at equal budget, sparse routing adds no structural benefit |
 | XSA + qknorm + wnorm + orthogonal_ffn on odd middle layers only (layers 1,3) | Whether alignment gain concentrates in specific layers; recover most of §8.9 gain with weaker global constraint | **Done** — 54.97 ep2 (§10.2); beats full orthogonal_ffn (55.57) |
 | XSA + qknorm + wnorm + orthogonal_ffn on layers 1,3,4 | Whether adding blocks.4 (next highest uncontrolled alignment per probe) compounds the gain | Pending — [1,2,3,4] done (55.43, §10.4); [1,3,4] untested |
+| XSA-KV-shared + SwiGLU + wnorm | Whether sharing K=V projection preserves XSA quality with fewer params | **Done** — 59.30 ep2 (§13.2); 2.42 ppl worse than standard XSA+wnorm; deprioritised |
+| XSA + qknorm + wnorm + AttnRes + gain(Q,V) + LoRA8 | Whether per-head QV gain adds to LoRA8 compound | **Done** — 53.33 ep2 (§15.2); no gain over LoRA8 alone (53.50) |
+| XSA + qknorm + wnorm + AttnRes + gain(Q,K) + muP + LoRA8 + orthogonal[1,3] | Compound with QK gain and muP on top of §12.2 best | **Done** — 53.18 ep2 (§15.3); 1.06 ppl worse than §12.2 without gain |
+| muP at base_width=256 (identity scale) | Validate muP implementation; confirm no-op at training width | **Done** — 56.05 ep2 (§14.2); matches AttnRes baseline (56.07) — implementation correct |
 | XSA + qknorm + wnorm + LoRA LM head rank=8 | Whether a low-rank adapter on the tied LM head provides complementary gain | **Done** — 53.50 ep2 (§11.2); new 3-epoch best (no AttnRes) |
 | XSA + relu_sq + qknorm + wnorm | Whether ReLU² gate competes with SwiGLU under wnorm | **Done** — 60.83 ep2 (§11.1); underperforms SwiGLU |
 | XSA + qknorm + wnorm + AttnRes | Whether learned per-layer blending of all prior outputs improves over fixed residual | **Done** — 56.07 ep2 (§12.2); modest standalone gain under wnorm; hurts without wnorm |
@@ -815,3 +819,117 @@ Four runs on 2026-05-19:
    - Selective orthogonal FFN (layers 1,3): removes parallel-direction FFN writes in highest-alignment layers (§10.2)
 4. **ReLU² + AttnRes provides marginal improvement** (60.45 vs 60.83, −0.38 ppl) — small benefit, consistent with relu_sq's limited gate expressiveness.
 5. **AttnRes adds ~25–35s/epoch overhead** (~1205s vs SwiGLU+wnorm ~1373s, noting hardware variance; compound variant 1333s).
+
+## §13 KV-Shared XSA (2026-06-11)
+
+### §13.1 Architecture
+
+`SharedExclusiveSelfAttention` combines XSA's Gram-Schmidt orthogonalisation with K=V projection sharing (arXiv:2606.04032, ICML 2026). A single `kv_proj` outputs `n_kv_heads × head_dim` and is used as both K and V, replacing the separate `k_proj` and `v_proj`. The Gram-Schmidt step then orthogonalises the attention output against this shared K/V direction. Param savings: removing one KV projection reduces total parameters slightly (17.2M vs 17.6M for standard XSA+wnorm).
+
+### §13.2 Results
+
+Two runs (2026-06-11) — one without normalization, one with weight norm only (no qk_norm):
+
+| Run | Variant | Val PPL (ep 0) | Val PPL (ep 1) | Val PPL (ep 2) | Time/epoch |
+|-----|---------|----------------|----------------|----------------|------------|
+| 20260611_142528 | XSA-KV-shared + SwiGLU (no norm) | 145.93 | 96.80 | **76.31** | ~1050s |
+| 20260611_151853 | XSA-KV-shared + SwiGLU + wnorm | 119.82 | 75.53 | **59.30** | ~1052s |
+
+**Comparison to standard XSA baselines:**
+
+| Variant | Val PPL (ep 2) | Δ | Time/epoch |
+|---------|----------------|---|------------|
+| XSA + SwiGLU (no norm, §8.1) | 72.41 | — | ~1160s |
+| **XSA-KV-shared + SwiGLU (no norm)** | 76.31 | +3.90 | ~1050s |
+| XSA + SwiGLU + qknorm + wnorm (§8.8) | 56.88 | — | ~1373s |
+| **XSA-KV-shared + SwiGLU + wnorm** | 59.30 | +2.42 | ~1052s |
+
+**Key conclusions:**
+
+1. **KV sharing degrades quality at this scale.** XSA-KV-shared is 3.90 ppl worse without normalization (76.31 vs 72.41) and 2.42 ppl worse with weight norm (59.30 vs 56.88). The gap is consistent and outside run-to-run noise.
+2. **Per-epoch time is ~10% faster** (~1050s vs ~1160s for standard XSA) — fewer KV parameters reduces memory bandwidth and the shared projection is cheaper. The speedup does not compensate for the quality gap.
+3. **K and V serve distinct roles in XSA.** The Gram-Schmidt step orthogonalises the attention output against the V direction; when K=V, the key direction used for scoring and the value direction used for orthogonalisation are tied, degrading both attention pattern quality and the usefulness of the subtraction. Forcing K=V removes the architectural freedom for the network to maintain separate scoring and representation subspaces.
+4. **KV sharing is deprioritised at d_model=256.** The parameter savings (~0.4M) are small relative to the quality cost (~2–4 ppl). At deployment scale, KV sharing's cache compression benefit may dominate; at research scale it does not.
+
+## §14 muP Baseline Validation (2026-06-21)
+
+### §14.1 Implementation
+
+muP (Maximal Update Parameterization, Yang et al. 2022) was implemented with three config fields:
+
+- `mup: bool` — enables muP scaling
+- `mup_base_width: int` — the reference d_model at which hyperparameters were tuned
+- `mup_init_std: float` — init std at base width (default 0.02)
+
+**Init scaling:** `_apply_mup_init` scales the std of all 2D weight matrices by `sqrt(mup_base_width / d_model)`. At d_model=mup_base_width the factor is 1.0 (identity).
+
+**LR scaling:** Muon LR is scaled by `sqrt(mup_base_width / d_model)`. AdamW LR is unchanged (scalar params receive no muP scaling).
+
+**Experiment tag:** runs with muP enabled are tagged `_mup` in the experiment name.
+
+### §14.2 Validation at Training Width
+
+At `d_model=256` and `mup_base_width=256`, both scaling factors are exactly 1.0 — muP is a complete no-op. Run `20260621_102333_xsa_swiglu_qknorm_wnorm_mup256_d256` isolates this:
+
+Config: XSA + SwiGLU + qknorm + wnorm + AttnRes + muP (base_width=256); no LoRA, no orthogonal, no gain.
+
+| Epoch | Val PPL | Time (s) |
+|-------|---------|----------|
+| 0 | 109.88 | 1256 |
+| 1 | 70.23 | 1200 |
+| 2 | **56.05** | 1199 |
+
+**Comparison:**
+
+| Variant | Val PPL (ep 2) | Δ |
+|---------|----------------|---|
+| XSA + qknorm + wnorm + AttnRes (§12.2) | 56.07 | — |
+| XSA + qknorm + wnorm + AttnRes + muP (base_width=256) | **56.05** | −0.02 |
+
+**Key conclusion:** muP at base_width=training_width gives 56.05 — within noise of the non-muP AttnRes baseline (56.07). This validates the implementation: muP is correctly a no-op at the reference scale. The muP infrastructure is now in place for future scaling experiments at d_model > 256 with base_width=256, where the scaling factors will be non-trivial.
+
+## §15 QK/V Projection Gain (2026-06-09, 2026-06-21)
+
+### §15.1 Architecture
+
+`qkv_gain` adds learnable per-head gain scalars to Q, K, and/or V projections after the linear map and before RoPE/qk_norm. Gain is parameterised as `(1 + g)` where `g` is initialized to zero — the projection starts at identity and the gain is learned additively. Target projections are controlled by `qkv_gain_targets: list[str]` (any subset of `["q", "k", "v"]`). Shapes: `q_gain ∈ R^H`, `k_gain ∈ R^{n_kv_heads}`, `v_gain ∈ R^{n_kv_heads}`.
+
+Two gain variants were tested as compounds with the §12.2 best stack:
+
+### §15.2 QV Gain (2026-06-09)
+
+Run `20260609_112353_xsa_swiglu_qknorm_wnorm_loralm8_gainqv_d256` — XSA + SwiGLU + qknorm + wnorm + AttnRes + LoRA rank=8 + gain(Q, V):
+
+| Epoch | Val PPL | Time (s) |
+|-------|---------|----------|
+| 0 | 110.09 | 1395 |
+| 1 | 68.81 | 1316 |
+| 2 | **53.33** | 1317 |
+
+### §15.3 QK Gain + muP + orthogonal[1,3] (2026-06-21)
+
+Run `20260621_120718_xsa_swiglu_qknorm_wnorm_loralm8_gainkq_mup256_d256` — XSA + SwiGLU + qknorm + wnorm + AttnRes + LoRA rank=8 + gain(Q, K) + muP (base_width=256) + orthogonal[1,3]:
+
+| Epoch | Val PPL | Time (s) |
+|-------|---------|----------|
+| 0 | 113.09 | 1363 |
+| 1 | 68.65 | 1333 |
+| 2 | **53.18** | 1333 |
+
+### §15.4 Comparison
+
+| Variant | Val PPL (ep 2) | Δ vs §12.2 best |
+|---------|----------------|-----------------|
+| **XSA + qknorm + wnorm + AttnRes + LoRA8 + orthogonal[1,3] (§12.2)** | **52.12** | — |
+| XSA + qknorm + wnorm + AttnRes + LoRA8 + gain(Q,K) + muP + orthogonal[1,3] | 53.18 | +1.06 |
+| XSA + qknorm + wnorm + AttnRes + LoRA8 + gain(Q,V) | 53.33 | +1.21 |
+| XSA + qknorm + wnorm + AttnRes + LoRA8 (§11.2 reference) | 53.50 | +1.38 |
+| XSA + qknorm + wnorm + AttnRes (§12.2, no LoRA) | 56.07 | +3.95 |
+| XSA + qknorm + wnorm + AttnRes + muP (§14.2, no LoRA/gain) | 56.05 | +3.93 |
+
+**Key conclusions:**
+
+1. **Neither QV nor QK gain improves over the §12.2 compound.** QV gain (53.33) is essentially tied with LoRA8 alone (53.50, §11.2), adding no incremental benefit. QK gain + muP + orthogonal[1,3] (53.18) is 1.06 ppl worse than the §12.2 compound (52.12) that already includes LoRA8 + orthogonal[1,3] without the gain.
+2. **QK gain appears slightly harmful when combined with orthogonal FFN.** The gainkq compound includes all of §12.2's components plus gain(Q,K) and muP (identity at this scale), yet underperforms by 1.06 ppl. The QK gain may interfere with the orthogonal FFN constraint by altering the attention output distribution that the FFN wrapper then projects.
+3. **Per-head gain does not address the remaining gap.** The 52.12 bound (§12.2) is not broken by any single-step addition tested so far. The gain provides no additional representational benefit beyond what LoRA, AttnRes, and orthogonal_ffn already capture.
+4. **muP (at base_width=256) is confirmed a no-op** — the gainkq run's performance is driven solely by the gain and orthogonal components, not muP scaling.

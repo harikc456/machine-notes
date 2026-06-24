@@ -6,11 +6,14 @@ build-backend = "setuptools.build_meta"
 name = "rbf-ffn"
 version = "0.1.0"
 requires-python = ">=3.10"
-dependencies = ["pyyaml"]
+dependencies = [
+    "liger-kernel>=0.8.0",
+    "pyyaml",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["rbf_ffn*", "kromhc_transformer*", "grokking*", "flow_matching*", "sigreg*", "mamba_lm*", "idlm*", "mtp_draft*"]
+include = ["rbf_ffn*", "kromhc_transformer*", "grokking*", "flow_matching*", "sigreg*", "mamba_lm*", "idlm*", "mtp_draft*", "medusa*"]
 
 [tool.pytest.ini_options]
-testpaths = ["rbf_ffn/tests", "kromhc_transformer/tests", "grokking/tests", "sigreg/tests", "idlm/tests", "mtp_draft/tests"]
+testpaths = ["rbf_ffn/tests", "kromhc_transformer/tests", "grokking/tests", "sigreg/tests", "idlm/tests", "mtp_draft/tests", "medusa/tests"]

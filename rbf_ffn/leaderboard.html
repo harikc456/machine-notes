@@ -76,7 +76,7 @@
 </style>
 </head>
 <body>
-<h1>rbf_ffn Leaderboard &mdash; 58 experiments</h1>
+<h1>rbf_ffn Leaderboard &mdash; 63 experiments</h1>
 <input id="filter-input" type="text" placeholder="Filter experiments..." oninput="filterTable(this.value)">
 <div class="table-wrap">
 <table id="lb-table">
@@ -682,6 +682,56 @@ grad_clip: 1.0
     <td>1.11</td>
   </tr>
   <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="# XSA + SwiGLU + ReLU² + qk_norm + weight_norm + muP + QK gain + LoRA LM head + selective orthogonal FFN.
+#
+# OrthogonalMLPWrapper applied to layers 1 and 3 only.
+attn_type: xsa
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+qk_norm: true
+use_attn_res: true
+qkv_gain: true
+qkv_gain_targets: [q, k]
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+linear_weight_norm_max_only: false
+mup: true
+mup_base_width: 256
+mup_init_std: 0.02
+lm_head_lora_rank: 8
+orthogonal_ffn_layers: [1, 3]
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>15</td>
+    <td>xsa_swiglu_qknorm_wnorm_loralm8_gainkq_mup256_d256</td>
+    <td>xsa</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>[1, 3]</td>
+    <td>—</td>
+    <td>18.0M</td>
+    <td>3</td>
+    <td>53.18</td>
+    <td>2</td>
+    <td>53.18</td>
+    <td>61.76</td>
+    <td>1.12</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
   <tr class="" data-config="attn_type: xsa
 ffn_type: swiglu
 d_model: 256
@@ -707,7 +757,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>15</td>
+    <td>16</td>
     <td>xsa_swiglu_qknorm_wnorm_loralm8_gainqv_d256</td>
     <td>xsa</td>
     <td>swiglu</td>
@@ -747,7 +797,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>16</td>
+    <td>17</td>
     <td>xsa_swiglu_qknorm_wnorm_loralm8_d256</td>
     <td>xsa</td>
     <td>swiglu</td>
@@ -793,7 +843,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>17</td>
+    <td>18</td>
     <td>xsa_moe_qknorm_wnorm_dynamic_erf_d256</td>
     <td>xsa</td>
     <td>moe</td>
@@ -835,7 +885,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>18</td>
+    <td>19</td>
     <td>standard_swiglu_qknorm_wnorm_d256</td>
     <td>std</td>
     <td>swiglu</td>
@@ -871,7 +921,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>19</td>
+    <td>20</td>
     <td>swiglu_qknorm_d256</td>
     <td>std</td>
     <td>swiglu</td>
@@ -922,7 +972,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>20</td>
+    <td>21</td>
     <td>xsa_swiglu_qknorm_wnorm_d256</td>
     <td>xsa</td>
     <td>swiglu</td>
@@ -973,7 +1023,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>21</td>
+    <td>22</td>
     <td>xsa_swiglu_qknorm_wnorm_d256</td>
     <td>xsa</td>
     <td>swiglu</td>
@@ -999,6 +1049,49 @@ ffn_hidden: 688
 dropout: 0.1
 vocab_size: 50257
 seq_len: 512
+qk_norm: true
+use_attn_res: true
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+linear_weight_norm_max_only: false
+mup: true
+mup_base_width: 256
+mup_init_std: 0.02
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>23</td>
+    <td>xsa_swiglu_qknorm_wnorm_mup256_d256</td>
+    <td>xsa</td>
+    <td>swiglu</td>
+    <td>Y</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.6M</td>
+    <td>3</td>
+    <td>56.05</td>
+    <td>2</td>
+    <td>56.05</td>
+    <td>65.03</td>
+    <td>1.02</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="attn_type: xsa
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
 linear_weight_norm: true
 linear_weight_norm_value: 2.0
 qk_norm: true
@@ -1012,7 +1105,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>22</td>
+    <td>24</td>
     <td>xsa_swiglu_qknorm_wnorm_d256</td>
     <td>xsa</td>
     <td>swiglu</td>
@@ -1056,7 +1149,7 @@ loop_n_fixed: 2
 linear_weight_norm: true
 linear_weight_norm_value: 2.0
 " onclick="toggleConfig(this)">
-    <td>23</td>
+    <td>25</td>
     <td>xsa_swiglu_qknorm_wnorm_d256</td>
     <td>xsa</td>
     <td>swiglu</td>
@@ -1096,7 +1189,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>24</td>
+    <td>26</td>
     <td>xsa_relu_sq_qknorm_wnorm_loralm8_d256</td>
     <td>xsa</td>
     <td>relu_sq</td>
@@ -1142,7 +1235,7 @@ grad_accum_steps: 1
 linear_weight_norm: true
 linear_weight_norm_value: 2.0
 " onclick="toggleConfig(this)">
-    <td>25</td>
+    <td>27</td>
     <td>pfd_rationalglu_qknorm_wnorm_d256</td>
     <td>std</td>
     <td>rationalglu</td>
@@ -1187,7 +1280,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>26</td>
+    <td>28</td>
     <td>swiglu_wnorm_d256</td>
     <td>std</td>
     <td>swiglu</td>
@@ -1202,6 +1295,43 @@ grad_clip: 1.0
     <td>58.97</td>
     <td>70.19</td>
     <td>1.02</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="attn_type: xsa_kv_shared
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+linear_weight_norm: true
+linear_weight_norm_value: 2.0
+seq_len: 512
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>29</td>
+    <td>xsa_kv_shared_swiglu_wnorm_d256</td>
+    <td>xsa_kv_shared</td>
+    <td>swiglu</td>
+    <td>—</td>
+    <td>Y</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.2M</td>
+    <td>3</td>
+    <td>59.30</td>
+    <td>2</td>
+    <td>59.30</td>
+    <td>71.03</td>
+    <td>0.88</td>
   </tr>
   <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
   <tr class="" data-config="attn_type: xsa
@@ -1226,7 +1356,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>27</td>
+    <td>30</td>
     <td>xsa_relu_sq_qknorm_wnorm_d256</td>
     <td>xsa</td>
     <td>relu_sq</td>
@@ -1272,7 +1402,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>28</td>
+    <td>31</td>
     <td>standard_swiglu_qknorm_adpwnorm_d256</td>
     <td>std</td>
     <td>swiglu</td>
@@ -1311,7 +1441,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>29</td>
+    <td>32</td>
     <td>xsa_relu_sq_qknorm_wnorm_d256</td>
     <td>xsa</td>
     <td>relu_sq</td>
@@ -1362,7 +1492,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>30</td>
+    <td>33</td>
     <td>xsa_moe_qknorm_wnorm_d256</td>
     <td>xsa</td>
     <td>moe</td>
@@ -1422,7 +1552,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>31</td>
+    <td>34</td>
     <td>xsa_moe_qknorm_wnorm_orthogonal_d256</td>
     <td>xsa</td>
     <td>moe</td>
@@ -1459,7 +1589,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>32</td>
+    <td>35</td>
     <td>xsa_swiglu_qknorm_orthogonal_d256</td>
     <td>xsa</td>
     <td>swiglu</td>
@@ -1497,7 +1627,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>33</td>
+    <td>36</td>
     <td>xsa_moe_qknorm_d256</td>
     <td>xsa</td>
     <td>moe</td>
@@ -1535,7 +1665,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>34</td>
+    <td>37</td>
     <td>xsa_swiglu_qknorm_gated_orthogonal_d256</td>
     <td>xsa</td>
     <td>swiglu</td>
@@ -1572,7 +1702,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>35</td>
+    <td>38</td>
     <td>xsa_swiglu_qknorm_d256</td>
     <td>xsa</td>
     <td>swiglu</td>
@@ -1608,7 +1738,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>36</td>
+    <td>39</td>
     <td>xsa_swiglu_qknorm_d256</td>
     <td>xsa</td>
     <td>swiglu</td>
@@ -1647,7 +1777,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>37</td>
+    <td>40</td>
     <td>xsa_swiglu_qknorm_d256</td>
     <td>xsa</td>
     <td>swiglu</td>
@@ -1691,7 +1821,7 @@ warmup_ratio: 0.02
 grad_clip: 1.0
 grad_accum_steps: 1
 " onclick="toggleConfig(this)">
-    <td>38</td>
+    <td>41</td>
     <td>pfd_rationalglu_qknorm_d256</td>
     <td>std</td>
     <td>rationalglu</td>
@@ -1728,7 +1858,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>39</td>
+    <td>42</td>
     <td>xsa_swiglu_d256</td>
     <td>xsa</td>
     <td>swiglu</td>
@@ -1773,7 +1903,7 @@ warmup_ratio: 0.02
 grad_clip: 1.0
 grad_accum_steps: 1
 " onclick="toggleConfig(this)">
-    <td>40</td>
+    <td>43</td>
     <td>pfd_rationalglu_d256</td>
     <td>std</td>
     <td>rationalglu</td>
@@ -1816,7 +1946,7 @@ warmup_ratio: 0.02
 grad_clip: 1.0
 grad_accum_steps: 1
 " onclick="toggleConfig(this)">
-    <td>41</td>
+    <td>44</td>
     <td>rationalglu_qknorm_d256</td>
     <td>std</td>
     <td>rationalglu</td>
@@ -1855,7 +1985,7 @@ grad_accum_steps: 1
 linear_weight_norm: true
 linear_weight_norm_value: 2.0
 " onclick="toggleConfig(this)">
-    <td>42</td>
+    <td>45</td>
     <td>standard_first_order_pfd_rational_qknorm_wnorm_d256</td>
     <td>std</td>
     <td>rational</td>
@@ -1899,7 +2029,7 @@ warmup_ratio: 0.02
 grad_clip: 1.0
 grad_accum_steps: 1
 " onclick="toggleConfig(this)">
-    <td>43</td>
+    <td>46</td>
     <td>rationalglu_d256</td>
     <td>std</td>
     <td>rationalglu</td>
@@ -1939,7 +2069,7 @@ use_loop: true
 loop_n_repeats: 8
 loop_n_fixed: 2
 " onclick="toggleConfig(this)">
-    <td>44</td>
+    <td>47</td>
     <td>xsa_swiglu_qknorm_d256</td>
     <td>xsa</td>
     <td>swiglu</td>
@@ -1976,7 +2106,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>45</td>
+    <td>48</td>
     <td>xsa_swiglu_qknorm_d256</td>
     <td>xsa</td>
     <td>swiglu</td>
@@ -2017,7 +2147,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>46</td>
+    <td>49</td>
     <td>standard_swiglu_qknorm_wnorm_d256</td>
     <td>std</td>
     <td>swiglu</td>
@@ -2058,7 +2188,7 @@ adamw_lr: 0.0003
 adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0" onclick="toggleConfig(this)">
-    <td>47</td>
+    <td>50</td>
     <td>swiglu_d256</td>
     <td>std</td>
     <td>swiglu</td>
@@ -2104,7 +2234,7 @@ warmup_ratio: 0.02
 grad_clip: 1.0
 grad_accum_steps: 1
 " onclick="toggleConfig(this)">
-    <td>48</td>
+    <td>51</td>
     <td>pfd_rationalglu_d256</td>
     <td>std</td>
     <td>rationalglu</td>
@@ -2119,6 +2249,41 @@ grad_accum_steps: 1
     <td>75.71</td>
     <td>90.57</td>
     <td>1.48</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="attn_type: xsa_kv_shared
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>52</td>
+    <td>xsa_kv_shared_swiglu_d256</td>
+    <td>xsa_kv_shared</td>
+    <td>swiglu</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.2M</td>
+    <td>3</td>
+    <td>76.31</td>
+    <td>2</td>
+    <td>76.31</td>
+    <td>91.32</td>
+    <td>0.88</td>
   </tr>
   <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
   <tr class="" data-config="# FirstOrderPFDRational ablation — gate_variant, sigma_variant, K, centers,
@@ -2149,7 +2314,7 @@ warmup_ratio: 0.02
 grad_clip: 1.0
 grad_accum_steps: 1
 " onclick="toggleConfig(this)">
-    <td>49</td>
+    <td>53</td>
     <td>first_order_pfd_rational_d256</td>
     <td>std</td>
     <td>rational</td>
@@ -2193,7 +2358,7 @@ warmup_ratio: 0.02
 grad_clip: 1.0
 grad_accum_steps: 1
 " onclick="toggleConfig(this)">
-    <td>50</td>
+    <td>54</td>
     <td>rational_d256</td>
     <td>std</td>
     <td>rational</td>
@@ -2229,7 +2394,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>51</td>
+    <td>55</td>
     <td>xsa_leaky_relu_sq_qknorm_d256</td>
     <td>xsa</td>
     <td>leaky_relu_sq</td>
@@ -2265,7 +2430,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>52</td>
+    <td>56</td>
     <td>xsa_leaky_relu_sq_qknorm_d256</td>
     <td>xsa</td>
     <td>leaky_relu_sq</td>
@@ -2280,6 +2445,41 @@ grad_clip: 1.0
     <td>79.97</td>
     <td>94.58</td>
     <td>0.97</td>
+  </tr>
+  <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
+  <tr class="" data-config="attn_type: kv_shared
+ffn_type: swiglu
+d_model: 256
+n_heads: 8
+n_layers: 6
+ffn_hidden: 688
+dropout: 0.1
+vocab_size: 50257
+seq_len: 512
+seed: 42
+n_epochs: 3
+batch_size: 16
+muon_lr: 0.02
+adamw_lr: 0.0003
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0
+" onclick="toggleConfig(this)">
+    <td>57</td>
+    <td>kv_shared_swiglu_d256</td>
+    <td>kv_shared</td>
+    <td>swiglu</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>17.2M</td>
+    <td>3</td>
+    <td>80.23</td>
+    <td>2</td>
+    <td>80.23</td>
+    <td>95.80</td>
+    <td>0.87</td>
   </tr>
   <tr class="config-row" style="display:none"><td colspan="15"><pre class="config-pre"></pre></td></tr>
   <tr class="" data-config="model_type: polar_mlp
@@ -2302,7 +2502,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>53</td>
+    <td>58</td>
     <td>standard_polar_qknorm_wnorm_d256</td>
     <td>std</td>
     <td>polar</td>
@@ -2336,7 +2536,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>54</td>
+    <td>59</td>
     <td>standard_polar_d256</td>
     <td>std</td>
     <td>polar</td>
@@ -2378,7 +2578,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>55</td>
+    <td>60</td>
     <td>standard_swiglu_qknorm_wnorm_d256</td>
     <td>std</td>
     <td>swiglu</td>
@@ -2420,7 +2620,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>56</td>
+    <td>61</td>
     <td>standard_swiglu_qknorm_d256</td>
     <td>std</td>
     <td>swiglu</td>
@@ -2466,7 +2666,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>57</td>
+    <td>62</td>
     <td>standard_swiglu_qknorm_wnorm_d256</td>
     <td>std</td>
     <td>swiglu</td>
@@ -2501,7 +2701,7 @@ adamw_wd: 0.1
 warmup_ratio: 0.02
 grad_clip: 1.0
 " onclick="toggleConfig(this)">
-    <td>58</td>
+    <td>63</td>
     <td>polar_polar_d256</td>
     <td>—</td>
     <td>polar</td>
@@ -2521,7 +2721,7 @@ grad_clip: 1.0
 </tbody>
 </table>
 </div>
-<footer>Generated: 2026-06-09 12:57:20</footer>
+<footer>Generated: 2026-06-21 13:22:23</footer>
 
 <script>
 (function() {

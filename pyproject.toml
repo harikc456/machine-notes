@@ -17,3 +17,6 @@ include = ["rbf_ffn*", "kromhc_transformer*", "grokking*", "flow_matching*", "si
 
 [tool.pytest.ini_options]
 testpaths = ["rbf_ffn/tests", "kromhc_transformer/tests", "grokking/tests", "sigreg/tests", "idlm/tests", "mtp_draft/tests", "medusa/tests", "tests"]
+markers = [
+    "slow: tests that require GPU + model download (deselect with '--run-slow')",
+]

@@ -150,7 +150,6 @@ def test_spectralquant_compressed_smaller_than_fp16():
 # ---------------------------------------------------------------------------
 # wrap() API tests
 # ---------------------------------------------------------------------------
-import types
 from kv_quant import wrap
 
 

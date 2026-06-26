@@ -135,3 +135,39 @@ def test_rotation_sign_correct():
     R = make_rotation(8)
     det = torch.linalg.det(R)
     assert abs(det.item() - 1.0) < 1e-4
+
+
+# ---------------------------------------------------------------------------
+# turboquant_core tests
+# ---------------------------------------------------------------------------
+from kv_quant.ops.turboquant_core import TurboQuantMSE, TurboQuantProd, quantize_values, dequantize_values, ValueQuantized
+
+def test_tq_mse_roundtrip():
+    """MSE quantizer should round-trip within reasonable error at 4 bits."""
+    torch.manual_seed(0)
+    q = TurboQuantMSE(dim=128, bits=4)
+    x = torch.randn(4, 128)
+    x_hat = q.dequantize(q.quantize(x))
+    # SNR should be high at 4 bits
+    signal = x.norm() ** 2
+    noise = (x - x_hat).norm() ** 2
+    snr = (signal / noise).item()
+    assert snr > 10.0, f"SNR={snr:.2f} too low"
+
+def test_tq_prod_roundtrip_shape():
+    torch.manual_seed(0)
+    q = TurboQuantProd(dim=128, bits=4)
+    x = torch.randn(2, 4, 10, 128)  # (B, H, S, d)
+    quant = q.quantize(x)
+    x_hat = q.dequantize(quant)
+    assert x_hat.shape == x.shape
+    assert not torch.isnan(x_hat).any()
+
+def test_value_quant_roundtrip():
+    torch.manual_seed(0)
+    v = torch.randn(2, 4, 20, 128)  # (B, H, S, d), d=128 divisible by group_size=32
+    vq = quantize_values(v, bits=2, group_size=32)
+    v_hat = dequantize_values(vq, group_size=32)
+    assert v_hat.shape == v.shape
+    # Group quant should be reasonably close
+    assert (v - v_hat).abs().max().item() < 2.0

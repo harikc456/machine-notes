@@ -2,6 +2,7 @@ from __future__ import annotations
 import torch
 from kv_quant.config import QuantConfig
 from kv_quant.turboquant import TurboQuantCache
+from kv_quant.calibrate import _compute_bit_split
 
 
 def _make_kv(batch=1, heads=2, seq=5, d=16):
@@ -55,9 +56,6 @@ def test_turboquant_multiple_layers():
     cache.update(k, v, layer_idx=1)
     assert cache.get_seq_length(layer_idx=0) == 5
     assert cache.get_seq_length(layer_idx=1) == 5
-
-
-from kv_quant.calibrate import _compute_bit_split
 
 
 def test_compute_bit_split_budget():

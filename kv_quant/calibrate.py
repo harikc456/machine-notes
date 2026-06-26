@@ -136,6 +136,16 @@ def calibrate(
                 "S_signal": S_signal,                           # (m, d_s)
             }
 
+    # Compute representative top-level bit allocations (max across all heads/layers)
+    all_bits_s = [head["bits_signal"] for layer_heads in cal_data["layers"].values() for head in layer_heads.values()]
+    all_bits_n = [head["bits_noise"]  for layer_heads in cal_data["layers"].values() for head in layer_heads.values()]
+    bits_signal_top = int(max(all_bits_s))
+    bits_noise_top  = int(min(all_bits_n))
+
+    # Add top-level bits to calibration data
+    cal_data["bits_signal"] = bits_signal_top
+    cal_data["bits_noise"] = bits_noise_top
+
     torch.save(cal_data, output_path)
     print(f"Calibration data saved to {output_path}")
     del model

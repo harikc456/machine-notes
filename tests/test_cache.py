@@ -1,6 +1,5 @@
 from __future__ import annotations
 import torch
-import pytest
 from kv_quant.config import QuantConfig
 from kv_quant.turboquant import TurboQuantCache
 

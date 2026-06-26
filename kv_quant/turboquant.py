@@ -97,10 +97,9 @@ class TurboQuantCache(DynamicCache):
         return k_full, v_full
 
     def get_seq_length(self, layer_idx: int = 0) -> int:
-        if not self._qk_int:
+        if layer_idx >= len(self._qk_int):
             return 0
-        idx = min(layer_idx, len(self._qk_int) - 1)
-        return self._qk_int[idx].shape[2]
+        return self._qk_int[layer_idx].shape[2]
 
     def compressed_bytes(self) -> int:
         """Bytes used by compressed K/V buffers."""
@@ -110,5 +109,5 @@ class TurboQuantCache(DynamicCache):
         for buf in self._qk_scale + self._qv_scale:
             total += buf.nelement() * buf.element_size()
         for buf in self._qk_qjl + self._qv_qjl:
-            total += buf.nelement() // 8 + 1  # 1 bit per bool conceptually
+            total += (buf.nelement() + 7) // 8  # 1 bit per bool, ceiling division
         return total

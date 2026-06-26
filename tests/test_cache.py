@@ -1,5 +1,7 @@
 from __future__ import annotations
+import pytest
 import torch
+from unittest.mock import MagicMock
 from kv_quant.config import QuantConfig
 from kv_quant.turboquant import TurboQuantCache
 from kv_quant.calibrate import _compute_bit_split
@@ -143,3 +145,61 @@ def test_spectralquant_compressed_smaller_than_fp16():
     cache.update(k, v, layer_idx=0)
     fp16_k_bytes = k.nelement() * 2  # K only (V stored bfloat16 = 2 bytes)
     assert cache.compressed_bytes() < fp16_k_bytes * 4  # sanity, not tight
+
+
+# ---------------------------------------------------------------------------
+# wrap() API tests
+# ---------------------------------------------------------------------------
+import types
+from kv_quant import wrap
+
+
+def _mock_model(n_kv_heads=4, n_heads=8, hidden_size=512, head_dim=64, n_layers=2):
+    model = MagicMock()
+    model.config.num_key_value_heads = n_kv_heads
+    model.config.num_attention_heads = n_heads
+    model.config.hidden_size = hidden_size
+    model.config.head_dim = head_dim
+    model.config.num_hidden_layers = n_layers
+    model.parameters = lambda: iter([torch.zeros(1)])
+    model.generate = MagicMock(return_value=torch.zeros(1, 10, dtype=torch.long))
+    return model
+
+
+def test_wrap_returns_model():
+    model = _mock_model()
+    cfg = QuantConfig(method="turboquant", bits=4)
+    result = wrap(model, cfg)
+    assert result is model
+
+
+def test_wrap_sets_quant_config():
+    model = _mock_model()
+    cfg = QuantConfig(method="turboquant", bits=4)
+    wrap(model, cfg)
+    assert model._kv_quant_config is cfg
+
+
+def test_wrap_injects_turboquant_cache():
+    from kv_quant.turboquant import TurboQuantCache
+    model = _mock_model()
+    cfg = QuantConfig(method="turboquant", bits=4)
+    wrap(model, cfg)
+
+    captured = {}
+    def fake_generate(*args, **kwargs):
+        captured["cache"] = kwargs.get("past_key_values")
+        return torch.zeros(1, 10, dtype=torch.long)
+
+    model.generate = fake_generate
+    # Re-wrap so the patched generate is the one wrapped
+    wrap(model, cfg)
+    model.generate(torch.zeros(1, 5, dtype=torch.long))
+    assert isinstance(captured["cache"], TurboQuantCache)
+
+
+def test_wrap_spectralquant_raises_without_calibration():
+    model = _mock_model()
+    cfg = QuantConfig(method="spectralquant", bits=4, calibration_path=None)
+    with pytest.raises(ValueError, match="calibration_path"):
+        wrap(model, cfg)

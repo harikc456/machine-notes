@@ -113,3 +113,25 @@ def test_encode_deterministic():
     S = make_sign_matrix(16, 32)
     h = torch.randn(5, 32)
     assert (encode_2d(h, S) == encode_2d(h, S)).all()
+
+
+# ---------------------------------------------------------------------------
+# codebook tests
+# ---------------------------------------------------------------------------
+from kv_quant.ops.codebook import get_codebook, get_codebook_tensors
+
+def test_codebook_loads_d128_b4():
+    cb = get_codebook(128, 4)
+    assert len(cb["centroids"]) == 16
+    assert len(cb["boundaries"]) == 17
+
+def test_codebook_tensors_shapes():
+    centroids, decision_boundaries = get_codebook_tensors(64, 3)
+    assert centroids.shape == (8,)
+    assert decision_boundaries.shape == (7,)
+
+def test_rotation_sign_correct():
+    """det(R) should be +1 after sign correction."""
+    R = make_rotation(8)
+    det = torch.linalg.det(R)
+    assert abs(det.item() - 1.0) < 1e-4

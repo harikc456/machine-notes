@@ -4,10 +4,12 @@ import torch
 
 
 def make_rotation(d: int, device=None, dtype=torch.float32, generator=None) -> torch.Tensor:
-    """Random orthogonal matrix (d, d) via QR decomposition."""
-    G = torch.randn(d, d, device=device, dtype=dtype, generator=generator)
-    Q, _ = torch.linalg.qr(G)
-    return Q
+    """Random orthogonal matrix (d, d) via QR decomposition with det=+1."""
+    G = torch.randn(d, d, device="cpu", dtype=torch.float32, generator=generator)
+    Q, R = torch.linalg.qr(G)
+    diag_sign = torch.sign(torch.diag(R))
+    Q = Q * diag_sign.unsqueeze(0)
+    return Q.to(device=device, dtype=dtype)
 
 
 def rotate(h: torch.Tensor, R: torch.Tensor) -> torch.Tensor:

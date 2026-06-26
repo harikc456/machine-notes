@@ -3,9 +3,9 @@ from __future__ import annotations
 import torch
 
 
-def make_rotation(d: int, device=None, dtype=torch.float32) -> torch.Tensor:
+def make_rotation(d: int, device=None, dtype=torch.float32, generator=None) -> torch.Tensor:
     """Random orthogonal matrix (d, d) via QR decomposition."""
-    G = torch.randn(d, d, device=device, dtype=dtype)
+    G = torch.randn(d, d, device=device, dtype=dtype, generator=generator)
     Q, _ = torch.linalg.qr(G)
     return Q
 

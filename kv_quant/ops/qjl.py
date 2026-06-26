@@ -3,9 +3,9 @@ from __future__ import annotations
 import torch
 
 
-def make_sign_matrix(m: int, d: int, device=None) -> torch.Tensor:
+def make_sign_matrix(m: int, d: int, device=None, generator=None) -> torch.Tensor:
     """Random ±1/√m sign matrix of shape (m, d)."""
-    S = torch.randint(0, 2, (m, d), device=device).float() * 2.0 - 1.0
+    S = torch.randint(0, 2, (m, d), device=device, generator=generator).float() * 2.0 - 1.0
     return S / (m ** 0.5)
 
 

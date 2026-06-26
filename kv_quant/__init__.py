@@ -49,4 +49,6 @@ def wrap(model, config: QuantConfig):
 
     model.generate = _wrapped_generate
     model._kv_quant_config = config
+    # Cache factory so perplexity.py can materialize a fresh quantized cache per chunk
+    model._make_kv_cache = lambda: _make_cache(config, n_kv_heads, head_dim, cal_data, device)
     return model

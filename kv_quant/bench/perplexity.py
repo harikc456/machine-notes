@@ -30,7 +30,8 @@ def compute_perplexity(
                 break
             input_ids = chunk[:-1].unsqueeze(0).to(device)
             labels    = chunk[1:].unsqueeze(0).to(device)
-            loss = model(input_ids, labels=labels).loss
+            cache = model._make_kv_cache() if hasattr(model, "_make_kv_cache") else None
+            loss = model(input_ids=input_ids, labels=labels, past_key_values=cache).loss
             n = input_ids.shape[1]
             total_nll    += loss.item() * n
             total_tokens += n

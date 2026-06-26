@@ -22,12 +22,13 @@ class TurboQuantCache(DynamicCache):
         self.n_heads = n_heads
         self.head_dim = head_dim
 
-        torch.manual_seed(0)  # reproducible rotation / QJL matrices
-        self._Rk = torch.stack([make_rotation(head_dim, device=device) for _ in range(n_heads)])
-        self._Rv = torch.stack([make_rotation(head_dim, device=device) for _ in range(n_heads)])
+        g = torch.Generator(device=device or "cpu")
+        g.manual_seed(0)  # reproducible rotation / QJL matrices, local generator only
+        self._Rk = torch.stack([make_rotation(head_dim, device=device, dtype=torch.float32, generator=g) for _ in range(n_heads)])
+        self._Rv = torch.stack([make_rotation(head_dim, device=device, dtype=torch.float32, generator=g) for _ in range(n_heads)])
         m = config.qjl_dim
-        self._Sk = torch.stack([make_sign_matrix(m, head_dim, device=device) for _ in range(n_heads)])
-        self._Sv = torch.stack([make_sign_matrix(m, head_dim, device=device) for _ in range(n_heads)])
+        self._Sk = torch.stack([make_sign_matrix(m, head_dim, device=device, generator=g) for _ in range(n_heads)])
+        self._Sv = torch.stack([make_sign_matrix(m, head_dim, device=device, generator=g) for _ in range(n_heads)])
 
         # Compressed buffers — one tensor per layer
         self._qk_int:   list[torch.Tensor] = []   # (B, H, S, d) int8

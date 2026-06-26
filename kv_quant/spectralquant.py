@@ -16,11 +16,10 @@ class SpectralQuantCache(DynamicCache):
     Value storage: _sq_v (B, H, S, d) bfloat16 — no VQ on values.
     """
 
-    def __init__(self, config: QuantConfig, cal_data: dict, device=None):
+    def __init__(self, config: QuantConfig, cal_data: dict):
         super().__init__()
         self.config = config
         self.cal_data = cal_data
-        self.device = device
 
         self._sq_k_sig_idx: list[torch.Tensor] = []
         self._sq_k_noi_idx: list[torch.Tensor] = []
@@ -129,16 +128,20 @@ class SpectralQuantCache(DynamicCache):
         sig_idx, noi_idx, qjl_bits, _ = self._quant_key_layer(key_states, layer_idx)
         v_new = value_states.bfloat16()
 
-        if layer_idx >= len(self._sq_k_sig_idx):
+        if layer_idx == len(self._sq_k_sig_idx):
+            # New layer — append
             self._sq_k_sig_idx.append(sig_idx)
             self._sq_k_noi_idx.append(noi_idx)
             self._sq_k_qjl.append(qjl_bits)
             self._sq_v.append(v_new)
-        else:
+        elif layer_idx < len(self._sq_k_sig_idx):
+            # Existing layer — concat
             self._sq_k_sig_idx[layer_idx] = torch.cat([self._sq_k_sig_idx[layer_idx], sig_idx],   dim=2)
             self._sq_k_noi_idx[layer_idx] = torch.cat([self._sq_k_noi_idx[layer_idx], noi_idx],   dim=2)
             self._sq_k_qjl[layer_idx]     = torch.cat([self._sq_k_qjl[layer_idx],     qjl_bits],  dim=2)
             self._sq_v[layer_idx]         = torch.cat([self._sq_v[layer_idx],          v_new],     dim=2)
+        else:
+            raise IndexError(f"layer_idx {layer_idx} is out of order; expected {len(self._sq_k_sig_idx)}")
 
         k_full = self._dequant_key_full(layer_idx)
         v_full = self._sq_v[layer_idx].float()
@@ -147,15 +150,16 @@ class SpectralQuantCache(DynamicCache):
     def get_seq_length(self, layer_idx: int = 0) -> int:
         if not self._sq_k_sig_idx:
             return 0
-        idx = min(layer_idx, len(self._sq_k_sig_idx) - 1)
-        return self._sq_k_sig_idx[idx].shape[2]
+        if layer_idx >= len(self._sq_k_sig_idx):
+            return 0
+        return self._sq_k_sig_idx[layer_idx].shape[2]
 
     def compressed_bytes(self) -> int:
         total = 0
         for buf in self._sq_k_sig_idx + self._sq_k_noi_idx:
             total += buf.nelement() * buf.element_size()  # uint8
         for buf in self._sq_k_qjl:
-            total += buf.nelement() // 8 + 1
+            total += (buf.nelement() + 7) // 8
         for buf in self._sq_v:
             total += buf.nelement() * buf.element_size()  # bfloat16
         return total

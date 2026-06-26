@@ -76,3 +76,40 @@ def test_quantize_clamps_to_range():
     # Reconstructed values should be within [-max_val, max_val]
     max_val = h.abs().max().item()
     assert h_rec.abs().max().item() <= max_val + 1e-3
+
+
+from kv_quant.ops.qjl import make_sign_matrix, encode, encode_2d
+
+
+def test_sign_matrix_shape_and_values():
+    S = make_sign_matrix(32, 64)
+    assert S.shape == (32, 64)
+    # Values should be ±1/sqrt(32)
+    expected_abs = 1.0 / (32 ** 0.5)
+    assert torch.allclose(S.abs(), torch.full_like(S, expected_abs))
+
+
+def test_encode_shape():
+    torch.manual_seed(0)
+    H, m, d = 4, 16, 32
+    S = torch.stack([make_sign_matrix(m, d) for _ in range(H)])
+    h = torch.randn(2, H, 10, d)
+    bits = encode(h, S)
+    assert bits.shape == (2, H, 10, m)
+    assert bits.dtype == torch.bool
+
+
+def test_encode_2d_shape():
+    torch.manual_seed(0)
+    S = make_sign_matrix(16, 32)
+    h = torch.randn(100, 32)
+    bits = encode_2d(h, S)
+    assert bits.shape == (100, 16)
+    assert bits.dtype == torch.bool
+
+
+def test_encode_deterministic():
+    torch.manual_seed(0)
+    S = make_sign_matrix(16, 32)
+    h = torch.randn(5, 32)
+    assert (encode_2d(h, S) == encode_2d(h, S)).all()

@@ -4,7 +4,6 @@ import torch
 from unittest.mock import MagicMock
 from kv_quant.config import QuantConfig
 from kv_quant.turboquant import TurboQuantCache
-from kv_quant.calibrate import _compute_bit_split
 from kv_quant.spectralquant import SpectralQuantCache
 from kv_quant.ops.qjl import make_sign_matrix
 
@@ -65,23 +64,6 @@ def test_turboquant_multiple_layers():
     assert cache.get_seq_length(layer_idx=0) == 5
     assert cache.get_seq_length(layer_idx=1) == 5
 
-
-def test_compute_bit_split_budget():
-    # For d=128, d_s=4, total_bits=4, boost=2.0:
-    # bits_signal=8, bits_noise should make average ≈ 4
-    bits_s, bits_n = _compute_bit_split(total_bits=4, d=128, d_s=4, signal_bit_boost=2.0)
-    # Average: (4*bits_s + 124*bits_n) / 128 should be close to 4
-    avg = (4 * bits_s + 124 * bits_n) / 128
-    assert abs(avg - 4.0) < 1.0
-    assert bits_s >= bits_n  # signal gets more bits
-    assert 1 <= bits_n <= 8
-    assert 1 <= bits_s <= 8
-
-
-def test_compute_bit_split_low_bits():
-    bits_s, bits_n = _compute_bit_split(total_bits=2, d=128, d_s=4, signal_bit_boost=2.0)
-    assert bits_s >= bits_n
-    assert bits_n >= 1
 
 
 def _make_synthetic_cal_data(

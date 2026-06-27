@@ -91,8 +91,32 @@ def test_get_stats_zero_elapsed_does_not_divide_by_zero():
         seq_len=64,
         head_dim=64,
     )
+    import math
     assert stats.tokens_per_sec >= 0
-    assert not (stats.tokens_per_sec != stats.tokens_per_sec)  # not NaN
+    assert math.isfinite(stats.tokens_per_sec)
+
+
+def test_get_stats_quantized_includes_buffer():
+    import math
+    mock_cache = MagicMock()
+    mock_cache.compressed_bytes.return_value = 1_000_000  # 1 MB compressed
+    # buffer_size=128, min(seq_len=512, 128)=128 tokens in buffer
+    # buf_bytes = 2 * 2 * 4 * 128 * 64 * 2 = 262_144
+    stats = get_stats(
+        cache=mock_cache,
+        n_new_tokens=10,
+        elapsed=1.0,
+        n_layers=2,
+        n_kv_heads=4,
+        seq_len=512,
+        head_dim=64,
+        buffer_size=128,
+    )
+    buf_bytes = 2 * 2 * 4 * 128 * 64 * 2  # = 262_144
+    expected_kv_mb = (1_000_000 + buf_bytes) / 1e6
+    assert stats.kv_memory_mb == pytest.approx(expected_kv_mb, rel=1e-4)
+    assert math.isfinite(stats.compression_ratio)
+    assert stats.compression_ratio > 0.0
 
 
 def test_kv_quant_chat_syntax():

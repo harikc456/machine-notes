@@ -69,15 +69,19 @@ def get_stats(
     n_kv_heads: int,
     seq_len: int,
     head_dim: int,
+    *,
+    buffer_size: int = 0,
 ) -> ChatStats:
-    # baseline: K + V tensors, fp16 (2 bytes), all layers and heads
+    # n_layers * n_kv_heads * seq_len * head_dim * 2 bytes(fp16) * 2 tensors(K+V)
     baseline_bytes = n_layers * n_kv_heads * seq_len * head_dim * 2 * 2
     baseline_mb = baseline_bytes / 1e6
 
     if cache is not None:
         compressed = cache.compressed_bytes()
-        kv_mb = compressed / 1e6
-        ratio = baseline_bytes / max(compressed, 1)
+        # Add fp16 recency buffer (up to buffer_size tokens, K+V, all layers and heads)
+        buf_bytes = 2 * n_layers * n_kv_heads * min(seq_len, buffer_size) * head_dim * 2
+        kv_mb = (compressed + buf_bytes) / 1e6
+        ratio = baseline_bytes / max(compressed + buf_bytes, 1)
     else:
         kv_mb = baseline_mb
         ratio = 1.0

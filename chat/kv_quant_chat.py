@@ -61,10 +61,11 @@ with st.sidebar:
     use_quant = mode_label == "TurboQuant"
     quant_disabled = not use_quant
 
+    _key_bits_opts = [1, 2, 3, 4]
     key_bits = st.selectbox(
         "Key bits",
-        [1, 2, 3, 4],
-        index=[1, 2, 3, 4].index(entry.default_bits),
+        _key_bits_opts,
+        index=_key_bits_opts.index(entry.default_bits) if entry.default_bits in _key_bits_opts else 3,
         key="key_bits",
         disabled=quant_disabled,
     )
@@ -119,7 +120,17 @@ with st.sidebar:
         loaded_mode: str = st.session_state.get("mode", "baseline")
         current_mode = "turboquant" if use_quant else "baseline"
         st.success(f"Loaded: {loaded_id.split('/')[-1]}")
-        if loaded_id != entry.id or loaded_mode != current_mode:
+        current_quant = QuantConfig(
+            method="turboquant",
+            bits=key_bits,
+            value_bits=value_bits,
+            buffer_size=buffer_size,
+        )
+        if (
+            loaded_id != entry.id
+            or loaded_mode != current_mode
+            or st.session_state.get("quant_config") != current_quant
+        ):
             st.warning("Settings changed — click Load Model to apply.")
 
 # ── Main area ─────────────────────────────────────────────────────────────────
@@ -168,9 +179,9 @@ if user_input:
         do_sample=False,
     )
 
+    n_kv_heads, head_dim = get_kv_shape(model)
     cache: TurboQuantCache | None = None
     if current_mode == "turboquant" and quant_config is not None:
-        n_kv_heads, head_dim = get_kv_shape(model)
         cache = TurboQuantCache(
             quant_config, n_kv_heads, head_dim, device=model.device
         )
@@ -192,17 +203,18 @@ if user_input:
     st.session_state["history"] = history
 
     n_new = len(tokenizer.encode(response, add_special_tokens=False))
-    n_kv_heads_s, head_dim_s = get_kv_shape(model)
     seq_len = input_ids.shape[-1] + n_new
 
+    buf_size = quant_config.buffer_size if cache is not None else 0
     st.session_state["last_stats"] = get_stats(
         cache=cache,
         n_new_tokens=n_new,
         elapsed=elapsed,
         n_layers=model.config.num_hidden_layers,
-        n_kv_heads=n_kv_heads_s,
+        n_kv_heads=n_kv_heads,
         seq_len=seq_len,
-        head_dim=head_dim_s,
+        head_dim=head_dim,
+        buffer_size=buf_size,
     )
 
 # ── Stats panel ───────────────────────────────────────────────────────────────
@@ -216,5 +228,5 @@ if stats is not None:
         else f"↓ from {stats.baseline_memory_mb:.1f} MB"
     )
     col1.metric("KV Memory", f"{stats.kv_memory_mb:.1f} MB", delta=delta)
-    col2.metric("Tokens/sec", f"{stats.tokens_per_sec:.1f} tok/s")
+    col2.metric("Tokens/sec (e2e)", f"{stats.tokens_per_sec:.1f} tok/s")
     col3.metric("Compression", f"{stats.compression_ratio:.1f}×")

@@ -421,3 +421,142 @@ def test_wrap_combined_requires_model_name_or_path():
     cfg = QuantConfig(method="turboquant", eviction="triattention", budget=256, calibration_path="/fake/stats.pt")
     with pytest.raises(ValueError, match="_name_or_path"):
         wrap(model, cfg)
+
+
+def _make_fake_triattention_modules(mock_comp):
+    """Inject a fake triattention package into sys.modules so apply_combined_eviction_patch
+    can import from it without the real triattention submodule being installed."""
+    import types as _types
+    fake_pkg = _types.ModuleType("triattention")
+    fake_methods = _types.ModuleType("triattention.methods")
+    fake_ta = _types.ModuleType("triattention.methods.triattention")
+
+    fake_ta.TriAttention = MagicMock(return_value=mock_comp)
+    fake_ta.TriAttentionConfig = MagicMock()
+    fake_methods.triattention = fake_ta
+    fake_pkg.methods = fake_methods
+
+    return {
+        "triattention": fake_pkg,
+        "triattention.methods": fake_methods,
+        "triattention.methods.triattention": fake_ta,
+    }
+
+
+def test_patched_forward_prefill_initializes_state():
+    """_patched_forward prefill branch sets cache_positions, absolute_position, prefix_length."""
+    import sys
+    from kv_quant.triattention_patch import apply_combined_eviction_patch
+
+    model = _mock_model(n_layers=1)
+    cfg = QuantConfig(method="turboquant", budget=10, divide_length=100, calibration_path="/fake/stats.pt")
+
+    mock_comp = MagicMock()
+    mock_comp.absolute_position = 0
+
+    fake_modules = _make_fake_triattention_modules(mock_comp)
+    saved = {k: sys.modules.get(k) for k in fake_modules}
+    sys.modules.update(fake_modules)
+    try:
+        apply_combined_eviction_patch(model, cfg)
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                sys.modules.pop(k, None)
+            else:
+                sys.modules[k] = v
+
+    # Prefill: empty cache
+    empty_cache = TurboQuantCache(cfg, n_heads=4, head_dim=64)
+    orig_forward_called = []
+
+    _orig = model.forward
+    def capturing_forward(*args, **kwargs):
+        # simulate populating cache with 3 tokens during prefill
+        k, v = _make_kv(seq=3, heads=4, d=64)
+        empty_cache.update(k, v, layer_idx=0)
+        orig_forward_called.append(True)
+        return MagicMock()
+    model.forward = _orig  # restore so patch can rewrap
+    # re-apply patch on capturing forward
+    model.forward = capturing_forward
+
+    # Now manually call the patched forward (stored as model.forward by apply_combined_eviction_patch)
+    # But apply_combined_eviction_patch wrapped model.forward at the time of call.
+    # Just test via a direct call to the patched version captured in the closure.
+    # Simpler: just verify after patch that prefill sets state correctly.
+    # We verify via the mock_comp attributes that _patched_forward writes to.
+    model.forward = capturing_forward
+    # Re-apply so _orig_forward is capturing_forward
+    fake_modules2 = _make_fake_triattention_modules(mock_comp)
+    saved2 = {k: sys.modules.get(k) for k in fake_modules2}
+    sys.modules.update(fake_modules2)
+    try:
+        apply_combined_eviction_patch(model, cfg)
+    finally:
+        for k, v in saved2.items():
+            if v is None:
+                sys.modules.pop(k, None)
+            else:
+                sys.modules[k] = v
+
+    input_ids = torch.zeros(1, 3, dtype=torch.long)
+    model.forward(input_ids=input_ids, past_key_values=empty_cache)
+
+    assert mock_comp.cache_positions == [0, 1, 2]
+    assert mock_comp.absolute_position == 3
+    assert mock_comp.prefix_length == 3
+
+
+def test_patched_forward_eviction_trigger():
+    """_patched_forward: eviction fires when seq_len > budget AND position % divide_length == 0.
+    Verifies compute_keep_indices receives a list of (k,v) tuples, not a SimpleNamespace."""
+    import sys
+    from kv_quant.triattention_patch import apply_combined_eviction_patch
+
+    budget = 3
+    divide_length = 1  # trigger every decode step
+    cfg = QuantConfig(method="turboquant", budget=budget, divide_length=divide_length,
+                      calibration_path="/fake/stats.pt")
+
+    model = _mock_model(n_layers=1)
+    cache = TurboQuantCache(cfg, n_heads=4, head_dim=64)
+
+    k, v = _make_kv(seq=4, heads=4, d=64)
+    cache.update(k, v, layer_idx=0)  # 4 tokens > budget=3
+
+    keep = torch.tensor([0, 1, 2])
+    mock_comp = MagicMock()
+    mock_comp.absolute_position = 4
+    mock_comp.prefix_length = 4
+    mock_comp.cache_positions = list(range(4))
+    mock_comp.compute_keep_indices.return_value = keep
+
+    def fake_orig(*args, **kwargs):
+        return MagicMock()
+
+    model.forward = fake_orig
+
+    fake_modules = _make_fake_triattention_modules(mock_comp)
+    saved = {k: sys.modules.get(k) for k in fake_modules}
+    sys.modules.update(fake_modules)
+    try:
+        apply_combined_eviction_patch(model, cfg)
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                sys.modules.pop(k, None)
+            else:
+                sys.modules[k] = v
+
+    input_ids = torch.zeros(1, 1, dtype=torch.long)
+    model.forward(input_ids=input_ids, past_key_values=cache)
+
+    assert mock_comp.compute_keep_indices.called
+    kv_arg = mock_comp.compute_keep_indices.call_args[0][0]
+    assert isinstance(kv_arg, list), "compute_keep_indices must receive a list, not SimpleNamespace"
+    assert len(kv_arg) == 1  # n_layers=1
+    k_tensor, v_tensor = kv_arg[0]
+    assert isinstance(k_tensor, torch.Tensor)
+    assert k_tensor.shape[-1] == 64
+    assert cache.get_seq_length(0) == 3  # eviction reduced to budget

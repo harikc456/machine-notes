@@ -9,7 +9,6 @@ by wrap() — the official patch only works on plain DynamicCache.
 from __future__ import annotations
 import os
 import sys
-import types
 from pathlib import Path
 
 import torch
@@ -54,7 +53,7 @@ def apply_combined_eviction_patch(model, config: QuantConfig) -> None:
 
     _orig_forward = model.forward
 
-    def _patched_forward(self_model, *args, **kwargs):
+    def _patched_forward(*args, **kwargs):
         input_ids = kwargs.get("input_ids")
         if input_ids is None and args:
             input_ids = args[0]
@@ -99,17 +98,14 @@ def apply_combined_eviction_patch(model, config: QuantConfig) -> None:
             new_seq_len > config.budget
             and comp.absolute_position % config.divide_length == 0
         ):
+            # compute_keep_indices expects a list of (key, value) tensor tuples
             kv_pairs = [past_kv.get_kv(l) for l in range(n_layers)]
-            proxy = types.SimpleNamespace(
-                key_cache=[k for k, _v in kv_pairs],
-                value_cache=[_v for _k, _v in kv_pairs],
-            )
             keep_indices = comp.compute_keep_indices(
-                proxy, prefix_length=getattr(comp, "prefix_length", 0)
+                kv_pairs, prefix_length=getattr(comp, "prefix_length", 0)
             )
             past_kv.evict(keep_indices)
             comp.cache_positions = [comp.cache_positions[i] for i in keep_indices.tolist()]
 
         return output
 
-    model.forward = types.MethodType(_patched_forward, model)
+    model.forward = _patched_forward

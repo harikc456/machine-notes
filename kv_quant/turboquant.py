@@ -149,6 +149,80 @@ class TurboQuantCache(DynamicCache):
         buf_len = 0 if self._k_buf[layer_idx] is None else self._k_buf[layer_idx].shape[-2]
         return qk_len + buf_len
 
+    def get_kv(self, layer_idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return full dequantized (keys, values) for layer_idx as float32 tensors.
+
+        Shape: (B, H, S, D) where S = get_seq_length(layer_idx).
+        Raises IndexError if layer_idx has not been populated yet.
+        """
+        if layer_idx >= len(self._qk):
+            raise IndexError(
+                f"layer_idx {layer_idx} not in cache (cache has {len(self._qk)} layers)"
+            )
+
+        if self._k_buf[layer_idx] is not None:
+            device = self._k_buf[layer_idx].device
+        elif self._device is not None:
+            device = self._device
+        else:
+            device = torch.device("cpu")
+
+        parts_k: list[torch.Tensor] = []
+        parts_v: list[torch.Tensor] = []
+
+        if self._qk[layer_idx] is not None:
+            q = self._get_quantizer(layer_idx, device)
+            parts_k.append(q.dequantize(self._qk[layer_idx]))
+            parts_v.append(dequantize_values(self._qv[layer_idx], self.config.value_group_size))
+
+        if self._k_buf[layer_idx] is not None:
+            parts_k.append(self._k_buf[layer_idx].float())
+            parts_v.append(self._v_buf[layer_idx].float())
+
+        if not parts_k:
+            raise ValueError(f"layer_idx {layer_idx} has no cached tokens")
+
+        return torch.cat(parts_k, dim=-2), torch.cat(parts_v, dim=-2)
+
+    def evict(self, keep_indices: torch.Tensor) -> None:
+        """Retain only the tokens at keep_indices, discarding all others.
+
+        Applies to ALL layers. keep_indices is a 1D int64 tensor of positions
+        to keep (size = budget, values in [0, get_seq_length()-1]).
+        """
+        for layer_idx in range(len(self._qk)):
+            if self._k_buf[layer_idx] is None and self._qk[layer_idx] is None:
+                continue
+
+            orig_dtype = (
+                self._k_buf[layer_idx].dtype
+                if self._k_buf[layer_idx] is not None
+                else torch.bfloat16
+            )
+
+            k_full, v_full = self.get_kv(layer_idx)
+            k_kept = k_full[..., keep_indices, :]
+            v_kept = v_full[..., keep_indices, :]
+
+            self._qk[layer_idx] = None
+            self._qv[layer_idx] = None
+            self._k_buf[layer_idx] = None
+            self._v_buf[layer_idx] = None
+
+            budget = k_kept.shape[-2]
+            if budget <= self.config.buffer_size:
+                self._k_buf[layer_idx] = k_kept.to(orig_dtype)
+                self._v_buf[layer_idx] = v_kept.to(orig_dtype)
+            else:
+                n_quant = budget - self.config.buffer_size
+                self._flush_to_quantized(
+                    layer_idx,
+                    k_kept[..., :n_quant, :].to(orig_dtype),
+                    v_kept[..., :n_quant, :].to(orig_dtype),
+                )
+                self._k_buf[layer_idx] = k_kept[..., n_quant:, :].to(orig_dtype)
+                self._v_buf[layer_idx] = v_kept[..., n_quant:, :].to(orig_dtype)
+
     def compressed_bytes(self) -> int:
         """Bytes used by compressed K/V storage (excludes fp16 buffer)."""
         total = 0

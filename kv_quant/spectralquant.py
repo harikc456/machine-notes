@@ -189,6 +189,71 @@ class SpectralQuantCache(DynamicCache):
                 return slot.shape[1]
         return 0
 
+    def get_kv(self, layer_idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return full dequantized (keys, values) for layer_idx as float32 tensors.
+
+        Shape: (B, H, S, D). Raises IndexError if layer has no cached tokens.
+        """
+        from spectralquant.nonuniform_quantization import CompressedVector
+
+        if layer_idx >= len(self._sk_sem) or self._sk_sem[layer_idx][0] is None:
+            raise IndexError(f"layer_idx {layer_idx} has no cached tokens")
+
+        k_hat_heads: list[torch.Tensor] = []
+        v_hat_heads: list[torch.Tensor] = []
+
+        for h in range(len(self._sk_sem[layer_idx])):
+            k_meta = self._head_meta[(layer_idx, h, "key")]
+            B = self._sk_sem[layer_idx][h].shape[0]
+            S = self._sk_sem[layer_idx][h].shape[1]
+            D = k_meta["head_dim"]
+
+            k_cv = CompressedVector(
+                semantic_indices=self._sk_sem[layer_idx][h],
+                tail_indices=self._sk_tail[layer_idx][h],
+                d_eff=k_meta["d_eff_int"],
+                head_dim=D,
+                b_high=k_meta["b_high"],
+                b_low=k_meta["b_low"],
+                original_shape=(B, S, D),
+            )
+            k_hat = self._key_rot.unrotate(
+                self._key_quants[(layer_idx, h)].decompress(k_cv), layer_idx, h
+            )
+            k_hat_heads.append(k_hat.float())
+
+            v_meta = self._head_meta[(layer_idx, h, "value")]
+            v_cv = CompressedVector(
+                semantic_indices=self._sv_sem[layer_idx][h],
+                tail_indices=self._sv_tail[layer_idx][h],
+                d_eff=v_meta["d_eff_int"],
+                head_dim=D,
+                b_high=v_meta["b_high"],
+                b_low=v_meta["b_low"],
+                original_shape=(B, S, D),
+            )
+            v_hat = self._val_rot.unrotate(
+                self._val_quants[(layer_idx, h)].decompress(v_cv), layer_idx, h
+            )
+            v_hat_heads.append(v_hat.float())
+
+        return torch.stack(k_hat_heads, dim=1), torch.stack(v_hat_heads, dim=1)
+
+    def evict(self, keep_indices: torch.Tensor) -> None:
+        """Retain only the tokens at keep_indices, discarding all others.
+
+        Applies to ALL layers. Slices stored index tensors along dim=1
+        (the sequence dimension) — no re-quantization needed.
+        """
+        for l in range(len(self._sk_sem)):
+            for h in range(len(self._sk_sem[l])):
+                if self._sk_sem[l][h] is None:
+                    continue
+                self._sk_sem[l][h] = self._sk_sem[l][h][:, keep_indices, :]
+                self._sk_tail[l][h] = self._sk_tail[l][h][:, keep_indices, :]
+                self._sv_sem[l][h] = self._sv_sem[l][h][:, keep_indices, :]
+                self._sv_tail[l][h] = self._sv_tail[l][h][:, keep_indices, :]
+
     def compressed_bytes(self) -> int:
         """Theoretical compressed bytes using declared bit widths (not int32 tensor sizes)."""
         total_bits = 0

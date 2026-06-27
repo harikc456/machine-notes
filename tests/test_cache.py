@@ -72,6 +72,68 @@ def test_turboquant_multiple_layers():
 
 
 
+def test_turboquant_get_kv_shape_buffer_only():
+    """get_kv() returns correct shape when all tokens are in buffer."""
+    cfg = QuantConfig(bits=4, buffer_size=128)
+    cache = TurboQuantCache(cfg, n_heads=2, head_dim=64)
+    k, v = _make_kv(seq=5, heads=2, d=64)
+    cache.update(k, v, layer_idx=0)
+    k_out, v_out = cache.get_kv(0)
+    assert k_out.shape == (1, 2, 5, 64)
+    assert v_out.shape == (1, 2, 5, 64)
+    assert k_out.dtype == torch.float32
+
+
+def test_turboquant_get_kv_shape_with_quantized():
+    """get_kv() reconstructs both quantized and buffer portions."""
+    cfg = QuantConfig(bits=4, buffer_size=4)
+    cache = TurboQuantCache(cfg, n_heads=2, head_dim=64)
+    k, v = _make_kv(seq=6, heads=2, d=64)  # 6 tokens → 2 flushed to quantized
+    cache.update(k, v, layer_idx=0)
+    k_out, v_out = cache.get_kv(0)
+    assert k_out.shape == (1, 2, 6, 64)
+    assert v_out.shape == (1, 2, 6, 64)
+    assert k_out.dtype == torch.float32
+
+
+def test_turboquant_evict_reduces_seq_length():
+    """After evict(keep_indices), get_seq_length() == len(keep_indices)."""
+    cfg = QuantConfig(bits=4, buffer_size=128)
+    cache = TurboQuantCache(cfg, n_heads=2, head_dim=64)
+    k, v = _make_kv(seq=6, heads=2, d=64)
+    cache.update(k, v, layer_idx=0)
+    keep = torch.tensor([0, 2, 4])
+    cache.evict(keep)
+    assert cache.get_seq_length(0) == 3
+
+
+def test_turboquant_evict_multiple_layers():
+    """evict() applies to all layers."""
+    cfg = QuantConfig(bits=4, buffer_size=128)
+    cache = TurboQuantCache(cfg, n_heads=2, head_dim=64)
+    k, v = _make_kv(seq=5, heads=2, d=64)
+    cache.update(k, v, layer_idx=0)
+    cache.update(k, v, layer_idx=1)
+    keep = torch.tensor([0, 2, 4])
+    cache.evict(keep)
+    assert cache.get_seq_length(0) == 3
+    assert cache.get_seq_length(1) == 3
+
+
+def test_turboquant_evict_then_update_works():
+    """After evict(), update() still appends correctly."""
+    cfg = QuantConfig(bits=4, buffer_size=128)
+    cache = TurboQuantCache(cfg, n_heads=2, head_dim=64)
+    k, v = _make_kv(seq=6, heads=2, d=64)
+    cache.update(k, v, layer_idx=0)
+    keep = torch.tensor([0, 2, 4])
+    cache.evict(keep)
+    k_new, v_new = _make_kv(seq=1, heads=2, d=64)
+    k_out, v_out = cache.update(k_new, v_new, layer_idx=0)
+    assert k_out.shape[-2] == 4  # 3 kept + 1 new
+    assert cache.get_seq_length(0) == 4
+
+
 def _make_spectralquant_cal_data(
     n_layers: int = 2, n_kv_heads: int = 2, D: int = 64, avg_bits: int = 4
 ) -> tuple:
@@ -164,6 +226,60 @@ def test_spectralquant_compressed_smaller_than_fp16():
     fp16_k_bytes = k.nelement() * 2  # K only (1*2*64*64 * 2 bytes = 16384)
     # compressed_bytes() counts K+V at 4 bits/coord = 8192 bytes < 65536
     assert cache.compressed_bytes() < fp16_k_bytes * 4
+
+
+def test_spectralquant_get_kv_shape():
+    """get_kv() returns (B, H, S, D) float32 tensors."""
+    cfg = QuantConfig(method="spectralquant", bits=4)
+    cal = _make_spectralquant_cal_data()
+    cache = SpectralQuantCache(cfg, cal)
+    k, v = _make_kv(heads=2, d=64)
+    cache.update(k, v, layer_idx=0)
+    k_out, v_out = cache.get_kv(0)
+    assert k_out.shape == (1, 2, 5, 64)
+    assert v_out.shape == (1, 2, 5, 64)
+    assert k_out.dtype == torch.float32
+
+
+def test_spectralquant_evict_reduces_seq_length():
+    """After evict(keep_indices), get_seq_length() == len(keep_indices)."""
+    cfg = QuantConfig(method="spectralquant", bits=4)
+    cal = _make_spectralquant_cal_data()
+    cache = SpectralQuantCache(cfg, cal)
+    k, v = _make_kv(seq=5, heads=2, d=64)
+    cache.update(k, v, layer_idx=0)
+    keep = torch.tensor([0, 2, 4])
+    cache.evict(keep)
+    assert cache.get_seq_length(0) == 3
+
+
+def test_spectralquant_evict_multiple_layers():
+    """evict() applies to all layers."""
+    cfg = QuantConfig(method="spectralquant", bits=4)
+    cal = _make_spectralquant_cal_data(n_layers=2)
+    cache = SpectralQuantCache(cfg, cal)
+    k, v = _make_kv(seq=5, heads=2, d=64)
+    cache.update(k, v, layer_idx=0)
+    cache.update(k, v, layer_idx=1)
+    keep = torch.tensor([1, 3])
+    cache.evict(keep)
+    assert cache.get_seq_length(0) == 2
+    assert cache.get_seq_length(1) == 2
+
+
+def test_spectralquant_evict_then_update_works():
+    """After evict(), update() still appends and returns correct shape."""
+    cfg = QuantConfig(method="spectralquant", bits=4)
+    cal = _make_spectralquant_cal_data()
+    cache = SpectralQuantCache(cfg, cal)
+    k, v = _make_kv(seq=5, heads=2, d=64)
+    cache.update(k, v, layer_idx=0)
+    keep = torch.tensor([0, 2, 4])
+    cache.evict(keep)
+    k_new, v_new = _make_kv(seq=1, heads=2, d=64)
+    k_out, v_out = cache.update(k_new, v_new, layer_idx=0)
+    assert k_out.shape[-2] == 4  # 3 kept + 1 new
+    assert cache.get_seq_length(0) == 4
 
 
 # ---------------------------------------------------------------------------

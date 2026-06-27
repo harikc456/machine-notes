@@ -221,3 +221,58 @@ def test_wrap_spectralquant_raises_without_calibration():
     cfg = QuantConfig(method="spectralquant", bits=4, calibration_path=None)
     with pytest.raises(ValueError, match="calibration_path"):
         wrap(model, cfg)
+
+
+# ---------------------------------------------------------------------------
+# TriAttention guard rail tests (no model/stats needed — tests ValueError only)
+# ---------------------------------------------------------------------------
+
+def test_wrap_standalone_triattention_requires_calibration_path():
+    """method=None, eviction=triattention, no calibration_path → ValueError."""
+    model = _mock_model()
+    cfg = QuantConfig(method=None, eviction="triattention", budget=256, calibration_path=None)
+    with pytest.raises(ValueError, match="calibration_path"):
+        wrap(model, cfg)
+
+
+def test_wrap_combined_triattention_requires_calibration_path():
+    """method=turboquant, eviction=triattention, no calibration_path → ValueError."""
+    model = _mock_model()
+    cfg = QuantConfig(method="turboquant", eviction="triattention", budget=256, calibration_path=None)
+    with pytest.raises(ValueError, match="calibration_path"):
+        wrap(model, cfg)
+
+
+def test_wrap_triattention_requires_model_name_or_path():
+    """eviction=triattention with _name_or_path=None → ValueError."""
+    model = _mock_model()
+    model.config._name_or_path = None
+    cfg = QuantConfig(method=None, eviction="triattention", budget=256, calibration_path="/fake/stats.pt")
+    with pytest.raises(ValueError, match="_name_or_path"):
+        wrap(model, cfg)
+
+
+def test_plain_cache_compressed_bytes_single_layer():
+    """_make_plain_cache() compressed_bytes() sums bfloat16 KV bytes."""
+    from kv_quant import _make_plain_cache
+    cache = _make_plain_cache()
+    B, H, S, D = 1, 2, 10, 64
+    k = torch.zeros(B, H, S, D, dtype=torch.bfloat16)
+    v = torch.zeros(B, H, S, D, dtype=torch.bfloat16)
+    cache.key_cache.append(k)
+    cache.value_cache.append(v)
+    expected = (k.nelement() + v.nelement()) * 2  # bfloat16 = 2 bytes
+    assert cache.compressed_bytes() == expected
+
+
+def test_plain_cache_compressed_bytes_multiple_layers():
+    """_make_plain_cache() accumulates across two layers."""
+    from kv_quant import _make_plain_cache
+    cache = _make_plain_cache()
+    B, H, S, D = 1, 2, 5, 64
+    k = torch.zeros(B, H, S, D, dtype=torch.bfloat16)
+    v = torch.zeros(B, H, S, D, dtype=torch.bfloat16)
+    cache.key_cache.extend([k, k])
+    cache.value_cache.extend([v, v])
+    expected = 2 * (k.nelement() + v.nelement()) * 2
+    assert cache.compressed_bytes() == expected

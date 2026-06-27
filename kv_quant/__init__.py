@@ -46,9 +46,6 @@ def _load_spectralquant_cal(base_path: str) -> tuple:
 
 def _make_plain_cache():
     """Return a cache-like object with key_cache, value_cache, and compressed_bytes() method."""
-    from transformers import DynamicCache
-
-    # Create a simple wrapper that provides the legacy API
     class PlainDynamicCache:
         def __init__(self):
             self.key_cache = []

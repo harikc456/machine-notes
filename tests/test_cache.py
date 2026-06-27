@@ -392,3 +392,32 @@ def test_plain_cache_compressed_bytes_multiple_layers():
     cache.value_cache.extend([v, v])
     expected = 2 * (k.nelement() + v.nelement()) * 2
     assert cache.compressed_bytes() == expected
+
+
+# ---------------------------------------------------------------------------
+# Combined mode guard rail tests (no real TriAttention needed)
+# ---------------------------------------------------------------------------
+
+def test_wrap_combined_turboquant_requires_calibration_path():
+    """method=turboquant + eviction=triattention + no calibration_path → ValueError."""
+    model = _mock_model()
+    cfg = QuantConfig(method="turboquant", eviction="triattention", budget=256, calibration_path=None)
+    with pytest.raises(ValueError, match="calibration_path"):
+        wrap(model, cfg)
+
+
+def test_wrap_combined_spectralquant_requires_calibration_path():
+    """method=spectralquant + eviction=triattention + no calibration_path → ValueError."""
+    model = _mock_model()
+    cfg = QuantConfig(method="spectralquant", eviction="triattention", budget=256, calibration_path=None)
+    with pytest.raises(ValueError, match="calibration_path"):
+        wrap(model, cfg)
+
+
+def test_wrap_combined_requires_model_name_or_path():
+    """method=turboquant + eviction=triattention + _name_or_path=None → ValueError."""
+    model = _mock_model()
+    model.config._name_or_path = None
+    cfg = QuantConfig(method="turboquant", eviction="triattention", budget=256, calibration_path="/fake/stats.pt")
+    with pytest.raises(ValueError, match="_name_or_path"):
+        wrap(model, cfg)

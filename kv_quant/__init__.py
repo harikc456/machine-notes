@@ -1,4 +1,6 @@
 from __future__ import annotations
+import os
+import sys
 import torch
 
 from kv_quant.config import QuantConfig
@@ -14,6 +16,26 @@ def _get_kv_shape(model) -> tuple[int, int]:
     return n_kv_heads, head_dim
 
 
+def _ensure_spectralquant_on_path() -> None:
+    src = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "spectralquant", "src")
+    )
+    if src not in sys.path:
+        sys.path.insert(0, src)
+
+
+def _load_spectralquant_cal(base_path: str) -> tuple:
+    """Load (EigenspectralCalibrator, quant_state_dict) from base_path."""
+    _ensure_spectralquant_on_path()
+    from spectralquant.calibration import EigenspectralCalibrator
+    calibrator = EigenspectralCalibrator()
+    calibrator.load(base_path)
+    quant_state = torch.load(
+        base_path + "_quantizers.pt", map_location="cpu", weights_only=True
+    )
+    return (calibrator, quant_state)
+
+
 def _make_cache(config: QuantConfig, n_kv_heads: int, head_dim: int, cal_data, device):
     if config.method == "turboquant":
         from kv_quant.turboquant import TurboQuantCache
@@ -27,13 +49,13 @@ def _make_cache(config: QuantConfig, n_kv_heads: int, head_dim: int, cal_data, d
 def wrap(model, config: QuantConfig):
     """Patch model.generate() to use a quantized KV cache.
 
-    For spectralquant, config.calibration_path must point to a .pt file
-    produced by `python -m kv_quant.calibrate`.
+    For spectralquant, config.calibration_path must be a base path (no extension)
+    pointing to files produced by `python -m kv_quant.calibrate`.
     """
     if config.method == "spectralquant":
         if not config.calibration_path:
             raise ValueError("spectralquant requires config.calibration_path")
-        cal_data = torch.load(config.calibration_path, map_location="cpu")
+        cal_data = _load_spectralquant_cal(config.calibration_path)
     else:
         cal_data = None
 
@@ -49,6 +71,5 @@ def wrap(model, config: QuantConfig):
 
     model.generate = _wrapped_generate
     model._kv_quant_config = config
-    # Cache factory so perplexity.py can materialize a fresh quantized cache per chunk
     model._make_kv_cache = lambda: _make_cache(config, n_kv_heads, head_dim, cal_data, device)
     return model

@@ -1,4 +1,6 @@
 from __future__ import annotations
+import os
+import py_compile
 import textwrap
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -91,3 +93,9 @@ def test_get_stats_zero_elapsed_does_not_divide_by_zero():
     )
     assert stats.tokens_per_sec >= 0
     assert not (stats.tokens_per_sec != stats.tokens_per_sec)  # not NaN
+
+
+def test_kv_quant_chat_syntax():
+    chat_path = os.path.join(os.path.dirname(__file__), "..", "chat", "kv_quant_chat.py")
+    # Compiles to bytecode — raises SyntaxError if the file has syntax errors
+    py_compile.compile(chat_path, doraise=True)

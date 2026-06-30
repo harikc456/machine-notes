@@ -73,6 +73,18 @@ def test_train_stage2_ids_within_extended_vocab():
     assert all(0 <= i < _VOCAB_SIZE for i in enc.ids)
 
 
+def test_train_stage2_produces_superword_tokens():
+    """Stage 2 must emit at least one token ID >= _TRANSITION (a superword token)."""
+    from rbf_ffn.superbpe_data import _train_stage1, _train_stage2
+    tok1 = _train_stage1(_TINY_TEXTS, transition=_TRANSITION)
+    tok2 = _train_stage2(tok1, _TINY_TEXTS, vocab_size=_VOCAB_SIZE)
+    enc = tok2.encode("the quick brown fox jumps over the lazy dog")
+    assert any(i >= _TRANSITION for i in enc.ids), (
+        f"Expected at least one superword token (id >= {_TRANSITION}) "
+        f"but got ids: {enc.ids}"
+    )
+
+
 # ── _build_superbpe_tokenizer ─────────────────────────────────────────────────
 
 def test_build_superbpe_tokenizer_creates_cache_files(tmp_path):

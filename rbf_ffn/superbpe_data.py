@@ -53,7 +53,16 @@ def _train_stage2(stage1: Tokenizer, texts: list[str], vocab_size: int) -> Token
     Loads Stage 1 vocab+merges via serialisation, swaps the pre-tokenizer to
     ByteLevel-only, then continues BPE until vocab_size is reached.
     """
-    tok2 = Tokenizer.from_str(stage1.to_str())
+    try:
+        tok2 = Tokenizer.from_str(stage1.to_str())
+    except Exception as e:
+        import warnings
+        warnings.warn(
+            f"Stage 2 warm-start from Stage 1 failed ({e}); "
+            "falling back to fresh BPE with ByteLevel-only pre-tokenizer.",
+            RuntimeWarning,
+        )
+        tok2 = Tokenizer(BPE())
     tok2.pre_tokenizer = ByteLevel(add_prefix_space=False)
     trainer = BpeTrainer(vocab_size=vocab_size, min_frequency=2, special_tokens=[])
     tok2.train_from_iterator(texts, trainer)

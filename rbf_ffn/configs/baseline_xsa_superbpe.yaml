@@ -1,0 +1,21 @@
+# XSA + SwiGLU baseline with SuperBPE tokenizer (vocab=48576, t=43718).
+# Matches the current best-performing config family (XSA + qknorm + wnorm)
+# with only the tokenizer and vocab_size changed.
+attn_type: xsa
+ffn_type: swiglu
+vocab_size: 48576
+tokenizer: superbpe48576
+d_model: 256
+n_heads: 8
+n_layers: 6
+seq_len: 512
+batch_size: 32
+n_epochs: 3
+qk_norm: true
+linear_weight_norm: true
+seed: 42
+muon_lr: 0.02
+adamw_lr: 3.0e-4
+adamw_wd: 0.1
+warmup_ratio: 0.02
+grad_clip: 1.0

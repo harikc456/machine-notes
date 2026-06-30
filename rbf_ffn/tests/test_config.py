@@ -336,3 +336,16 @@ def test_tokenizer_yaml_roundtrip(tmp_path):
     cfg = load_config(p)
     assert cfg.tokenizer == "superbpe48576"
     assert cfg.vocab_size == 48576
+
+
+def test_baseline_xsa_superbpe_yaml_loads():
+    cfg = load_config(CONFIGS_DIR / "baseline_xsa_superbpe.yaml")
+    assert cfg.tokenizer == "superbpe48576"
+    assert cfg.vocab_size == 48576
+    assert cfg.attn_type == "xsa"
+    assert cfg.ffn_type == "swiglu"
+    assert cfg.qk_norm is True
+    assert cfg.linear_weight_norm is True
+    assert cfg.d_model == 256
+    assert cfg.n_layers == 6
+    assert cfg.seq_len == 512

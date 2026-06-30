@@ -9,12 +9,12 @@ import pytest
 import torch
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, TensorDataset
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import torch.nn as nn
 from rbf_ffn.config import ModelConfig
 from rbf_ffn.models.model import CausalLM
-from rbf_ffn.train import make_lr_lambda, train, apply_adaptive_weight_norm
+from rbf_ffn.train import make_lr_lambda, train, apply_adaptive_weight_norm, get_experiment_dir
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ def _run_train(cfg: ModelConfig, tmp_path, n_train: int = 8):
     config_path = tmp_path / "cfg.yaml"
     config_path.write_text("")   # train() copies config; content irrelevant
     loaders = _fake_loaders(cfg, n_train=n_train)
-    with patch("rbf_ffn.train.get_dataloaders", return_value=loaders), \
+    with patch("rbf_ffn.data.get_dataloaders", return_value=loaders), \
          patch("rbf_ffn.train.Muon", _MuonStub):
         return train(cfg, config_path=config_path)
 
@@ -275,7 +275,7 @@ def test_train_adaptive_weight_norm_smoke(tmp_path):
     config_path = tmp_path / "cfg.yaml"
     config_path.write_text("")
 
-    with patch("rbf_ffn.train.get_dataloaders", return_value=_fake_loaders(cfg)):
+    with patch("rbf_ffn.data.get_dataloaders", return_value=_fake_loaders(cfg)):
         with patch("torch.optim.Muon", _MuonStub):
             exp_dir = train(cfg, config_path=config_path)
 
@@ -299,7 +299,7 @@ def _run_resume(exp_dir, cfg: ModelConfig,
     """Run train() in resume mode, reusing exp_dir."""
     resume_ckpt = exp_dir / f"checkpoint_{resume_from}.pt"
     loaders = _fake_loaders(cfg)
-    with patch("rbf_ffn.train.get_dataloaders", return_value=loaders), \
+    with patch("rbf_ffn.data.get_dataloaders", return_value=loaders), \
          patch("rbf_ffn.train.Muon", _MuonStub):
         return train(
             cfg,
@@ -477,3 +477,55 @@ def test_mup_disabled_lrs_unchanged():
                       weight_decay=cfg.adamw_wd, betas=(0.9, 0.95))
     assert muon.param_groups[0]["lr"] == pytest.approx(0.02)
     assert adamw_opt.param_groups[0]["lr"] == pytest.approx(3e-4)
+
+
+# ── SuperBPE tokenizer dispatch + experiment naming ───────────────────────────
+
+def test_get_experiment_dir_includes_superbpe_tag():
+    """get_experiment_dir returns a path whose name contains '_superbpe' when
+    tokenizer='superbpe48576'."""
+    import shutil
+    cfg = ModelConfig(
+        tokenizer="superbpe48576",
+        vocab_size=48576,
+        attn_type="xsa",
+        ffn_type="swiglu",
+        d_model=32,
+    )
+    result = get_experiment_dir(cfg)
+    assert "_superbpe" in result.name
+    shutil.rmtree(result, ignore_errors=True)
+
+
+def test_train_uses_superbpe_dataloaders(tmp_path):
+    """When cfg.tokenizer='superbpe48576', train() calls superbpe_data.get_dataloaders."""
+    cfg = _tiny_cfg(tokenizer="superbpe48576", vocab_size=48576)
+    fake_train, fake_val, _ = _fake_loaders(cfg)
+    config_path = tmp_path / "cfg.yaml"
+    config_path.write_text(
+        "tokenizer: superbpe48576\nvocab_size: 48576\nseq_len: 9\nbatch_size: 2\nn_epochs: 1\n"
+    )
+    with patch("rbf_ffn.superbpe_data.get_dataloaders", return_value=(fake_train, fake_val, fake_val)) as mock_sbpe, \
+         patch("rbf_ffn.data.get_dataloaders") as mock_r50k, \
+         patch("rbf_ffn.train.Muon", _MuonStub), \
+         patch("torch.cuda.is_available", return_value=False), \
+         patch("torch.compiler.cudagraph_mark_step_begin", return_value=None):
+        train(cfg, config_path)
+        mock_sbpe.assert_called_once()
+        mock_r50k.assert_not_called()
+
+
+def test_train_uses_r50k_dataloaders_by_default(tmp_path):
+    """Default tokenizer uses rbf_ffn.data.get_dataloaders (r50k)."""
+    cfg = _tiny_cfg()  # tokenizer defaults to "r50k"
+    fake_train, fake_val, _ = _fake_loaders(cfg)
+    config_path = tmp_path / "cfg.yaml"
+    config_path.write_text("seq_len: 9\nbatch_size: 2\nn_epochs: 1\n")
+    with patch("rbf_ffn.data.get_dataloaders", return_value=(fake_train, fake_val, fake_val)) as mock_r50k, \
+         patch("rbf_ffn.superbpe_data.get_dataloaders") as mock_sbpe, \
+         patch("rbf_ffn.train.Muon", _MuonStub), \
+         patch("torch.cuda.is_available", return_value=False), \
+         patch("torch.compiler.cudagraph_mark_step_begin", return_value=None):
+        train(cfg, config_path)
+        mock_r50k.assert_called_once()
+        mock_sbpe.assert_not_called()

@@ -22,7 +22,6 @@ from torch.optim.lr_scheduler import LambdaLR
 from tqdm import tqdm
 
 from rbf_ffn.config import ModelConfig, load_config
-from rbf_ffn.data import get_dataloaders
 from rbf_ffn.models.model import CausalLM, build_optimizer_groups
 from rbf_ffn.models.transformer_block import KromHCWrapper
 from rbf_ffn.models.rational_ffn import PFDRationalActivation, RationalActivation
@@ -55,6 +54,8 @@ def get_experiment_dir(cfg: ModelConfig) -> Path:
         norm_tags += f"_gain{''.join(sorted(cfg.qkv_gain_targets))}"
     if cfg.mup:
         norm_tags += f"_mup{cfg.mup_base_width}"
+    if cfg.tokenizer == "superbpe48576":
+        norm_tags += "_superbpe"
     name = f"{stamp}_{cfg.attn_type}_{cfg.ffn_type}{norm_tags}_d{cfg.d_model}"
     path = Path(__file__).parent / "experiments" / name
     path.mkdir(parents=True, exist_ok=True)
@@ -254,7 +255,11 @@ def train(
     print(f"Experiment dir: {exp_dir}")
 
     # ── Data ──────────────────────────────────────────────────────────────────
-    train_loader, val_loader, _ = get_dataloaders(cfg)
+    if cfg.tokenizer == "superbpe48576":
+        from rbf_ffn.superbpe_data import get_dataloaders as _get_dataloaders
+    else:
+        from rbf_ffn.data import get_dataloaders as _get_dataloaders
+    train_loader, val_loader, _ = _get_dataloaders(cfg)
     steps_per_epoch = len(train_loader)
     total_steps     = cfg.n_epochs * steps_per_epoch          # micro-batches; used for optimizer_steps
     optimizer_steps = total_steps // cfg.grad_accum_steps     # optimizer updates; used for LR

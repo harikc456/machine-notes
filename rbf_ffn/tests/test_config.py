@@ -305,3 +305,34 @@ def test_mup_yaml_roundtrip(tmp_path):
     assert cfg.mup is True
     assert cfg.mup_base_width == 128
     assert cfg.mup_init_std == pytest.approx(0.01)
+
+
+# ── tokenizer field ───────────────────────────────────────────────────────────
+
+def test_tokenizer_default_is_r50k():
+    cfg = ModelConfig()
+    assert cfg.tokenizer == "r50k"
+
+
+def test_tokenizer_superbpe_with_correct_vocab_size_is_valid():
+    cfg = ModelConfig(tokenizer="superbpe48576", vocab_size=48576)
+    assert cfg.tokenizer == "superbpe48576"
+    assert cfg.vocab_size == 48576
+
+
+def test_tokenizer_superbpe_with_wrong_vocab_size_raises():
+    with pytest.raises(ValueError, match="vocab_size must be 48576"):
+        ModelConfig(tokenizer="superbpe48576", vocab_size=50257)
+
+
+def test_tokenizer_unknown_value_raises():
+    with pytest.raises(ValueError, match="Unknown tokenizer"):
+        ModelConfig(tokenizer="gpt4_turbo")
+
+
+def test_tokenizer_yaml_roundtrip(tmp_path):
+    p = tmp_path / "cfg.yaml"
+    p.write_text("tokenizer: superbpe48576\nvocab_size: 48576\n")
+    cfg = load_config(p)
+    assert cfg.tokenizer == "superbpe48576"
+    assert cfg.vocab_size == 48576

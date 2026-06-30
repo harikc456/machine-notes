@@ -125,6 +125,9 @@ class ModelConfig:
     mup_base_width: int = 256    # proxy model width at which muon_lr/adamw_lr were tuned
     mup_init_std: float = 0.02   # init std at base width; hidden matrices scaled by sqrt(base/d)
 
+    # Tokenizer
+    tokenizer: str = "r50k"    # "r50k" | "superbpe48576"
+
     def __post_init__(self) -> None:
         if self.model_type is not None:
             if self.model_type not in _MODEL_TYPE_MAP:
@@ -180,6 +183,16 @@ class ModelConfig:
         if self.mup and self.mup_base_width <= 0:
             raise ValueError(
                 f"mup_base_width must be > 0 when mup=True, got {self.mup_base_width}"
+            )
+
+        _valid_tokenizers = {"r50k", "superbpe48576"}
+        if self.tokenizer not in _valid_tokenizers:
+            raise ValueError(
+                f"Unknown tokenizer '{self.tokenizer}'. Valid values: {sorted(_valid_tokenizers)}"
+            )
+        if self.tokenizer == "superbpe48576" and self.vocab_size != 48576:
+            raise ValueError(
+                f"vocab_size must be 48576 when tokenizer='superbpe48576', got {self.vocab_size}"
             )
 
 

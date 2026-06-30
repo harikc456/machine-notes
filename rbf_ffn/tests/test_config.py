@@ -349,3 +349,6 @@ def test_baseline_xsa_superbpe_yaml_loads():
     assert cfg.d_model == 256
     assert cfg.n_layers == 6
     assert cfg.seq_len == 512
+    assert cfg.batch_size == 32
+    assert cfg.n_epochs == 3
+    assert cfg.n_heads == 8

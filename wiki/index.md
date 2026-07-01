@@ -2,7 +2,7 @@
 
 > Content catalog. Every wiki page listed under its type with a one-line summary.
 > Read this first to find relevant pages for any query.
-> Last updated: 2026-06-24 | Total pages: 58
+> Last updated: 2026-06-30 | Total pages: 62
 
 ## Entities
 
@@ -32,13 +32,17 @@
 - [[h2o]] — H₂O Heavy-Hitter Oracle: KV cache eviction policy retaining "heavy hitter" tokens via attention score accumulation
 - [[i-dlm]] — I-DLM: introspective consistency training converts AR models to DLMs; ISD decoding; first DLM to match same-scale AR quality; WikiText-103 reproduction (α=0.34, PPL=155.7, TPF/OH=1.11 at d=256)
 - [[kromhc]] — KromHC: Manifold-constrained HC via Kronecker-product residual matrices — exact doubly-stochastic, parameter-efficient
+- [[kvtc]] — kvtc (NVIDIA/Warsaw, ICLR 2026): transform coding (PCA + DP bit allocation + DEFLATE) for KV cache storage; 20× lossless, 40× with modest drop; multi-turn serving focus
+- [[lazyeviction]] — LazyEviction (HKUST, Oct 2025): observation window + MRI tracking eviction for reasoning tasks; 50–70% KV reduction at matched accuracy on GSM8K/MATH500
 - [[mhc]] — mHC (Manifold-Constrained Hyper-Connections): projects HC residual matrices onto Birkhoff polytope via Sinkhorn-Knopp
 - [[mhc-lite]] — mHC-lite: replaces SK iterations with convex combination of permutation matrices for exact doubly-stochastic residuals
 - [[polarquant]] — PolarQuant: KV cache quantization using polar coordinate transformation to eliminate normalization overhead
 - [[qknorm]] — QKNorm: cosine-similarity attention (ℓ₂-normalize Q and K) prevents softmax saturation; +0.7 ppl in LM experiments
 - [[qkv-projection-sharing]] — Q-K=V (ICML 2026): shared key-value projection; 50% KV cache at +3.1% PPL; Q=K-V fails (zero cache benefit); orthogonal to GQA/MQA
 - [[saguaro]] — Saguaro (SSD): speculative speculative decoding — parallelizes drafting and verification on separate hardware; 30% faster than SD, up to 5× over AR
+- [[dspark]] — DSpark (Jun 2026): DFlash backbone + Markov head eliminates suffix decay; confidence-scheduled verification; +51% aggregate throughput in DeepSeek-V4-Flash at 80 TPS/user SLA
 - [[spectralquant]] — SpectralQuant (Gopinath, Apr 2026): calibrated eigenvector rotation + selective QJL on 3% signal dims; +1.7–2.8 pp cosine sim, 5.95× compression vs TurboQuant's 5.02×
+- [[superbpe]] — SuperBPE (Liu, Hayase et al., COLM 2025): superword tokenization via BPE pretokenization curriculum; 33% fewer tokens, 32% less inference FLOPs, +4.0% downstream (30 tasks)
 - [[triattention]] — TriAttention: KV cache compression via trigonometric series in pre-RoPE space; 2.5× throughput or 10.7× KV reduction at matched accuracy on AIME25
 - [[turboquant]] — TurboQuant: near-optimal online vector quantization via random rotation + MSE quantizer + 1-bit QJL residual
 - [[weight-normalization]] — Weight Normalization (Salimans & Kingma 2016): decouple weight direction from magnitude; ~21 ppl gain in LM

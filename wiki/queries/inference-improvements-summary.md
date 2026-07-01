@@ -1,7 +1,7 @@
 ---
 title: LLM Inference Improvements — Structured Survey
 created: 2026-05-14
-updated: 2026-06-24
+updated: 2026-06-30
 type: query
 tags: [inference, architecture, quantization, kv-cache, speculative, attention, survey, training]
 sources: []
@@ -101,7 +101,7 @@ Key results: **TriAttention** achieves 10.7× KV reduction at matched accuracy f
 
 Draft-then-verify paradigm for lossless inference speedup. See [[inference-kv-speculative]] for the full algorithm walkthrough, rejection sampling proof, and self-speculative variants (LayerSkip, SWIFT, DASH).
 
-Key results: **Standard SD** delivers 2–3× lossless speedup (exact distributional match to target). **[[eagle]]** (feature-level AR drafting, Mar 2025): 2.7×–3.5×. **[[eagle-2]]** (dynamic draft trees, Jun 2024): 3.05×–4.26×, 20-40% over EAGLE-1. **[[eagle-3]]** (direct token prediction + training-time test, Apr 2025): up to 6.5×; unlocks data scaling law. **[[dflash]]** (block diffusion parallel drafting, ICML 2026): constant draft cost regardless of draft length; 6×+ lossless, 2.5× over EAGLE-3. **Saguaro** (May 2026): orthogonal — parallelizes speculator and verifier on separate hardware; 30% over SD baselines, up to 5× over AR. **LayerSkip** self-speculative decoding: up to 2.16× speedup, zero extra model memory. See [[speculative-decoding]], [[inference-kv-speculative]] for full detail.
+Key results: **Standard SD** delivers 2–3× lossless speedup (exact distributional match to target). **[[eagle]]** (feature-level AR drafting, Mar 2025): 2.7×–3.5×. **[[eagle-2]]** (dynamic draft trees, Jun 2024): 3.05×–4.26×, 20-40% over EAGLE-1. **[[eagle-3]]** (direct token prediction + training-time test, Apr 2025): up to 6.5×; unlocks data scaling law. **[[dflash]]** (block diffusion parallel drafting, ICML 2026): constant draft cost regardless of draft length; 6×+ lossless, 2.5× over EAGLE-3. **[[dspark]]** (Jun 2026): DFlash backbone + Markov head eliminates suffix decay; confidence-scheduled verification with hardware-aware scheduler; +25–30% accepted length; +51% aggregate throughput in DeepSeek-V4-Flash at 80 TPS/user SLA. **Saguaro** (May 2026): orthogonal — parallelizes speculator and verifier on separate hardware; 30% over SD baselines, up to 5× over AR. **LayerSkip** self-speculative decoding: up to 2.16× speedup, zero extra model memory. See [[speculative-decoding]], [[inference-kv-speculative]] for full detail.
 
 ---
 
@@ -145,6 +145,16 @@ Gain depends on task difficulty distribution: summarization and code completion 
 
 ---
 
+## 8. Tokenization Efficiency
+
+[[superbpe]] (Liu, Hayase et al., UW/NVIDIA/AI2, COLM 2025) extends BPE to learn "superword" tokens — single tokens spanning multiple whitespace-delimited words (multi-word expressions like *by the way*, *in the long run*). A **pretokenization curriculum** first learns subwords (standard BPE), then lifts the whitespace constraint so BPE can discover cross-word merges.
+
+**Key results at 8B / 200k vocab**: 33% fewer tokens than BPE for the same text → **32% less inference compute**. Average downstream score: +4.0% over BPE on 30 tasks (+8.2% MMLU, 25/30 wins). No architecture or framework changes.
+
+Orthogonal to all other techniques here: SuperBPE reduces the number of forward passes by reducing sequence length; all other methods improve what happens during each forward pass.
+
+---
+
 ## 7. Diffusion Language Models as an Inference Paradigm
 
 DLMs offer **parallel token generation** — a fundamentally different inference mode vs. AR decoding. See [[diffusion-language-models]] for the landscape; [[block-diffusion]] and [[i-dlm]] for entity pages.
@@ -177,7 +187,9 @@ DLMs offer **parallel token generation** — a fundamentally different inference
 | EAGLE-2 (dynamic draft trees) | Context-dependent tree expansion logic | Latency ↓ 3.05–4.26× (lossless, no extra training) |
 | EAGLE-3 (training-time test) | Larger draft training dataset | Latency ↓ up to 6.5×; data scaling law unlocked |
 | DFlash (block diffusion drafting) | Draft adapter training; constant draft overhead | Latency ↓ 6×+; 2.5× over EAGLE-3; lossless |
+| DSpark (semi-AR + confidence scheduler) | Draft model training; confidence head calibration | +25–30% accepted length; +51% serving throughput (DeepSeek-V4-Flash @ 80 TPS SLA) |
 | Saguaro (SSD) | Separate speculator hardware; prediction overhead | Latency ↓ 5× vs AR, 30% over SD (lossless) |
+| SuperBPE (superword tokenization) | Tokenizer retraining (CPU/memory intensive); no inference changes | Tokens ↓ 33%; inference FLOPs ↓ 32%; downstream +4.0% avg (30 tasks) |
 | Self-speculative (LayerSkip) | Draft quality vs separate model | Latency ↓ 1.3–2.2× (lossless, no extra memory) |
 | Flash Attention | Recomputes during backward pass | Attention IO ↓ 7.6×; memory O(N) |
 | PagedAttention | Block table indirection overhead | KV fragmentation ↓ ~0%; throughput ↑ 2–4× |
@@ -202,7 +214,9 @@ DLMs offer **parallel token generation** — a fundamentally different inference
 - [[eagle-2]] — dynamic draft trees; 3.05–4.26×; no extra training
 - [[eagle-3]] — direct token prediction + training-time test; up to 6.5×; data scaling law
 - [[dflash]] — block diffusion parallel drafting; constant draft cost; 6×+; 2.5× over EAGLE-3
+- [[dspark]] — semi-AR (DFlash + Markov head) + confidence scheduler; +51% DeepSeek-V4-Flash throughput
 - [[saguaro]] — SSD: parallel drafting + verification on separate hardware
+- [[superbpe]] — superword tokenization; 33% fewer tokens; 32% less inference compute; +4.0% downstream
 - [[early-exit-inference]] — early exit and layer skipping (LayerSkip, SWIFT, DASH)
 - [[layerskip]] — Meta's self-speculative decoding via layer dropout
 - [[diffusion-language-models]] — DLM landscape: BD3-LM, I-DLM, DFlash, Mercury

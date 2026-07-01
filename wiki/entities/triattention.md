@@ -75,6 +75,22 @@ On MATH-500 (1024/32K KV budget = 3% cache):
 - TriAttention: 68.4% vs R-KV: 69.6% vs Full: 72.5% — competitive at extreme compression
 - Enables OpenClaw deployment on a single consumer GPU for long-context reasoning
 
+### H2O Comparison (AIME24, DS-Qwen-7B, Table A in Appendix E)
+
+Numbers for H2O, TOVA, RaaS cited from LazyEviction paper; TriAttention run directly.
+
+| Method | 10% KV | 20% KV | 30% KV |
+|---|---|---|---|
+| FullKV | — | — | 46.7 |
+| H2O | — | — | 33.3 |
+| TOVA | — | — | 36.7 |
+| RaaS | — | — | 36.7 |
+| R-KV | — | — | 43.3 |
+| LazyEviction | 33.3 | 40.0 | 43.3 |
+| **TriAttention** | **40.0** | **43.3** | **46.7** |
+
+At 30% KV budget: TriAttention (+13.4 pp over H2O) matches Full Attention; H2O sits in the same tier as TOVA/RaaS. H2O also requires O(n²) memory and cannot use FlashAttention, making it infeasible on larger LongBench subtasks (48GB GPU).
+
 ## Offline Calibration
 
 Q distribution centers E[q_f] are computed once per model from a calibration dataset in pre-RoPE space. At inference, no extra compute is needed — keys are already in the KV cache, and scoring uses the precomputed centers.

@@ -1,10 +1,10 @@
 ---
 title: KV Cache
 created: 2026-05-14
-updated: 2026-06-24
+updated: 2026-06-29
 type: concept
 tags: [kv-cache, inference, attention, quantization]
-sources: [raw/papers/2306.14048v3.pdf, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf, raw/papers/2604.04921v1.pdf, raw/papers/2602.21548v2.md, raw/papers/2606.20945v2.md]
+sources: [raw/papers/2306.14048v3.pdf, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf, raw/papers/2604.04921v1.pdf, raw/papers/2602.21548v2.md, raw/papers/2606.20945v2.md, raw/papers/2506.15969v3.md, raw/papers/2511.01815v2.md]
 confidence: high
 ---
 
@@ -30,12 +30,15 @@ For a 30B-parameter model with batch=128 and seq_len=1024: ~180 GB of KV cache �
 Keep only a subset of tokens' KV pairs:
 - [[h2o]]: retain "heavy hitter" tokens (high accumulated attention) + recency window
 - [[triattention]]: score keys via trigonometric series in pre-RoPE space; avoids RoPE rotation instability that limits attention-based methods; 2.5× throughput or 10.7× KV reduction at matched accuracy on AIME25
-- **Limitation**: irreversible eviction can miss critical tokens in retrieval tasks — though scoring quality matters; TriAttention's trigonometric approach is more stable than post-RoPE methods
+- [[lazyeviction]]: observation window-based lagged eviction for reasoning tasks; tracks Maximum Recurrence Interval (MRI) per token to retain tokens during low-attention intervals before their next recurrence; 50–70% KV reduction at matched accuracy on GSM8K/MATH500
+- **Limitation**: irreversible eviction can miss critical tokens in retrieval tasks — though scoring quality matters; TriAttention's pre-RoPE approach is most stable, LazyEviction's MRI tracking is best for reasoning
 
-### Quantization (precision reduction)
+### Quantization / Compression (precision reduction)
 Reduce the bit-width of stored K and V tensors:
 - [[polarquant]]: polar coordinate transform eliminates normalization overhead; >4.2× compression
 - [[turboquant]]: random rotation + MSE quantizer + 1-bit QJL residual; neutral at 3.5 bits
+- [[spectralquant]]: calibrated eigenvector rotation + selective QJL on 3% signal dims; 5.95× compression, strictly dominates TurboQuant
+- [[kvtc]]: transform coding (PCA + DP bit allocation + DEFLATE); 20× compression at lossless accuracy; 40× at modest drop; oriented toward storage/serving (extending KV cache lifetime on-GPU and reducing prefill→decode transfer bandwidth)
 - Traditional methods: per-block normalization adds >1 bit overhead
 - QJL: 1-bit sketching, data-oblivious
 
@@ -64,21 +67,26 @@ Rather than compressing stored KV tensors, [[gqe]] reduces the Q-side compute th
 
 ## Quantization vs. Eviction Trade-offs
 
-| Property | Eviction (H₂O) | Quantization (PolarQuant/TurboQuant) |
+| Property | Eviction (H₂O/LazyEviction) | Quantization (TurboQuant/kvtc) |
 |---|---|---|
-| Memory reduction | High (retain ~5-20%) | Moderate (2-4× compression) |
+| Memory reduction | High (retain 30–50% tokens) | 5×–20× compression of all tokens |
 | Lossy? | Yes, irreversible | Yes, but retains all tokens |
-| Needle-in-haystack | Risky | Safe |
-| Compute overhead | Low | Low-moderate (transform cost) |
+| Needle-in-haystack | Risky (H₂O); better with MRI tracking | Safe |
+| Reasoning tasks | H₂O fails; LazyEviction designed for it | Untested focus area |
+| Serving/storage | Not applicable | kvtc's primary use case (cache lifetime extension) |
+| Compute overhead | Low | Low-moderate (transform cost; one-time calibration) |
 
-These are **complementary** — quantization + eviction can be combined.
+These are **complementary** — quantization + eviction can be combined (e.g., TriAttention eviction + SpectralQuant on retained tokens).
 
 ## See Also
 
-- [[h2o]] — eviction approach (post-RoPE)
-- [[triattention]] — pre-RoPE eviction via trigonometric series; better for reasoning/long-context
+- [[h2o]] — eviction approach (post-RoPE); fails on reasoning
+- [[triattention]] — pre-RoPE eviction via trigonometric series; better for long-context
+- [[lazyeviction]] — MRI-tracking eviction for reasoning tasks (GSM8K, MATH500); 50–70% KV reduction
 - [[polarquant]] — polar quantization
 - [[turboquant]] — vector quantization
+- [[spectralquant]] — calibrated spectral quantization; best quality/compression of quantization methods
+- [[kvtc]] — transform coding (PCA+DP+DEFLATE); 20× lossless, 40× with modest drop; storage/serving focus
 - [[kv-cache-compression-comparison]] — detailed comparison
 - [[quantization]] — broader quantization context
 - [[qkv-projection-sharing]] — architectural reduction via K=V projection constraint; 50% cache, orthogonal to GQA/MQA

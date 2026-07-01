@@ -1,7 +1,7 @@
 ---
 title: KV Cache Compression and Speculative Decoding — Detail
 created: 2026-05-19
-updated: 2026-06-24
+updated: 2026-06-30
 type: query
 tags: [inference, kv-cache, quantization, speculative, attention, survey]
 sources: []
@@ -238,6 +238,48 @@ EAGLE uses a static draft tree (fixed number of candidates per position). EAGLE-
 
 Over 6× lossless acceleration on math/code, **2.5× over EAGLE-3** across most tasks. MT-Bench lower (2.75×) — conversational tasks have less concentrated future-token signal in hidden states.
 
+#### [[dspark]] — Semi-Autoregressive + Confidence Scheduling (Jun 2026)
+
+**Root causes addressed**: (1) parallel drafters suffer *suffix decay* — positions after the first are predicted independently of one another, causing acceptance rates to fall sharply for later tokens. (2) Verifying a fixed-length draft regardless of confidence wastes verifier compute when drafts are unlikely to be accepted.
+
+**Semi-Autoregressive Generation (SAG)**:
+- Parallel backbone (DFlash): generates base logits `U_k` for all γ positions simultaneously — O(1) draft cost preserved
+- Markov head (sequential refinement): computes transition bias conditioned on the previous sampled token:
+
+  `y_k = U_k + B_k`  where  `B(x_{k-1}, x_k) = (W_1[x_{k-1}]) W_2ᵀ[x_k]`
+
+  Low-rank lookup; ~1.5% latency overhead; eliminates suffix decay — acceptance rate stays flat across the entire draft block.
+
+**Confidence-Scheduled Verification**:
+- Confidence head: predicts `c_k` = P(token k accepted | tokens 1..k-1 accepted)
+- Calibrated via Sequential Temperature Scaling (STS) — ensures predicted probabilities match empirical acceptance rates
+- Prefix survival: `a_{r,j} = ∏_{i≤j} c_{r,i}`
+
+**Hardware-Aware Prefix Scheduler**:
+Maximizes `Θ = τ × SPS(B)` (expected accepted tokens × profiled GPU steps/sec at batch size B).
+
+Greedy per-request: select draft token additions ranked by marginal gain in expected accepted tokens per unit batch-size cost. Load-adaptive: more verification tokens when lightly loaded (minimize latency); prune low-confidence tails under congestion (maximize throughput for all users).
+
+**Results**:
+
+| Setting | Result |
+|---|---|
+| Offline avg accepted length | +25–30% over AR baselines |
+| Suffix decay | Eliminated (flat acceptance across positions) |
+| DeepSeek-V4-Flash @ 80 TPS/user SLA | **+51% aggregate throughput** vs MTP-1 |
+| >120 TPS/user tier | **Newly achievable** under load |
+
+DSpark vs prior work in the SD landscape:
+
+| System | Draft cost | Suffix decay | Confidence-aware |
+|---|---|---|---|
+| EAGLE-3 | O(γ) | No | No |
+| DFlash | O(1) | Yes | No |
+| **DSpark** | **O(1)** | **No** | **Yes** |
+| Saguaro (SSD) | varies | — | No |
+
+[[saguaro]] and DSpark are orthogonal: DSpark improves draft quality and dynamically adjusts verification length per request; Saguaro parallelizes the draft–verify loop across separate hardware.
+
 ### Self-Speculative Decoding
 
 Variant that eliminates the separate draft model. See [[early-exit-inference]] for full coverage.
@@ -289,6 +331,7 @@ Trade-off: no extra model memory, but draft quality bounded by early-exit repres
 - [[eagle-2]] — dynamic draft trees; 3.05–4.26×; no extra training
 - [[eagle-3]] — training-time test; up to 6.5×; data scaling law
 - [[dflash]] — block diffusion parallel drafting; 6×+; 2.5× over EAGLE-3
+- [[dspark]] — semi-AR draft (DFlash + Markov head) + confidence scheduler; +51% throughput DeepSeek-V4-Flash
 - [[saguaro]] — SSD: parallel drafting + verification on separate hardware
 - [[layerskip]] — Meta's self-speculative decoding via layer dropout
 - [[early-exit-inference]] — early exit and layer skipping (LayerSkip, SWIFT, DASH)

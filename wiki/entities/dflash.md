@@ -71,5 +71,6 @@ DFlash uses [[block-diffusion]] (BD3-LM) as the drafting model architecture, but
 - [[eagle]] — original EAGLE; feature-level AR drafting
 - [[block-diffusion]] — the BD3-LM architecture used as DFlash's draft engine
 - [[diffusion-language-models]] — broader context for diffusion as LM accelerators
+- [[dspark]] — production system (DeepSeek-V4-Flash) that uses DFlash as its parallel backbone; adds Markov head + confidence scheduler on top; +51% serving throughput
 - [[saguaro]] — orthogonal hardware-parallelism approach to speculative decoding
 - [[continuous-batching]] — SGLang serving framework used in evaluations

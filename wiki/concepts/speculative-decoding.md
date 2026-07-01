@@ -1,10 +1,10 @@
 ---
 title: Speculative Decoding
 created: 2026-05-14
-updated: 2026-06-17
+updated: 2026-06-30
 type: concept
 tags: [inference, speculative]
-sources: [raw/papers/2211.17192v2.pdf, raw/papers/2603.03251v3.pdf, raw/papers/2401.15077v3.pdf, raw/papers/2406.16858v2.pdf, raw/papers/2503.01840v3.pdf, raw/papers/2602.06036v2.pdf, raw/papers/2401.10774v3.md]
+sources: [raw/papers/2211.17192v2.pdf, raw/papers/2603.03251v3.pdf, raw/papers/2401.15077v3.pdf, raw/papers/2406.16858v2.pdf, raw/papers/2503.01840v3.pdf, raw/papers/2602.06036v2.pdf, raw/papers/2401.10774v3.md, raw/papers/dspark.md]
 confidence: high
 ---
 
@@ -59,6 +59,25 @@ Removes the feature prediction constraint entirely, switching to **direct token 
 
 ### [[dflash]] (May 2026, ICML 2026)
 Replaces autoregressive drafting with a **block diffusion adapter** conditioned on target model hidden features. All γ draft tokens are generated in a *single parallel forward pass* (constant drafting cost, independent of γ), breaking the linear scaling wall of AR drafters. **Over 6× lossless acceleration**, up to **2.5× over EAGLE-3** on math/code benchmarks (GSM8K 5.15×, Math500 6.08×, AIME25 5.62×).
+
+### [[dspark]] — Semi-Autoregressive + Confidence Scheduling (Jun 2026)
+
+Addresses two residual bottlenecks in parallel drafting:
+
+1. **Suffix decay**: parallel drafters (including DFlash) predict each position independently, causing accuracy to drop for later draft positions ("multi-modal collisions").
+2. **Fixed verification length**: verifying a full draft block regardless of confidence wastes compute under load.
+
+**Semi-Autoregressive Generation (SAG)**: keeps DFlash's constant-cost parallel backbone but adds a lightweight **Markov head** that computes a per-position transition bias `B_k` conditioned on the previously sampled token `x_{k-1}`:
+
+`y_k = U_k + B_k`  where  `B(x_{k-1}, x_k) = (W_1[x_{k-1}]) W_2ᵀ[x_k]`
+
+The Markov head adds ~1.5% latency overhead but eliminates suffix decay — final acceptance curve stays flat across all draft positions (vs DFlash's sharp decay).
+
+**Confidence-Scheduled Verification**: a confidence head predicts `c_k` = P(token k accepted | tokens 1..k-1 accepted). Calibrated via Sequential Temperature Scaling so predicted probabilities are accurate. Prefix survival probability `a_{r,j} = ∏_{i≤j} c_{r,i}` guides a **hardware-aware prefix scheduler** that dynamically picks verification length per request to maximize `Θ = τ × SPS(B)` — verifying more tokens when the system is lightly loaded, fewer when congested.
+
+**Results**: +25–30% average accepted length over AR baselines (offline). Deployed in DeepSeek-V4-Flash serving: **+51% aggregate throughput at 80 TPS/user SLA**; enables sustained >120 TPS tiers previously unsustainable under load.
+
+DSpark and [[saguaro]] are orthogonal: DSpark improves draft quality and schedules verification length; Saguaro parallelizes drafting and verification across separate hardware.
 
 ## Speculative Sampling
 
@@ -124,6 +143,7 @@ Key challenge: predicting the bonus token (sampled from residual distribution) w
 - [[eagle-2]] — dynamic draft trees; 3.05×–4.26×, 20–40% over EAGLE-1
 - [[eagle-3]] — direct token prediction + training-time test; up to 6.5×, data scaling law unlocked
 - [[dflash]] — block diffusion drafting; constant draft cost; 6×+ lossless, 2.5× over EAGLE-3
+- [[dspark]] — semi-AR draft (DFlash backbone + Markov head) + confidence scheduler; +51% throughput in DeepSeek-V4-Flash
 - [[block-diffusion]] — DFlash's draft engine architecture
 - [[diffusion-language-models]] — DFlash uses diffusion as an AR model accelerator
 - [[inference-kv-speculative]] — deep-dive companion: full EAGLE family section, KV compression detail, SSD algorithm

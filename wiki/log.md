@@ -345,3 +345,33 @@
   - DeepSeek_V4.md — DeepSeek-V4: CSA/HCA + mHC + Muon + 1M context (DeepSeek-AI, 2026)
   - spectralquant.md — SpectralQuant: 3% Spectral Gap Beats TurboQuant (Gopinath, MIT/Sentra, 2026)
   - visual-guide-quantization.md — A Visual Guide to Quantization (Grootendorst, 2024)
+
+## [2026-06-29] ingest | LazyEviction, kvtc (2 new papers from ./papers)
+- New raw source files:
+  - wiki/raw/papers/2506.15969v3.md — LazyEviction: Lagged KV Eviction with Attention Pattern Observation (HKUST/HK PolyU, Oct 2025)
+  - wiki/raw/papers/2511.01815v2.md — KV Cache Transform Coding / kvtc (NVIDIA/Warsaw, ICLR 2026)
+  - (2606.04032v2.md already existed from 2026-06-17; no change)
+- New entity pages:
+  - wiki/entities/lazyeviction.md — MRI-tracking eviction for reasoning tasks; 50-70% KV reduction on GSM8K/MATH500
+  - wiki/entities/kvtc.md — transform coding (PCA + DP + DEFLATE); 20× lossless, 40× with modest drop; serving focus
+- Pages updated:
+  - wiki/concepts/kv-cache.md — added LazyEviction to eviction section; added kvtc and spectralquant to quantization section; updated trade-offs table; updated See Also
+  - wiki/comparisons/kv-cache-compression-comparison.md — expanded table from 5 to 7 methods; added LazyEviction and kvtc sections; updated Recommended Use; updated See Also
+- index.md updated: total pages 58 → 60; added lazyeviction and kvtc entries
+
+## [2026-06-30] ingest | Batch ingest: 2 new papers — SuperBPE + DSpark
+- Sources ingested:
+  - 2503.13423v3.pdf → SuperBPE: Space Travel for Language Models (Liu, Hayase, Hofmann, Oh, Smith, Choi — UW/NVIDIA/AI2, COLM 2025)
+  - DSpark_.../dspark.md → DSpark: Confidence-Scheduled Speculative Decoding with Semi-Autoregressive Generation (Liang et al., alphaxiv 2026-06-28)
+- New raw source files:
+  - wiki/raw/papers/2503.13423v3.md — SuperBPE: superword tokenization via BPE pretokenization curriculum; COLM 2025
+  - wiki/raw/papers/dspark.md — DSpark: SAG (DFlash + Markov head) + confidence-scheduled verification + hardware-aware scheduler
+- New entity pages:
+  - wiki/entities/superbpe.md — superword tokenization; 33% fewer tokens; 32% less inference FLOPs; +4.0% avg (30 tasks); COLM 2025
+  - wiki/entities/dspark.md — semi-AR speculative decoding; eliminates suffix decay; +51% throughput DeepSeek-V4-Flash @ 80 TPS SLA
+- Pages updated:
+  - wiki/concepts/speculative-decoding.md — added DSpark section (SAG architecture, Markov head, confidence scheduling, results); updated sources, date, See Also
+  - wiki/entities/dflash.md — added [[dspark]] to See Also (DSpark uses DFlash as parallel backbone)
+  - wiki/queries/inference-kv-speculative.md — added full DSpark subsection in §4 (math, comparison table vs EAGLE-3/DFlash/Saguaro, production results); updated date, See Also
+  - wiki/queries/inference-improvements-summary.md — extended §4 with DSpark; added §8 Tokenization Efficiency (SuperBPE); added 2 rows to cross-cutting themes table; updated date, See Also
+- index.md updated: total pages 60 → 62; added dspark and superbpe entries; bumped date

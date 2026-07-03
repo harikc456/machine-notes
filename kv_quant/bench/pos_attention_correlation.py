@@ -92,3 +92,33 @@ def load_spacy_model():
             "spaCy model 'en_core_web_sm' not found. Install it with: "
             "python -m spacy download en_core_web_sm"
         ) from e
+
+
+def compute_enrichment_ratios(records: list[dict]) -> dict[int, dict[str, float]]:
+    """Per layer, per POS tag: ratio of (fraction cold) to (fraction overall)."""
+    from collections import defaultdict
+
+    by_layer: dict[int, list[dict]] = defaultdict(list)
+    for r in records:
+        by_layer[r["layer"]].append(r)
+
+    result: dict[int, dict[str, float]] = {}
+    for layer, recs in by_layer.items():
+        total = len(recs)
+        cold = [r for r in recs if r["is_cold"]]
+        n_cold = len(cold)
+
+        overall_counts: dict[str, int] = defaultdict(int)
+        cold_counts: dict[str, int] = defaultdict(int)
+        for r in recs:
+            overall_counts[r["pos_tag"]] += 1
+        for r in cold:
+            cold_counts[r["pos_tag"]] += 1
+
+        ratios = {}
+        for tag, count in overall_counts.items():
+            overall_frac = count / total
+            cold_frac = cold_counts.get(tag, 0) / n_cold if n_cold else 0.0
+            ratios[tag] = cold_frac / overall_frac if overall_frac > 0 else 0.0
+        result[layer] = ratios
+    return result

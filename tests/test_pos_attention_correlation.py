@@ -118,3 +118,36 @@ def test_tag_text_pos_real_spacy():
     spans = tag_text_pos("The dog runs.", nlp)
     tags = [pos for _, _, pos in spans]
     assert tags == ["DET", "NOUN", "VERB", "PUNCT"]
+
+
+def test_compute_enrichment_ratios_basic():
+    from kv_quant.bench.pos_attention_correlation import compute_enrichment_ratios
+
+    records = [
+        {"layer": 0, "pos_tag": "PUNCT", "is_cold": True},
+        {"layer": 0, "pos_tag": "PUNCT", "is_cold": True},
+        {"layer": 0, "pos_tag": "NOUN", "is_cold": False},
+        {"layer": 0, "pos_tag": "NOUN", "is_cold": False},
+        {"layer": 0, "pos_tag": "NOUN", "is_cold": False},
+        {"layer": 0, "pos_tag": "NOUN", "is_cold": False},
+    ]
+    # PUNCT: overall_frac = 2/6, cold_frac = 2/2 -> ratio = 1.0 / (2/6) = 3.0
+    # NOUN: overall_frac = 4/6, cold_frac = 0/2 -> ratio = 0.0
+    ratios = compute_enrichment_ratios(records)
+    assert ratios[0]["PUNCT"] == 3.0
+    assert ratios[0]["NOUN"] == 0.0
+
+
+def test_compute_enrichment_ratios_separates_layers():
+    from kv_quant.bench.pos_attention_correlation import compute_enrichment_ratios
+
+    records = [
+        {"layer": 0, "pos_tag": "DET", "is_cold": True},
+        {"layer": 0, "pos_tag": "DET", "is_cold": False},
+        {"layer": 1, "pos_tag": "VERB", "is_cold": True},
+        {"layer": 1, "pos_tag": "VERB", "is_cold": False},
+    ]
+    ratios = compute_enrichment_ratios(records)
+    assert set(ratios.keys()) == {0, 1}
+    assert ratios[0] == {"DET": 1.0}
+    assert ratios[1] == {"VERB": 1.0}

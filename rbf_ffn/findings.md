@@ -933,3 +933,72 @@ Run `20260621_120718_xsa_swiglu_qknorm_wnorm_loralm8_gainkq_mup256_d256` — XSA
 2. **QK gain appears slightly harmful when combined with orthogonal FFN.** The gainkq compound includes all of §12.2's components plus gain(Q,K) and muP (identity at this scale), yet underperforms by 1.06 ppl. The QK gain may interfere with the orthogonal FFN constraint by altering the attention output distribution that the FFN wrapper then projects.
 3. **Per-head gain does not address the remaining gap.** The 52.12 bound (§12.2) is not broken by any single-step addition tested so far. The gain provides no additional representational benefit beyond what LoRA, AttnRes, and orthogonal_ffn already capture.
 4. **muP (at base_width=256) is confirmed a no-op** — the gainkq run's performance is driven solely by the gain and orthogonal components, not muP scaling.
+
+## §16 SuperBPE Tokenizer (2026-06-30, pending)
+
+### §16.1 Motivation
+
+All prior experiments use the r50k tokenizer (vocab=50257), which treats whitespace as a hard boundary — tokens are subwords, never spanning multiple words. SuperBPE (arXiv:2503.13423, Liu et al., COLM 2025) relaxes this with a two-stage curriculum that teaches BPE to learn "superword" tokens (multi-word expressions such as *by the way*, *in effect*, *on top of*).
+
+Key mechanism: Stage 2 BPE merges freely across word boundaries, collapsing common fixed phrases into single tokens. This produces a more **uniform per-token difficulty distribution** — the easy, rote predictions that inflate PPL are absorbed into superword tokens, shifting loss mass toward genuinely hard predictions. At 8B scale (200k vocab), SuperBPE achieves 33% fewer tokens/sequence and +4.0% downstream average vs standard BPE.
+
+The rbf_ffn use case is smaller scale (vocab=48576, d_model=256, WikiText-103), so the gains may be attenuated — but the tokenizer is orthogonal to all architecture choices tested so far and represents a complementary axis.
+
+### §16.2 Implementation
+
+Two-stage curriculum with `vocab_size=48576`, `transition=43718` (~90/10 split per paper recommendation):
+
+- **Stage 1** (slots 0 → 43718): standard BPE with whitespace pretokenization (`Whitespace() + ByteLevel()`), `min_frequency=2`, trained on WikiText-103 train split
+- **Stage 2** (slots 43718 → 48576): warm-start from Stage 1 via `Tokenizer.from_str(stage1.to_str())`, swap pre-tokenizer to `ByteLevel()` only (removes whitespace boundary), continue BPE to `vocab_size=48576`
+
+Cache structure:
+- Tokenizer: `data_cache/superbpe48576_tokenizer/{stage1,stage2}.json`
+- Token chunks: `data_cache/{split}_superbpe48576_{seq_len}.pt`
+
+`ModelConfig` gains `tokenizer: str = "r50k"` (valid values: `"r50k"` | `"superbpe48576"`); `train.py` dispatches to `superbpe_data.get_dataloaders` vs `data.get_dataloaders` based on this field. Experiment names are tagged `_superbpe`.
+
+### §16.3 Results (2026-06-30)
+
+Three runs completed (the d32 experiments are test-harness runs with seq_len=9, batch=2, not research experiments):
+
+**Run A** — `20260630_174257_064775_xsa_swiglu_qknorm_wnorm_superbpe_d256` (XSA + qknorm + wnorm, **no AttnRes**, batch=32):
+
+| Epoch | Val PPL | Time (s) |
+|-------|---------|----------|
+| 0 | 178.37 | 947 |
+| 1 | 98.07 | 906 |
+| 2 | **78.90** | 906 |
+
+**Run B** — `20260630_200346_888879_xsa_swiglu_qknorm_wnorm_superbpe_d256` (XSA + qknorm + wnorm + AttnRes, batch=32): **incomplete** — no metrics recorded.
+
+**Run C** — `20260630_200444_457734_xsa_swiglu_qknorm_wnorm_superbpe_d256` (XSA + qknorm + wnorm + **AttnRes**, batch=16):
+
+| Epoch | Val PPL | Time (s) |
+|-------|---------|----------|
+| 0 | 136.32 | 1018 |
+| 1 | 87.47 | 979 |
+| 2 | **69.23** | 979 |
+
+### §16.4 Comparison and interpretation
+
+**Direct PPL comparison vs r50k baselines (not apples-to-apples):**
+
+| Variant | Tokenizer | Val PPL (ep 2) | Δ |
+|---------|-----------|----------------|---|
+| XSA + qknorm + wnorm (§8.8) | r50k (50257) | 56.88 | — |
+| XSA + qknorm + wnorm + AttnRes (§12.2) | r50k (50257) | 56.07 | — |
+| XSA + qknorm + wnorm (Run A) | SuperBPE (48576) | 78.90 | +22.02 vs §8.8 |
+| XSA + qknorm + wnorm + AttnRes (Run C) | SuperBPE (48576) | 69.23 | +13.16 vs §12.2 |
+
+**Why PPL is higher for SuperBPE:** SuperBPE per-token PPL is expected to be higher than r50k, not lower, because each SuperBPE token encodes more bytes — the easy multi-word fixed phrases that generated several very-low-loss r50k tokens are now collapsed into a single harder-to-predict SuperBPE superword token. The difficulty distribution is shifted upward. The fair comparison metric is **bits-per-byte (BPB)**: `BPB = log_ppl / (bytes_per_token × log(2))`. BPB requires the average bytes/token for the SuperBPE tokenizer on the WikiText-103 validation split, which has not yet been computed.
+
+**AttnRes gain under SuperBPE:** Run A (no AttnRes, batch=32) vs Run C (AttnRes, batch=16) shows a 9.67 ppl gap. Caution: the two runs differ in both AttnRes and batch size (batch=16 in Run C trains with more gradient noise, which can act as regularization). The batch size effect on PPL at this scale is typically 1–3 ppl, so the gap is likely predominantly AttnRes. Under r50k, AttnRes added ~0.81 ppl over XSA+wnorm (§12.2); the ~9.67 gap here includes the batch-size confound and an apparently larger AttnRes benefit at the SuperBPE difficulty level. This warrants a matched-batch rerun.
+
+**Key conclusions:**
+
+1. **SuperBPE tokenizer is functional and trains stably** with the existing XSA+qknorm+wnorm stack. No divergence, no instability; epoch-0 PPL recovers normally.
+2. **PPL is not comparable across tokenizers.** The 78.90/69.23 figures are not regressions — they reflect a harder per-token prediction task. BPB conversion is required before any quality judgment relative to r50k.
+3. **AttnRes helps under SuperBPE** (~9.67 ppl, partly confounded by batch size). A batch=32 AttnRes run is needed to isolate the effect cleanly (Run B was incomplete).
+4. **Per-epoch time is faster than r50k at batch=32** (~906s Run A vs ~1373s for §8.8 XSA+wnorm on r50k). Fewer tokens per sequence (SuperBPE encodes more bytes/token → shorter sequences for the same corpus) means fewer forward/backward steps per epoch.
+
+**Priority next:** (a) Compute BPB for Run A/C to get a tokenizer-comparable quality metric. (b) Rerun XSA + qknorm + wnorm + AttnRes at batch=32 (matched to Run A) to cleanly isolate AttnRes effect.

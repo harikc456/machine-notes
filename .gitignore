@@ -79,3 +79,6 @@ idlm/experiments/
 .cce/
 # Claude Code local settings written by cce init
 .claude/settings.local.json
+
+
+spectralquant/

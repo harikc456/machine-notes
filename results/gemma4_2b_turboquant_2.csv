@@ -1,0 +1,3 @@
+method,bits,kv_mb,kv_compression,hellaswag
+turboquant,4,2.5,2.96,29.79
+baseline,fp16,7.4,1.0,29.79

@@ -1,0 +1,3 @@
+method,bits,kv_mb,kv_compression,arc_easy
+baseline,fp16,0.0,6190080.0,47.69
+turboquant,4,2.5,0.93,47.6

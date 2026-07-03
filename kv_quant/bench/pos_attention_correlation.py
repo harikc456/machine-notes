@@ -142,8 +142,6 @@ def run_experiment(
 ) -> list[dict]:
     """Run generation + attention capture over each passage, returning flat
     per-token records with layer, POS tag, attention score, and cold flag."""
-    import torch
-
     device = next(model.parameters()).device
     num_layers = model.config.get_text_config().num_hidden_layers
     records: list[dict] = []
@@ -216,7 +214,6 @@ def write_outputs(
     records: list[dict],
     enrichment: dict[int, dict[str, float]],
     results_dir: str,
-    findings_path: str,
 ) -> None:
     import csv
     import os
@@ -240,7 +237,8 @@ def write_outputs(
             row = [layer] + [enrichment[layer].get(tag, "") for tag in all_tags]
             writer.writerow(row)
 
-    with open(findings_path, "w") as f:
+    table_path = os.path.join(results_dir, "pos_attention_enrichment_table.md")
+    with open(table_path, "w") as f:
         f.write("# POS-Attention Correlation: Raw Enrichment Data\n\n")
         f.write(
             "Enrichment ratio = (fraction of bottom-10%-attention tokens with "
@@ -256,7 +254,6 @@ def write_outputs(
 
 
 def main() -> None:
-    import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     model_id = "google/gemma-4-E2B-it"
@@ -277,7 +274,6 @@ def main() -> None:
         records,
         enrichment,
         results_dir="results",
-        findings_path="kv_quant/bench/findings_pos_attention.md",
     )
     print(f"Wrote {len(records)} records across {len(passages)} passages.")
 

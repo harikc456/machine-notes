@@ -55,3 +55,40 @@ def load_wikitext_token_ids(tokenizer) -> list[int]:
     dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="test")
     text = " ".join(ex["text"] for ex in dataset if ex["text"].strip())
     return tokenizer(text, return_tensors=None)["input_ids"]
+
+
+def align_offsets_to_pos(
+    offset_mapping: list[tuple[int, int]],
+    word_spans: list[tuple[int, int, str]],
+) -> list[str]:
+    """Map each token's char offsets to the POS tag of the word it overlaps."""
+    tags = []
+    for start, end in offset_mapping:
+        if start == end:
+            tags.append("SPECIAL")
+            continue
+        tag = "X"
+        for word_start, word_end, pos in word_spans:
+            if start < word_end and end > word_start:
+                tag = pos
+                break
+        tags.append(tag)
+    return tags
+
+
+def tag_text_pos(text: str, nlp) -> list[tuple[int, int, str]]:
+    """Run spaCy POS tagging, returning (start_char, end_char, pos_tag) per token."""
+    doc = nlp(text)
+    return [(tok.idx, tok.idx + len(tok.text), tok.pos_) for tok in doc]
+
+
+def load_spacy_model():
+    import spacy
+
+    try:
+        return spacy.load("en_core_web_sm")
+    except OSError as e:
+        raise RuntimeError(
+            "spaCy model 'en_core_web_sm' not found. Install it with: "
+            "python -m spacy download en_core_web_sm"
+        ) from e

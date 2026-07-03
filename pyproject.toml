@@ -10,6 +10,7 @@ dependencies = [
     "datasets>=5.0.0",
     "liger-kernel>=0.8.0",
     "pyyaml",
+    "spacy>=3.7",
     "tokenizers>=0.23.1",
 ]
 

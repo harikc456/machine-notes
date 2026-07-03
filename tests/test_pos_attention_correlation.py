@@ -71,3 +71,50 @@ def test_chunk_token_ids_drops_short_final_chunk():
     chunks = chunk_token_ids(token_ids, n_passages=5, max_tokens=3)
     # 7 tokens / 3 per chunk = 2 full chunks + 1 short chunk of 1, which is dropped
     assert chunks == [[0, 1, 2], [3, 4, 5]]
+
+
+def test_align_offsets_basic():
+    from kv_quant.bench.pos_attention_correlation import align_offsets_to_pos
+
+    # text: "The dog runs." tokenized into subwords covering "The", "dog", "runs", "."
+    offset_mapping = [(0, 3), (4, 7), (8, 12), (12, 13)]
+    word_spans = [(0, 3, "DET"), (4, 7, "NOUN"), (8, 12, "VERB"), (12, 13, "PUNCT")]
+    tags = align_offsets_to_pos(offset_mapping, word_spans)
+    assert tags == ["DET", "NOUN", "VERB", "PUNCT"]
+
+
+def test_align_offsets_special_token():
+    from kv_quant.bench.pos_attention_correlation import align_offsets_to_pos
+
+    offset_mapping = [(0, 0), (0, 3)]
+    word_spans = [(0, 3, "DET")]
+    tags = align_offsets_to_pos(offset_mapping, word_spans)
+    assert tags == ["SPECIAL", "DET"]
+
+
+def test_align_offsets_subword_inherits_word_tag():
+    from kv_quant.bench.pos_attention_correlation import align_offsets_to_pos
+
+    # "running" tokenized as "runn" + "ing", both inside word span (0, 7, "VERB")
+    offset_mapping = [(0, 4), (4, 7)]
+    word_spans = [(0, 7, "VERB")]
+    tags = align_offsets_to_pos(offset_mapping, word_spans)
+    assert tags == ["VERB", "VERB"]
+
+
+def test_align_offsets_no_overlapping_span():
+    from kv_quant.bench.pos_attention_correlation import align_offsets_to_pos
+
+    offset_mapping = [(50, 55)]
+    word_spans = [(0, 3, "DET")]
+    tags = align_offsets_to_pos(offset_mapping, word_spans)
+    assert tags == ["X"]
+
+
+def test_tag_text_pos_real_spacy():
+    from kv_quant.bench.pos_attention_correlation import load_spacy_model, tag_text_pos
+
+    nlp = load_spacy_model()
+    spans = tag_text_pos("The dog runs.", nlp)
+    tags = [pos for _, _, pos in spans]
+    assert tags == ["DET", "NOUN", "VERB", "PUNCT"]

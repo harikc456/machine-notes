@@ -145,7 +145,7 @@ def run_experiment(
     import torch
 
     device = next(model.parameters()).device
-    num_layers = model.config.num_hidden_layers
+    num_layers = model.config.get_text_config().num_hidden_layers
     records: list[dict] = []
 
     for passage_id, prompt_ids in enumerate(passages):

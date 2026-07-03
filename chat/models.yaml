@@ -1,30 +1,25 @@
 models:
-  - id: Qwen/Qwen3-0.6B-Instruct
+  - id: google/gemma-4-E2B-it
+    label: "Gemma4 2B"
+    head_dim: 128
+    default_bits: 4
+    
+  - id: Qwen/Qwen3-0.6B
     label: "Qwen3 0.6B"
     head_dim: 128
     default_bits: 4
 
-  - id: Qwen/Qwen3-1.7B-Instruct
+  - id: Qwen/Qwen3-1.7B
     label: "Qwen3 1.7B"
     head_dim: 128
     default_bits: 4
 
-  - id: Qwen/Qwen3-4B-Instruct
+  - id: Qwen/Qwen3-4B-Instruct-2507
     label: "Qwen3 4B"
     head_dim: 128
     default_bits: 4
 
-  - id: Qwen/Qwen3-8B-Instruct
-    label: "Qwen3 8B"
-    head_dim: 128
-    default_bits: 4
-
-  - id: google/gemma-4-2b-it
-    label: "Gemma4 2B"
-    head_dim: 128
-    default_bits: 4
-
-  - id: google/gemma-4-9b-it
-    label: "Gemma4 9B"
+  - id: google/gemma-4-E4B-it
+    label: "Gemma4 4B"
     head_dim: 128
     default_bits: 4

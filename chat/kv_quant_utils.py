@@ -56,6 +56,8 @@ def load_hf_model(
 
 def get_kv_shape(model) -> tuple[int, int]:
     cfg = model.config
+    if hasattr(cfg, "text_config"):
+        cfg = cfg.text_config
     n_kv_heads = getattr(cfg, "num_key_value_heads", cfg.num_attention_heads)
     head_dim = getattr(cfg, "head_dim", cfg.hidden_size // cfg.num_attention_heads)
     return n_kv_heads, head_dim

@@ -31,3 +31,27 @@ def select_cold_tokens(scores: torch.Tensor, frac: float = 0.1) -> list[int]:
     k = max(1, int(n * frac))
     order = torch.argsort(scores)
     return order[:k].tolist()
+
+
+def chunk_token_ids(
+    token_ids: list[int], n_passages: int, max_tokens: int
+) -> list[list[int]]:
+    """Split token_ids into up to n_passages chunks of exactly max_tokens each."""
+    chunks = []
+    for start in range(0, len(token_ids), max_tokens):
+        if len(chunks) >= n_passages:
+            break
+        chunk = token_ids[start : start + max_tokens]
+        if len(chunk) < max_tokens:
+            break
+        chunks.append(chunk)
+    return chunks
+
+
+def load_wikitext_token_ids(tokenizer) -> list[int]:
+    """Load and tokenize the WikiText-2 test split (mirrors perplexity.py)."""
+    from datasets import load_dataset
+
+    dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="test")
+    text = " ".join(ex["text"] for ex in dataset if ex["text"].strip())
+    return tokenizer(text, return_tensors=None)["input_ids"]

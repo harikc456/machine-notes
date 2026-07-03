@@ -49,3 +49,25 @@ def test_select_cold_tokens_minimum_one():
     scores = torch.tensor([5.0, 1.0, 3.0])
     cold = select_cold_tokens(scores, frac=0.1)
     assert cold == [1]  # 10% of 3 rounds to 0, floor to 1
+
+
+def test_chunk_token_ids_basic():
+    from kv_quant.bench.pos_attention_correlation import chunk_token_ids
+    token_ids = list(range(10))
+    chunks = chunk_token_ids(token_ids, n_passages=3, max_tokens=3)
+    assert chunks == [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+
+
+def test_chunk_token_ids_stops_at_n_passages():
+    from kv_quant.bench.pos_attention_correlation import chunk_token_ids
+    token_ids = list(range(100))
+    chunks = chunk_token_ids(token_ids, n_passages=2, max_tokens=4)
+    assert chunks == [[0, 1, 2, 3], [4, 5, 6, 7]]
+
+
+def test_chunk_token_ids_drops_short_final_chunk():
+    from kv_quant.bench.pos_attention_correlation import chunk_token_ids
+    token_ids = list(range(7))
+    chunks = chunk_token_ids(token_ids, n_passages=5, max_tokens=3)
+    # 7 tokens / 3 per chunk = 2 full chunks + 1 short chunk of 1, which is dropped
+    assert chunks == [[0, 1, 2], [3, 4, 5]]

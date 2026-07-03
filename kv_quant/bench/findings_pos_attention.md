@@ -14,3 +14,23 @@ At the other end, **DET** (determiners: "the", "a", "an"; mean ratio 1.90, range
 The pattern is not perfectly stable across depth. Layer 0 is an outlier for DET (ratio 0.42 — well-attended) before flipping sharply to over-represented from layer 1 onward (peaking at 3.56 in layer 2), suggesting the first layer treats determiners differently (plausibly still doing local/positional processing) before deeper layers settle into treating them as low-priority. The **X** tag (tokens whose character offsets didn't cleanly land inside a spaCy word span — mostly sub-word continuation pieces) shows the sharpest layer-dependent swing of any tag: it spikes to 4.88 at layer 3 before settling into a noisier 1.5–3.3 band for the remaining layers, hinting that early layers are especially likely to leave partial-word continuation pieces under-attended while later layers integrate them more.
 
 **Caveats:** this is a 25-passage, 200-token-prompt sample from WikiText-2 with only 30 generated tokens per passage — sufficient to see large, consistent effects (VERB/PUNCT under-representation, DET/PART/NUM over-representation) but not enough to trust small differences between adjacent layers or rare tags. SCONJ and SYM show extreme ratios (means of 0.06 and 0.11) that are likely sample-size artifacts — both tags are rare in a 200-token window, so a single passage with a "cold" SCONJ token can swing the ratio sharply; these should not be over-interpreted without a larger run. Additionally, "received attention" sums over query positions under a causal mask, so earlier tokens in a passage are structurally attended by more queries than later ones regardless of POS — the bottom-10% "cold" set is therefore biased toward late-in-passage positions, and part of the DET/PART/NUM enrichment could reflect where those tags tend to sit in a sentence rather than a pure POS effect; this analysis does not control for token position.
+
+## Layer-Invariance: Which Tags Are Cold/Hot in *Every* Layer?
+
+The paragraphs above describe averages across layers, which can mask whether an effect is truly universal (holds in all 35 layers) or just a strong average pulled up/down by a subset of layers (e.g. DET and X, which flip sign at layer 0 / early layers). Checking each tag's min and max ratio across all 35 layers individually separates these two cases:
+
+| Tag | Min ratio | Max ratio | Pattern |
+|---|---|---|---|
+| NUM | 1.07 | 2.63 | **Always cold** (every layer) |
+| VERB | 0.20 | 0.80 | **Always well-attended** (every layer) |
+| SCONJ | 0.00 | 0.55 | **Always well-attended** (every layer) |
+| DET | 0.42 | 3.56 | Mixed — cold in most layers, well-attended at layer 0 |
+| PART | 0.99 | 3.23 | Mixed — cold in most layers, briefly neutral around layer 2 |
+| X | 0.53 | 4.88 | Mixed — cold in most layers, well-attended in a few early/late layers |
+| SPACE | 0.60 | 2.56 | Mixed — see early/late split below |
+| PUNCT | 0.17 | 1.24 | Mixed — well-attended in most layers, briefly neutral late |
+| ADJ, ADP, ADV, AUX, CCONJ, NOUN, PRON, PROPN, SYM | varies | varies | Mixed across layers, no universal direction |
+
+**NUM is the only tag that is cold in literally every one of the 35 layers** (ratio never drops to 1.0 or below) — numerals are the single most reliably under-attended token class in this model, with no layer-dependent exception. **VERB and SCONJ are the mirror opposite**: both stay below ratio 1.0 in every layer, meaning verbs (and, more tentatively given SCONJ's rarity — see caveats above) subordinating conjunctions are never disproportionately in the bottom 10% at any depth.
+
+**SPACE shows a genuine early/late-layer split rather than a universal pattern.** Averaged over layers 0–18, SPACE's ratio is roughly neutral (mean 1.06, range 0.60–2.02). From layer 19 through 34, it shifts up and stays mostly elevated (mean 1.66, range 1.04–2.56, peaking at 2.56 at layer 25). So the back half of the network consistently ignores whitespace/newline tokens more than the front half does — this is the clearest depth-dependent (rather than layer-0-only) transition found in this run.

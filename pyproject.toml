@@ -12,6 +12,7 @@ dependencies = [
     "pyyaml",
     "spacy>=3.7",
     "tokenizers>=0.23.1",
+    "transformers>=5.0.0",
 ]
 
 [tool.setuptools.packages.find]

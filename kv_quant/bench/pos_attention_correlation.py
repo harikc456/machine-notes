@@ -26,7 +26,7 @@ def accumulate_attention_scores(
             reduced = layer_tensor[0].mean(dim=0)  # [q_len, kv_len]
             per_key = reduced.sum(dim=0)  # [kv_len]
             kv_len = per_key.shape[0]
-            scores[layer_idx][:kv_len] += per_key
+            scores[layer_idx][:kv_len] += per_key.detach().cpu()
     return scores
 
 

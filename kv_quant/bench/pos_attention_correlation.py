@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 
 import torch
+
+logger = logging.getLogger(__name__)
 
 
 def accumulate_attention_scores(
@@ -168,9 +171,10 @@ def run_experiment(
         if passage_id == 0:
             first_step_attn = output.attentions[0][0][0]  # [heads, q_len, kv_len]
             row_sums = first_step_attn.sum(dim=-1)
-            assert torch.allclose(
+            if not torch.allclose(
                 row_sums, torch.ones_like(row_sums), atol=1e-2
-            ), "Sanity check failed: attention rows do not sum to ~1.0"
+            ):
+                raise RuntimeError("Sanity check failed: attention rows do not sum to ~1.0")
 
         scores = accumulate_attention_scores(
             list(output.attentions), total_len=total_len, num_layers=num_layers
@@ -182,9 +186,11 @@ def run_experiment(
         )
         offset_mapping = encoding["offset_mapping"]
         if len(offset_mapping) != total_len:
-            print(
-                f"[warn] passage {passage_id}: offset_mapping length "
-                f"{len(offset_mapping)} != token count {total_len}, skipping"
+            logger.warning(
+                "passage %d: offset_mapping length %d != token count %d, skipping",
+                passage_id,
+                len(offset_mapping),
+                total_len,
             )
             continue
 

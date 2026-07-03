@@ -165,3 +165,38 @@ def test_compute_enrichment_ratios_zero_cold_tokens():
     ratios = compute_enrichment_ratios(records)
     # Layer with zero cold tokens should have an empty dict, not zero-valued ratios
     assert ratios[0] == {}
+
+
+import pytest
+
+
+@pytest.mark.slow
+def test_run_experiment_end_to_end_tiny_model():
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    from kv_quant.bench.pos_attention_correlation import (
+        load_spacy_model,
+        run_experiment,
+    )
+
+    model_id = "hf-internal-testing/tiny-random-gpt2"
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id, attn_implementation="eager"
+    ).eval()
+    nlp = load_spacy_model()
+
+    text = "The quick brown fox jumps over the lazy dog."
+    token_ids = tokenizer(text)["input_ids"]
+    passages = [token_ids]
+
+    records = run_experiment(model, tokenizer, nlp, passages, max_new_tokens=3)
+
+    assert len(records) > 0
+    for r in records:
+        assert set(r.keys()) == {
+            "passage_id", "layer", "token", "pos_tag", "attn_score", "is_cold",
+        }
+    n_layers = model.config.num_hidden_layers
+    assert {r["layer"] for r in records} == set(range(n_layers))

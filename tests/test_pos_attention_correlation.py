@@ -151,3 +151,17 @@ def test_compute_enrichment_ratios_separates_layers():
     assert set(ratios.keys()) == {0, 1}
     assert ratios[0] == {"DET": 1.0}
     assert ratios[1] == {"VERB": 1.0}
+
+
+def test_compute_enrichment_ratios_zero_cold_tokens():
+    from kv_quant.bench.pos_attention_correlation import compute_enrichment_ratios
+
+    # Layer where every record has is_cold=False (zero cold tokens)
+    records = [
+        {"layer": 0, "pos_tag": "NOUN", "is_cold": False},
+        {"layer": 0, "pos_tag": "VERB", "is_cold": False},
+        {"layer": 0, "pos_tag": "DET", "is_cold": False},
+    ]
+    ratios = compute_enrichment_ratios(records)
+    # Layer with zero cold tokens should have an empty dict, not zero-valued ratios
+    assert ratios[0] == {}

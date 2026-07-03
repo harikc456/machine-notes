@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections import defaultdict
+
 import torch
 
 
@@ -96,8 +98,6 @@ def load_spacy_model():
 
 def compute_enrichment_ratios(records: list[dict]) -> dict[int, dict[str, float]]:
     """Per layer, per POS tag: ratio of (fraction cold) to (fraction overall)."""
-    from collections import defaultdict
-
     by_layer: dict[int, list[dict]] = defaultdict(list)
     for r in records:
         by_layer[r["layer"]].append(r)
@@ -107,6 +107,11 @@ def compute_enrichment_ratios(records: list[dict]) -> dict[int, dict[str, float]
         total = len(recs)
         cold = [r for r in recs if r["is_cold"]]
         n_cold = len(cold)
+
+        # Layers with zero cold tokens get an empty dict.
+        if n_cold == 0:
+            result[layer] = {}
+            continue
 
         overall_counts: dict[str, int] = defaultdict(int)
         cold_counts: dict[str, int] = defaultdict(int)
@@ -118,7 +123,7 @@ def compute_enrichment_ratios(records: list[dict]) -> dict[int, dict[str, float]
         ratios = {}
         for tag, count in overall_counts.items():
             overall_frac = count / total
-            cold_frac = cold_counts.get(tag, 0) / n_cold if n_cold else 0.0
-            ratios[tag] = cold_frac / overall_frac if overall_frac > 0 else 0.0
+            cold_frac = cold_counts.get(tag, 0) / n_cold
+            ratios[tag] = cold_frac / overall_frac
         result[layer] = ratios
     return result

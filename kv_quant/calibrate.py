@@ -143,14 +143,16 @@ def calibrate(
         model_id, torch_dtype=torch.bfloat16, device_map=device
     ).eval()
 
-    dataset = load_dataset("wikitext", "wikitext-2-raw-v1", split="validation")
+    dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="validation")
     texts = [ex["text"] for ex in dataset if len(ex["text"].strip()) > 100][:n_seqs]
 
-    n_layers = model.config.num_hidden_layers
-    n_kv_heads = getattr(model.config, "num_key_value_heads", model.config.num_attention_heads)
+    # Some models (e.g. Gemma 4) nest arch params under text_config
+    arch_cfg = getattr(model.config, "text_config", model.config)
+    n_layers = arch_cfg.num_hidden_layers
+    n_kv_heads = getattr(arch_cfg, "num_key_value_heads", arch_cfg.num_attention_heads)
     head_dim = getattr(
-        model.config, "head_dim",
-        model.config.hidden_size // model.config.num_attention_heads,
+        arch_cfg, "head_dim",
+        arch_cfg.hidden_size // arch_cfg.num_attention_heads,
     )
 
     all_keys: list[list[torch.Tensor]] = [[] for _ in range(n_layers)]

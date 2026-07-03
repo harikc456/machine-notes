@@ -10,7 +10,7 @@ _CODEBOOK_DIR = os.path.join(os.path.dirname(__file__), "codebooks")
 def get_codebook(d: int, bits: int) -> dict:
     """Load precomputed Lloyd-Max codebook for the Beta distribution on [-1,1].
 
-    Codebooks are precomputed for d in {64, 128} and bits in {1, 2, 3, 4}.
+    Codebooks are precomputed for d in {64, 128, 256} and bits in {1, 2, 3, 4}.
     """
     key = (d, bits)
     if key in _CODEBOOK_CACHE:
@@ -19,7 +19,7 @@ def get_codebook(d: int, bits: int) -> dict:
     if not os.path.exists(path):
         raise FileNotFoundError(
             f"No precomputed codebook for d={d}, bits={bits}. "
-            f"Available: d in {{64, 128}}, bits in {{1, 2, 3, 4}}."
+            f"Available: d in {{64, 128, 256, 512}}, bits in {{1, 2, 3, 4}}."
         )
     with open(path) as f:
         cb = json.load(f)

@@ -9,6 +9,8 @@ from kv_quant.config import QuantConfig
 def _get_kv_shape(model) -> tuple[int, int]:
     """Extract (n_kv_heads, head_dim) from a HF model config."""
     cfg = model.config
+    if hasattr(cfg, "text_config"):
+        cfg = cfg.text_config
     n_kv_heads = getattr(cfg, "num_key_value_heads", cfg.num_attention_heads)
     head_dim = getattr(
         cfg, "head_dim", cfg.hidden_size // cfg.num_attention_heads

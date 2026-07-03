@@ -13,7 +13,7 @@ def compute_perplexity(
     non-overlapping chunks of chunk_size. Returns float PPL."""
     from datasets import load_dataset
 
-    dataset = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")
+    dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="test")
     text = " ".join(ex["text"] for ex in dataset if ex["text"].strip())
     enc = tokenizer(text, return_tensors="pt").input_ids[0]
     enc = enc[: n_tokens + 1]
@@ -23,7 +23,7 @@ def compute_perplexity(
     total_tokens = 0
 
     model.eval()
-    with torch.no_grad():
+    with torch.inference_mode():
         for i in range(0, len(enc) - 1, chunk_size):
             chunk = enc[i : i + chunk_size + 1]
             if len(chunk) < 2:

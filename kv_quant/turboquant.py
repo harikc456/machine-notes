@@ -38,16 +38,15 @@ class TurboQuantCache(DynamicCache):
         self._v_buf: list[torch.Tensor | None] = []
 
     # ------------------------------------------------------------------
-    def _get_quantizer(self, layer_idx: int, device) -> TurboQuantProd:
+    def _get_quantizer(self, layer_idx: int, device, dim: int) -> TurboQuantProd:
         while len(self._key_quantizers) <= layer_idx:
-            i = len(self._key_quantizers)
-            self._key_quantizers.append(
-                TurboQuantProd(
-                    dim=self.head_dim,
-                    bits=self.config.bits,
-                    device=device,
-                    seed=42 + i * 7,
-                )
+            self._key_quantizers.append(None)
+        if self._key_quantizers[layer_idx] is None:
+            self._key_quantizers[layer_idx] = TurboQuantProd(
+                dim=dim,
+                bits=self.config.bits,
+                device=device,
+                seed=42 + layer_idx * 7,
             )
         return self._key_quantizers[layer_idx]
 
@@ -61,7 +60,7 @@ class TurboQuantCache(DynamicCache):
     # ------------------------------------------------------------------
     def _flush_to_quantized(self, layer_idx: int, keys: torch.Tensor, values: torch.Tensor):
         """Compress tokens and append to quantized storage."""
-        q = self._get_quantizer(layer_idx, keys.device)
+        q = self._get_quantizer(layer_idx, keys.device, keys.shape[-1])
 
         new_kq = q.quantize(keys.float())
         new_vq = quantize_values(
@@ -128,7 +127,7 @@ class TurboQuantCache(DynamicCache):
         # Dequantize and return full K, V for attention
         parts_k, parts_v = [], []
         if self._qk[layer_idx] is not None:
-            q = self._get_quantizer(layer_idx, key_states.device)
+            q = self._get_quantizer(layer_idx, key_states.device, key_states.shape[-1])
             parts_k.append(q.dequantize(self._qk[layer_idx]).to(key_states.dtype))
             parts_v.append(
                 dequantize_values(self._qv[layer_idx], self.config.value_group_size)
@@ -171,7 +170,7 @@ class TurboQuantCache(DynamicCache):
         parts_v: list[torch.Tensor] = []
 
         if self._qk[layer_idx] is not None:
-            q = self._get_quantizer(layer_idx, device)
+            q = self._key_quantizers[layer_idx]  # already created during quantize
             parts_k.append(q.dequantize(self._qk[layer_idx]))
             parts_v.append(dequantize_values(self._qv[layer_idx], self.config.value_group_size))
 
@@ -229,14 +228,19 @@ class TurboQuantCache(DynamicCache):
         for kq in self._qk:
             if kq is None:
                 continue
+            # mse_indices: uint8 bit-packed → 1 byte/element
             total += kq.mse_indices.nelement()
-            total += (kq.qjl_signs.nelement() + 7) // 8
-            total += kq.residual_norms.nelement() * 2
-            total += kq.norms.nelement() * 2
+            # qjl_signs: uint8 already packed (8 signs/byte) → 1 byte/element
+            total += kq.qjl_signs.nelement()
+            # residual_norms, norms: float32 → 4 bytes/element
+            total += kq.residual_norms.nelement() * 4
+            total += kq.norms.nelement() * 4
         for vq in self._qv:
             if vq is None:
                 continue
+            # data: uint8 bit-packed → 1 byte/element
             total += vq.data.nelement()
-            total += vq.scales.nelement() * 2
-            total += vq.zeros.nelement() * 2
+            # scales, zeros: float32 → 4 bytes/element
+            total += vq.scales.nelement() * 4
+            total += vq.zeros.nelement() * 4
         return total

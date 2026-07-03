@@ -11,7 +11,7 @@ dependencies = [
     "liger-kernel>=0.8.0",
     "pyyaml",
     "spacy>=3.7",
-    "tokenizers>=0.23.1",
+    "tokenizers>=0.21",
     "transformers>=5.0.0",
 ]
 

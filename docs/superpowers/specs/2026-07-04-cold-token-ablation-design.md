@@ -67,9 +67,15 @@ New script: `kv_quant/bench/cold_token_ablation.py`, standalone (mirrors
 
 ## Scale / cost
 
-25 passages × (1 baseline + 35 pruned regenerations) = 900 `generate()` calls
-total. Pruned runs skip attention capture, so they're cheaper per-call than
-the baseline runs from the original experiment.
+25 passages × (1 baseline call + 1 batched ablation call) = 50 `generate()`
+calls total. The baseline call already returns attention for every layer in
+one shot (as in the original POS-attention experiment), and the ablation
+call batches all 35 layers' pruned prompts together in a single call: since
+`select_cold_tokens` removes a fixed token count (`floor(prompt_len *
+cold_frac)`) regardless of which layer's scores it's given, every layer's
+pruned prompt for a passage has identical length, so they stack into one
+batch tensor with no padding required. Pruned runs also skip attention
+capture, so they're cheaper per-sequence than the baseline runs.
 
 ## Error handling
 

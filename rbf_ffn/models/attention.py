@@ -506,10 +506,135 @@ class KVSharedAttention(nn.Module):
         return self.o_proj(out)
 
 
+class DeepSeekSparseAttention(nn.Module):
+    """
+    DeepSeek Sparse Attention (DSA), as introduced in DeepSeek-V3.2.
+
+    A small "lightning indexer" scores every (query, key) pair independently
+    of the main attention heads: per-position index vectors q_I, k_I of dim
+    cfg.sparse_index_dim are projected with cfg.sparse_index_heads heads,
+    dot-producted, passed through ReLU, and summed across indexer heads into
+    a single score shared by all attention heads (DeepSeek uses one shared
+    top-k set per query rather than per-head sets, so the sparsity pattern
+    is consistent across heads). For each query position, only the top
+    cfg.sparse_topk keys (causally restricted to positions <= query) are
+    kept; the rest are masked out of the main attention.
+
+    The indexer receives NO gradient from the main task loss: `.topk(...).indices`
+    is a hard, non-differentiable selection, so index_q_proj/index_k_proj/
+    index_weight stay at their random init unless trained separately (DeepSeek
+    trains the indexer with an auxiliary KL-distillation loss against the
+    dense attention distribution — not implemented here). Without that,
+    this module is a fixed random sparsification pattern, useful for
+    measuring the cost of sparsity itself but not representative of a
+    trained DSA model. Falls back to dense causal attention when
+    N <= cfg.sparse_topk (no keys to prune).
+
+    Supports GQA via cfg.n_kv_heads, same as CausalSelfAttention.
+
+    Input/output: (B, N, d_model)
+    """
+
+    def __init__(self, cfg: ModelConfig):
+        super().__init__()
+        D, H = cfg.d_model, cfg.n_heads
+        assert D % H == 0, f"d_model ({D}) must be divisible by n_heads ({H})"
+        self.n_heads = H
+        self.head_dim = D // H
+        self.n_kv_heads = cfg.n_kv_heads
+        self.n_groups = H // self.n_kv_heads
+        KV = self.n_kv_heads * self.head_dim
+        self.q_proj = nn.Linear(D, D, bias=False)
+        self.k_proj = nn.Linear(D, KV, bias=False)
+        self.v_proj = nn.Linear(D, KV, bias=False)
+        self.o_proj = nn.Linear(D, D, bias=False)
+        self.rope = RotaryEmbedding(self.head_dim)
+        self._dropout = cfg.dropout
+        self._qk_norm = cfg.qk_norm
+        self._qkv_silu = cfg.qkv_silu
+        if self._qk_norm:
+            self.q_norm = nn.RMSNorm(self.head_dim)
+            self.k_norm = nn.RMSNorm(self.head_dim)
+        _gain_targets = set(cfg.qkv_gain_targets) if cfg.qkv_gain else set()
+        if "q" in _gain_targets:
+            self.q_gain = nn.Parameter(torch.zeros(H))
+        if "k" in _gain_targets:
+            self.k_gain = nn.Parameter(torch.zeros(self.n_kv_heads))
+        if "v" in _gain_targets:
+            self.v_gain = nn.Parameter(torch.zeros(self.n_kv_heads))
+
+        # Lightning indexer: shared across attention heads, small dim.
+        self.topk = cfg.sparse_topk
+        self.index_heads = cfg.sparse_index_heads
+        self.index_dim = cfg.sparse_index_dim
+        self.index_q_proj = nn.Linear(D, self.index_heads * self.index_dim, bias=False)
+        self.index_k_proj = nn.Linear(D, self.index_heads * self.index_dim, bias=False)
+        self.index_rope = RotaryEmbedding(self.index_dim)
+        self.index_weight = nn.Parameter(torch.ones(self.index_heads))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """x: (B, N, d_model)"""
+        B, N, D = x.shape
+
+        def split_q(t):
+            return t.view(B, N, self.n_heads, self.head_dim).transpose(1, 2)
+
+        def split_kv(t):
+            return t.view(B, N, self.n_kv_heads, self.head_dim).transpose(1, 2)
+
+        q = self.rope(split_q(F.silu(self.q_proj(x)) if self._qkv_silu else self.q_proj(x)))
+        k = self.rope(split_kv(F.silu(self.k_proj(x)) if self._qkv_silu else self.k_proj(x)))
+        v = split_kv(F.silu(self.v_proj(x)) if self._qkv_silu else self.v_proj(x))
+
+        if hasattr(self, "q_gain"):
+            q = q * (1 + self.q_gain.view(1, -1, 1, 1))
+        if hasattr(self, "k_gain"):
+            k = k * (1 + self.k_gain.view(1, -1, 1, 1))
+        if hasattr(self, "v_gain"):
+            v = v * (1 + self.v_gain.view(1, -1, 1, 1))
+
+        if self._qk_norm:
+            q = self.q_norm(q)
+            k = self.k_norm(k)
+
+        k = k.repeat_interleave(self.n_groups, dim=1)
+        v = v.repeat_interleave(self.n_groups, dim=1)
+
+        causal_mask = torch.ones(N, N, device=x.device, dtype=torch.bool).tril()
+
+        dp = self._dropout if self.training else 0.0
+        if N <= self.topk:
+            # Nothing to prune; skip the indexer and run dense causal attention.
+            out = F.scaled_dot_product_attention(q, k, v, dropout_p=dp, is_causal=True)
+        else:
+            iq = self.index_rope(
+                self.index_q_proj(x).view(B, N, self.index_heads, self.index_dim).transpose(1, 2)
+            )
+            ik = self.index_rope(
+                self.index_k_proj(x).view(B, N, self.index_heads, self.index_dim).transpose(1, 2)
+            )
+            # (B, index_heads, N, N) -> shared (B, N, N) score per key
+            idx_scores = F.relu(torch.matmul(iq, ik.transpose(-2, -1)))
+            idx_scores = (idx_scores * self.index_weight.view(1, -1, 1, 1)).sum(dim=1)
+            idx_scores = idx_scores.masked_fill(~causal_mask, float("-inf"))
+
+            topk_idx = idx_scores.topk(self.topk, dim=-1).indices   # (B, N, topk)
+            sparse_mask = torch.zeros(B, N, N, device=x.device, dtype=torch.bool)
+            sparse_mask.scatter_(-1, topk_idx, True)
+            sparse_mask = sparse_mask & causal_mask.unsqueeze(0)   # re-clip ties selected from -inf rows
+
+            attn_mask = sparse_mask.unsqueeze(1)   # (B, 1, N, N), broadcasts across heads
+            out = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=dp)
+
+        out = out.transpose(1, 2).contiguous().view(B, N, D)
+        return self.o_proj(out)
+
+
 ATTN_REGISTRY: dict[str, type] = {
-    "standard":      CausalSelfAttention,
-    "polar":         PolarAttention,
-    "xsa":           ExclusiveSelfAttention,
-    "kv_shared":     KVSharedAttention,
-    "xsa_kv_shared": KVSharedExclusiveSelfAttention,
+    "standard":         CausalSelfAttention,
+    "polar":            PolarAttention,
+    "xsa":              ExclusiveSelfAttention,
+    "kv_shared":        KVSharedAttention,
+    "xsa_kv_shared":    KVSharedExclusiveSelfAttention,
+    "deepseek_sparse":  DeepSeekSparseAttention,
 }

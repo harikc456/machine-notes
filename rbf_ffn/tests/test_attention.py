@@ -92,7 +92,7 @@ def test_attn_flash_flag_matches_hardware(cfg):
 
 def test_attn_registry_keys():
     from rbf_ffn.models.attention import ATTN_REGISTRY
-    assert set(ATTN_REGISTRY.keys()) == {"standard", "polar", "xsa"}
+    assert {"standard", "polar", "xsa", "kv_shared", "xsa_kv_shared", "deepseek_sparse"} == set(ATTN_REGISTRY.keys())
 
 
 def test_attn_registry_standard_is_causal_self_attention():

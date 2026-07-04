@@ -39,12 +39,17 @@ class ModelConfig:
     # Grouped Query Attention (GQA) / Multi-Query Attention (MQA)
     n_kv_heads: int = 0            # 0 = match n_heads (MHA). 1 = MQA. 1 < n < n_heads = GQA.
 
+    # DeepSeek Sparse Attention (attn_type="deepseek_sparse")
+    sparse_topk: int = 128         # keys kept per query after indexer selection (causally clipped)
+    sparse_index_dim: int = 32     # per-head dim of the lightning indexer's q/k projections
+    sparse_index_heads: int = 4    # indexer heads; scores are summed into one shared score per key
+
     # Sequence / vocab
     seq_len: int = 512
     vocab_size: int = 50257
 
     # Composable block type
-    attn_type: str = "standard"    # "standard" | "polar" | "xsa"
+    attn_type: str = "standard"    # "standard" | "polar" | "xsa" | "kv_shared" | "xsa_kv_shared" | "deepseek_sparse"
     ffn_type: str = "swiglu"       # "swiglu" | "leaky_relu_sq" | "rational" | "rationalglu" | "pfd_rational" | "pfd_rationalglu" | "first_order_pfd_rational" | "polar"
     norm_type: str = "rmsnorm"     # "rmsnorm" | "dynamic_erf"
     orthogonal_ffn: bool = False        # Wrap FFN output to be orthogonal to input x (all layers)
@@ -154,6 +159,9 @@ class ModelConfig:
                 raise ValueError(f"qkv_gain_targets contains invalid entries: {bad}. Must be subset of {valid_targets}")
             if not self.qkv_gain_targets:
                 raise ValueError("qkv_gain_targets must be non-empty when qkv_gain=True")
+
+        if self.attn_type == "deepseek_sparse" and self.sparse_topk < 1:
+            raise ValueError(f"sparse_topk must be >= 1, got {self.sparse_topk}")
 
         if self.norm_type not in ("rmsnorm", "dynamic_erf"):
             raise ValueError(

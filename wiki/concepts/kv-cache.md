@@ -1,10 +1,10 @@
 ---
 title: KV Cache
 created: 2026-05-14
-updated: 2026-06-29
+updated: 2026-07-06
 type: concept
 tags: [kv-cache, inference, attention, quantization]
-sources: [raw/papers/2306.14048v3.pdf, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf, raw/papers/2604.04921v1.pdf, raw/papers/2602.21548v2.md, raw/papers/2606.20945v2.md, raw/papers/2506.15969v3.md, raw/papers/2511.01815v2.md]
+sources: [raw/papers/2306.14048v3.pdf, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf, raw/papers/2604.04921v1.pdf, raw/papers/2602.21548v2.md, raw/papers/2606.20945v2.md, raw/papers/2506.15969v3.md, raw/papers/2511.01815v2.md, raw/papers/2606.15007v1.pdf]
 confidence: high
 ---
 
@@ -93,3 +93,4 @@ These are **complementary** — quantization + eviction can be combined (e.g., T
 - [[speculative-decoding]] — orthogonal inference speedup technique
 - [[dualpath]] — serving-layer KV loading bottleneck in agentic inference; 1.87× offline throughput
 - [[gqe]] — MoE routing on GQA query heads; 1.7–1.8× prefill speedup at long context
+- [[nemotron-3-ultra]] — architectural KV reduction via a Mamba-heavy hybrid backbone (only 2 KV heads across 108 layers) rather than eviction/quantization

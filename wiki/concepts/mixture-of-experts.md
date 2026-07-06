@@ -1,10 +1,10 @@
 ---
 title: Mixture of Experts (MoE)
 created: 2026-05-14
-updated: 2026-06-24
+updated: 2026-07-06
 type: concept
 tags: [sparsity, architecture, model, training]
-sources: [raw/papers/2601.07372v1.pdf, raw/papers/DeepSeek_V4.pdf, raw/papers/2512.02556v1.pdf, raw/papers/2606.20945v2.md]
+sources: [raw/papers/2601.07372v1.pdf, raw/papers/DeepSeek_V4.pdf, raw/papers/2512.02556v1.pdf, raw/papers/2606.20945v2.md, raw/papers/2606.15007v1.pdf]
 confidence: high
 ---
 
@@ -66,3 +66,4 @@ The MoE idea is not limited to FFN layers. [[gqe]] (Grouped Query Experts, Jun 2
 - [[deepseek-v3-2]] — MoE with scalable RL
 - [[hyper-connections]] — architectural improvement to residual connections within MoE layers
 - [[gqe]] — MoE routing applied to GQA query heads (attention sparsity)
+- [[nemotron-3-ultra]] — 550B/55B LatentMoE combined with a Mamba-Attention hybrid backbone

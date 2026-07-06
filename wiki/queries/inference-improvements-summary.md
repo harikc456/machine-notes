@@ -1,7 +1,7 @@
 ---
 title: LLM Inference Improvements — Structured Survey
 created: 2026-05-14
-updated: 2026-06-30
+updated: 2026-07-06
 type: query
 tags: [inference, architecture, quantization, kv-cache, speculative, attention, survey, training]
 sources: []
@@ -10,7 +10,7 @@ confidence: high
 
 # LLM Inference Improvements — Structured Survey
 
-> Synthesis across wiki entities/concepts. Each section summarizes the technique landscape and points to detailed pages. For deep KV cache and speculative decoding coverage, see [[inference-kv-speculative]]. For memory-impact framing, see [[memory-inference-techniques]].
+> Synthesis across wiki entities/concepts. Each section summarizes the technique landscape and points to detailed pages. For deep KV cache coverage, see [[kv-cache-compression-detail]]; for speculative decoding, see [[speculative-decoding-detail]]. For memory-impact framing, see [[memory-inference-techniques]].
 
 ---
 
@@ -91,7 +91,7 @@ Key technique shared across all: outlier smoothing (K-smoothing in SA1; Q+K-smoo
 
 The KV cache is the primary memory bottleneck at long contexts and large batch sizes. See [[kv-cache]] for background.
 
-For the full treatment of pruning (H₂O, TriAttention) and quantization (PolarQuant, TurboQuant, SpectralQuant), see [[inference-kv-speculative]].
+For the full treatment of pruning (H₂O, TriAttention) and quantization (PolarQuant, TurboQuant, SpectralQuant), see [[kv-cache-compression-detail]].
 
 Key results: **TriAttention** achieves 10.7× KV reduction at matched accuracy for long-context reasoning (AIME25, 32K); **SpectralQuant** achieves 5.95× compression at full perplexity quality, strictly dominating TurboQuant (5.02×, −0.50 bits/element). Combining eviction + quantization is complementary — see [[kv-cache-compression-comparison]]. Architectural KV reduction (MQA/GQA/MLA/CSA) — see §1.
 
@@ -99,35 +99,17 @@ Key results: **TriAttention** achieves 10.7× KV reduction at matched accuracy f
 
 ## 4. Speculative Decoding
 
-Draft-then-verify paradigm for lossless inference speedup. See [[inference-kv-speculative]] for the full algorithm walkthrough, rejection sampling proof, and self-speculative variants (LayerSkip, SWIFT, DASH).
+Draft-then-verify paradigm for lossless inference speedup. See [[speculative-decoding-detail]] for the full algorithm walkthrough, rejection sampling proof, and self-speculative variants (LayerSkip, SWIFT, DASH).
 
-Key results: **Standard SD** delivers 2–3× lossless speedup (exact distributional match to target). **[[eagle]]** (feature-level AR drafting, Mar 2025): 2.7×–3.5×. **[[eagle-2]]** (dynamic draft trees, Jun 2024): 3.05×–4.26×, 20-40% over EAGLE-1. **[[eagle-3]]** (direct token prediction + training-time test, Apr 2025): up to 6.5×; unlocks data scaling law. **[[dflash]]** (block diffusion parallel drafting, ICML 2026): constant draft cost regardless of draft length; 6×+ lossless, 2.5× over EAGLE-3. **[[dspark]]** (Jun 2026): DFlash backbone + Markov head eliminates suffix decay; confidence-scheduled verification with hardware-aware scheduler; +25–30% accepted length; +51% aggregate throughput in DeepSeek-V4-Flash at 80 TPS/user SLA. **Saguaro** (May 2026): orthogonal — parallelizes speculator and verifier on separate hardware; 30% over SD baselines, up to 5× over AR. **LayerSkip** self-speculative decoding: up to 2.16× speedup, zero extra model memory. See [[speculative-decoding]], [[inference-kv-speculative]] for full detail.
+Key results: **Standard SD** delivers 2–3× lossless speedup (exact distributional match to target). **[[eagle]]** (feature-level AR drafting, Mar 2025): 2.7×–3.5×. **[[eagle-2]]** (dynamic draft trees, Jun 2024): 3.05×–4.26×, 20-40% over EAGLE-1. **[[eagle-3]]** (direct token prediction + training-time test, Apr 2025): up to 6.5×; unlocks data scaling law. **[[dflash]]** (block diffusion parallel drafting, ICML 2026): constant draft cost regardless of draft length; 6×+ lossless, 2.5× over EAGLE-3. **[[dspark]]** (Jun 2026): DFlash backbone + Markov head eliminates suffix decay; confidence-scheduled verification with hardware-aware scheduler; +25–30% accepted length; +51% aggregate throughput in DeepSeek-V4-Flash at 80 TPS/user SLA. **Saguaro** (May 2026): orthogonal — parallelizes speculator and verifier on separate hardware; 30% over SD baselines, up to 5× over AR. **LayerSkip** self-speculative decoding: up to 2.16× speedup, zero extra model memory. **Nemotron 3 Ultra** ([[nemotron-3-ultra]], Jun 2026): shared-weight MTP heads trained jointly with the base model from pretraining, used as a built-in draft mechanism. See [[speculative-decoding]], [[speculative-decoding-detail]] for full detail.
 
 ---
 
 ## 5. Serving Infrastructure (Algorithmic)
 
-Scheduling and memory management techniques that improve throughput at the serving layer — no model changes required.
+Scheduling and memory management techniques that improve throughput at the serving layer — no model changes required. Full detail (Flash Attention, PagedAttention, RadixAttention, Continuous Batching + Chunked Prefill, DualPath) split out to [[serving-infrastructure-detail]] on 2026-07-06 (page-size threshold).
 
-### Flash Attention
-
-[[flash-attention]] (Dao et al., 2022): tiles Q/K/V into SRAM blocks; computes attention with online softmax without materializing the full N×N matrix. IO complexity: O(Nd + N²/B) vs O(N²d). **7.6× speedup on GPT-2** (A100); O(N) memory — enables long contexts. Now default in PyTorch, HuggingFace, vLLM.
-
-### PagedAttention
-
-[[paged-attention]] (vLLM, 2023): fixed-size KV pages mapped via block tables (OS-style virtual memory). Eliminates 20–80% memory waste from fragmentation. **2–4× throughput over TGI** at same hardware. Enables prefix caching: system prompts computed once, shared across requests.
-
-### RadixAttention
-
-[[radix-attention]] (SGLang, 2023): radix tree maps token sequences → cached KV blocks. Longest matching prefix served on cache hit; LRU eviction clears unused leaves. **2–4× throughput improvement over vLLM** for shared-prefix workloads (system prompts, few-shot examples, agentic pipelines with repeated tool descriptions). Composes with PagedAttention: both active simultaneously.
-
-### Continuous Batching + Chunked Prefill
-
-[[continuous-batching]]: swap finished requests out at the token level (not request level); split long prompts into fixed-size chunks interleaved with decode steps. Results (SARATHI): **1.25–1.91× end-to-end**, **4–10× decode throughput**, 6.29× pipeline bubble reduction for GPT-3.
-
-### DualPath (Agentic KV Loading)
-
-[[dualpath]] (Peking U / DeepSeek-AI, Feb 2026): for agentic (multi-turn) inference in PD-disaggregated systems, KV-cache loading — not compute — dominates. Hit rates ≥95%, cache-compute ratio ~22 GB/PFLOP (DeepSeek-V3.2) saturate prefill-side storage NICs while decode NICs sit idle. DualPath adds a storage-to-decode path + RDMA to prefill, doubling effective storage bandwidth with no hardware changes. **1.87× offline throughput, 1.96× online** without SLO violation.
+Key results: **Flash Attention** ([[flash-attention]]): 7.6× speedup on GPT-2, O(N) memory. **PagedAttention** ([[paged-attention]]): 2–4× throughput over TGI via OS-style KV paging. **RadixAttention** ([[radix-attention]]): 2–4× over vLLM for shared-prefix workloads via radix-tree prefix caching. **Continuous batching + chunked prefill** ([[continuous-batching]]): 4–10× decode throughput (SARATHI). **DualPath** ([[dualpath]]): 1.87× offline / 1.96× online throughput for agentic multi-turn serving via dual-path KV loading.
 
 ---
 
@@ -167,41 +149,16 @@ DLMs offer **parallel token generation** — a fundamentally different inference
 
 ## Cross-Cutting Themes
 
-| Technique | What it trades | Gain |
-|---|---|---|
-| SageAttention (INT8) | ~0% accuracy; plug-and-play | Attention compute 2.1× FA2; 340 TOPS RTX4090 |
-| SageAttention2 (INT4/FP8) | ~0% accuracy; plug-and-play | Attention compute 3× FA2; 481 TOPS RTX4090 |
-| SageAttention3 (FP4, Blackwell) | ~0% accuracy; Blackwell only | Attention compute 5× FA2; 1038 TOPS RTX5090 |
-| DualPath (agentic KV loading) | System complexity (dual-path infra) | 1.87× offline throughput; 1.96× online (agentic) |
-| GQE (query-head MoE) | Router training overhead | 1.7–1.8× prefill speedup at ≥32k (matches GQA quality) |
-| AttnRes (Block) | O(Nd) depth-attention memory; architectural change at training time | 1.25× compute advantage; +7.5 GPQA-Diamond; mitigates PreNorm dilution |
-| GQA/DSA/CSA+HCA | Model quality (marginal) | KV cache ↓ 10–90% |
-| MoE | Memory (all experts must load) | FLOPs/token ↓ |
-| INT4 weights | Quality (marginal at INT8, moderate at INT4) | Memory ↓ 2–4× |
-| H₂O pruning | Retrieval quality | Throughput ↑ 29× |
-| TriAttention | Offline calibration; still eviction | Throughput ↑ 2.5× or KV ↓ 10.7× at matched accuracy (reasoning) |
-| PolarQuant / TurboQuant | Small quality loss | KV memory ↓ 3–5× |
-| SpectralQuant | 15s calibration | KV memory ↓ 5.95×; +1.7–2.8 pp cosine sim vs TurboQuant; 4.5× decode speedup |
-| Speculative decoding | Requires draft model | Latency ↓ 2–3× (lossless) |
-| EAGLE (feature-level AR drafting) | Draft model training; frozen target | Latency ↓ 2.7–3.5× (lossless) |
-| EAGLE-2 (dynamic draft trees) | Context-dependent tree expansion logic | Latency ↓ 3.05–4.26× (lossless, no extra training) |
-| EAGLE-3 (training-time test) | Larger draft training dataset | Latency ↓ up to 6.5×; data scaling law unlocked |
-| DFlash (block diffusion drafting) | Draft adapter training; constant draft overhead | Latency ↓ 6×+; 2.5× over EAGLE-3; lossless |
-| DSpark (semi-AR + confidence scheduler) | Draft model training; confidence head calibration | +25–30% accepted length; +51% serving throughput (DeepSeek-V4-Flash @ 80 TPS SLA) |
-| Saguaro (SSD) | Separate speculator hardware; prediction overhead | Latency ↓ 5× vs AR, 30% over SD (lossless) |
-| SuperBPE (superword tokenization) | Tokenizer retraining (CPU/memory intensive); no inference changes | Tokens ↓ 33%; inference FLOPs ↓ 32%; downstream +4.0% avg (30 tasks) |
-| Self-speculative (LayerSkip) | Draft quality vs separate model | Latency ↓ 1.3–2.2× (lossless, no extra memory) |
-| Flash Attention | Recomputes during backward pass | Attention IO ↓ 7.6×; memory O(N) |
-| PagedAttention | Block table indirection overhead | KV fragmentation ↓ ~0%; throughput ↑ 2–4× |
-| RadixAttention | Tree lookup overhead | Cross-request prefix reuse; throughput ↑ 2–4× over vLLM |
-| Continuous batching + chunked prefill | Scheduling complexity | Decode throughput ↑ 4–10× |
-| Early exit / layer skipping | Quality on hard tokens | Latency ↓ 1.3–2× per token |
-| BD3-LM (block diffusion) | Fixed block size hyperparameter | Parallel within-block generation + KV caching restored to DLMs |
-| I-DLM (introspective DLM) | Training on 4.5B extra tokens | 3.1× over SDAR; matches AR quality; AR-serving-stack compatible |
+One-line trade-off summary for every technique above, plus the KV/speculative/attention-quant
+detail-page techniques, moved to [[inference-technique-tradeoffs]] on 2026-07-06 (page-size
+threshold).
 
 ## See Also
 
-- [[inference-kv-speculative]] — full KV cache and speculative decoding detail (H₂O, TriAttention, PolarQuant, TurboQuant, SpectralQuant, SD algorithm, Saguaro, LayerSkip)
+- [[inference-technique-tradeoffs]] — full cross-cutting trade-off comparison table
+- [[kv-cache-compression-detail]] — full KV cache detail (H₂O, TriAttention, PolarQuant, TurboQuant, SpectralQuant, SageAttention family)
+- [[speculative-decoding-detail]] — full speculative decoding detail (SD algorithm, EAGLE family, DFlash, DSpark, Saguaro, LayerSkip)
+- [[serving-infrastructure-detail]] — full serving-layer detail (Flash Attention, PagedAttention, RadixAttention, Continuous Batching, DualPath)
 - [[memory-inference-techniques]] — memory-focused inference survey with quantitative memory impact per technique
 - [[memory-inference-research-gaps]] — methodological gaps, untested compositions, Pareto analysis
 - [[attnres]] — Attention Residuals entity page
@@ -234,3 +191,4 @@ DLMs offer **parallel token generation** — a fundamentally different inference
 - [[mixture-of-experts]] — MoE fundamentals
 - [[quantization]] — weight and attention quantization overview
 - [[deepseek-v4]] — CSA+HCA and MoE at production scale
+- [[nemotron-3-ultra]] — hybrid Mamba-Attention MoE with shared-weight MTP; ~6× throughput vs SOTA open LLMs

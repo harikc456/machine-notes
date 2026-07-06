@@ -2,7 +2,7 @@
 
 > Content catalog. Every wiki page listed under its type with a one-line summary.
 > Read this first to find relevant pages for any query.
-> Last updated: 2026-06-30 | Total pages: 62
+> Last updated: 2026-07-06 | Total pages: 69
 
 ## Entities
 
@@ -11,6 +11,7 @@
 - [[dflash]] — DFlash (UC San Diego, ICML 2026): block diffusion adapter as speculative draft engine; parallel draft generation; 6×+ lossless speedup, 2.5× over EAGLE-3
 - [[clip-to-grok]] — Clip to Grok: per-row weight norm clipping accelerates grokking 39–249× without weight decay
 - [[flash-attention]] — Flash Attention (Dao et al.): IO-aware tiled attention; 7.6× speedup on GPT-2; O(N) memory via online softmax
+- [[funcattn]] — Functional Attention (TUM/Oxford/UT Austin, ICML 2026): attention as functional correspondence between learned spectral bases; SOTA on PDE operator-learning benchmarks
 - [[layerskip]] — LayerSkip (Meta): layer dropout training + early exit inference + self-speculative decoding; up to 2.16× speedup
 - [[medusa]] — Medusa (ICML 2024): K extra decoding heads on backbone; tree attention verifies candidates; Medusa-1 2.18×, Medusa-2 2.83×; no draft model needed
 - [[paged-attention]] — PagedAttention (vLLM): OS-style paged KV cache management; eliminates fragmentation; 2–4× throughput over TGI
@@ -36,6 +37,7 @@
 - [[lazyeviction]] — LazyEviction (HKUST, Oct 2025): observation window + MRI tracking eviction for reasoning tasks; 50–70% KV reduction at matched accuracy on GSM8K/MATH500
 - [[mhc]] — mHC (Manifold-Constrained Hyper-Connections): projects HC residual matrices onto Birkhoff polytope via Sinkhorn-Knopp
 - [[mhc-lite]] — mHC-lite: replaces SK iterations with convex combination of permutation matrices for exact doubly-stochastic residuals
+- [[nemotron-3-ultra]] — Nemotron 3 Ultra (NVIDIA, Jun 2026): 550B/55B hybrid Mamba-Attention MoE with LatentMoE + shared-weight MTP + NVFP4 pretraining; ~6× throughput vs. SOTA open LLMs at on-par accuracy
 - [[polarquant]] — PolarQuant: KV cache quantization using polar coordinate transformation to eliminate normalization overhead
 - [[qknorm]] — QKNorm: cosine-similarity attention (ℓ₂-normalize Q and K) prevents softmax saturation; +0.7 ppl in LM experiments
 - [[qkv-projection-sharing]] — Q-K=V (ICML 2026): shared key-value projection; 50% KV cache at +3.1% PPL; Q=K-V fails (zero cache benefit); orthogonal to GQA/MQA
@@ -45,6 +47,7 @@
 - [[superbpe]] — SuperBPE (Liu, Hayase et al., COLM 2025): superword tokenization via BPE pretokenization curriculum; 33% fewer tokens, 32% less inference FLOPs, +4.0% downstream (30 tasks)
 - [[triattention]] — TriAttention: KV cache compression via trigonometric series in pre-RoPE space; 2.5× throughput or 10.7× KV reduction at matched accuracy on AIME25
 - [[turboquant]] — TurboQuant: near-optimal online vector quantization via random rotation + MSE quantizer + 1-bit QJL residual
+- [[visreg]] — VISReg (Altos Labs/Brown, Jun 2026): Sliced-Wasserstein sketching regularizer for JEPA/SSL training; fixes SIGReg's vanishing-gradient-under-collapse and scale/shape coupling; SOTA OOD on ImageNet-1K, matches DINOv2 with 10× less data
 - [[weight-normalization]] — Weight Normalization (Salimans & Kingma 2016): decouple weight direction from magnitude; ~21 ppl gain in LM
 - [[xsa]] — XSA (Exclusive Self-Attention): subtracts own-value-direction from attention output, addressing attention similarity bias
 
@@ -69,11 +72,15 @@
 
 - [[kv-cache-compression-comparison]] — H₂O vs PolarQuant vs TurboQuant: eviction vs. quantization approaches to KV cache compression
 - [[hyper-connections-variants]] — mHC vs mHC-lite vs KromHC: trade-offs in doubly-stochastic residual matrix construction
+- [[inference-technique-tradeoffs]] — cross-cutting one-line trade-off table for every inference-efficiency technique in the wiki
 
 ## Queries
 
-- [[inference-improvements-summary]] — LLM inference efficiency survey: architecture (GQA/MLA/MoE/AttnRes), weight quantization, serving (Flash Attention/PagedAttention/RadixAttention), DLMs; see [[inference-kv-speculative]] for KV/SD detail
-- [[inference-kv-speculative]] — KV cache compression and speculative decoding detail: H₂O, TriAttention, PolarQuant, TurboQuant, SpectralQuant, SD algorithm, Saguaro, LayerSkip
+- [[inference-improvements-summary]] — LLM inference efficiency survey: architecture (GQA/MLA/MoE/AttnRes), weight quantization, serving; see [[kv-cache-compression-detail]] and [[speculative-decoding-detail]] for detail, [[inference-technique-tradeoffs]] for the cross-cutting table
+- [[inference-kv-speculative]] — short overview/pointer page: links to [[kv-cache-compression-detail]] and [[speculative-decoding-detail]] (split 2026-07-06)
+- [[kv-cache-compression-detail]] — KV cache compression detail: H₂O, TriAttention, PolarQuant, TurboQuant, SpectralQuant, SageAttention family
+- [[speculative-decoding-detail]] — speculative decoding detail: SD algorithm, EAGLE family, DFlash, DSpark, self-speculative (LayerSkip/SWIFT/DASH), Saguaro
+- [[serving-infrastructure-detail]] — serving-layer detail: Flash Attention, PagedAttention, RadixAttention, Continuous Batching, DualPath
 - [[memory-reduction-survey]] — Memory reduction techniques for LLM training: ZeRO, gradient checkpointing, LoRA/QLoRA, Flash Attention, MoE, optimizer compression (Muon, Adafactor)
 - [[memory-inference-techniques]] — Memory reduction techniques for LLM inference: weight quantization, KV cache compression, architectural KV reduction (MLA/CSA), speculative decoding memory trade-offs
 - [[memory-inference-research-gaps]] — Critical-thinking pass over memory/inference coverage: methodological, coverage, composition, and shared-premise gaps; ranked high-value targets (MLA × KV quant, streaming-prefill, factorial composition study)

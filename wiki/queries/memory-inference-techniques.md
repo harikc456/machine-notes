@@ -1,7 +1,7 @@
 ---
 title: Memory Reduction Techniques for LLM Inference
 created: 2026-05-19
-updated: 2026-05-31
+updated: 2026-07-06
 type: query
 tags: [survey, inference, quantization, kv-cache, attention, sparsity]
 sources: []
@@ -190,4 +190,5 @@ MoE activates only top_k experts per token, but all expert weights must reside i
 - [[continuous-batching]] — serving scheduler that composes with memory reduction
 - [[attnres]] — Attention Residuals
 - [[inference-improvements-summary]] — broader inference survey (architecture, serving, DLMs)
-- [[inference-kv-speculative]] — deep-dive on KV compression + speculative decoding (including EAGLE family)
+- [[kv-cache-compression-detail]] — deep-dive on KV compression (H₂O, TriAttention, PolarQuant, TurboQuant, SpectralQuant)
+- [[speculative-decoding-detail]] — deep-dive on speculative decoding (including EAGLE family)

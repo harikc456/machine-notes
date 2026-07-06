@@ -1,7 +1,7 @@
 ---
 title: DeepSeek-V4
 created: 2026-05-14
-updated: 2026-05-14
+updated: 2026-07-06
 type: entity
 tags: [model, architecture, inference, attention, training, deepseek, open-source]
 sources: [raw/papers/DeepSeek_V4.pdf]
@@ -64,3 +64,9 @@ DeepSeek-V4-Pro-Max (maximum reasoning mode) redefines SOTA for open models. In 
 
 - How does CSA interact with [[speculative-decoding]] at 1M-token context?
 - Extent of KV cache reduction with [[kv-cache]] quantization on top of HCA
+
+## See Also
+
+- [[nemotron-3-ultra]] — comparable large-scale open frontier release (550B/55B) targeting the
+  same 1M-context, high-throughput inference problem via a Mamba-Attention hybrid backbone instead
+  of a redesigned attention mechanism

@@ -1,7 +1,7 @@
 ---
 title: QKV Projection Sharing
 created: 2026-06-17
-updated: 2026-06-17
+updated: 2026-07-06
 type: entity
 tags: [attention, inference, kv-cache, architecture]
 sources: [raw/papers/2606.04032v2.md]
@@ -99,4 +99,4 @@ Configs `baseline_kv_shared.yaml` and `baseline_xsa_kv_shared.yaml` set up basel
 - [[kv-cache]] — projection sharing as a new architectural reduction axis, complementary to quantization and eviction
 - [[xsa]] — XSA Gram-Schmidt step applied on top of Q-K=V in `KVSharedExclusiveSelfAttention`
 - [[deepseek-v4]] — MLA takes a different compression path (low-rank latent compression of K and V); projection sharing is a simpler hard-equality constraint
-- [[attention]] — broader attention mechanism context
+- [[flash-attention]] — standard attention kernel these projection variants run through

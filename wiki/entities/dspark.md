@@ -100,4 +100,4 @@ DSpark and [[saguaro]] are orthogonal: DSpark optimizes *what* to draft and *how
 - [[eagle-3]] — AR drafting baseline DSpark outperforms in average accepted length
 - [[saguaro]] — orthogonal hardware-parallelism approach (separate speculator/verifier)
 - [[deepseek-v4]] — deployment target (DeepSeek-V4-Flash production serving)
-- [[inference-kv-speculative]] — full speculative decoding deep-dive including DFlash, EAGLE family, Saguaro
+- [[speculative-decoding-detail]] — full speculative decoding deep-dive including DFlash, EAGLE family, Saguaro

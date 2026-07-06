@@ -375,3 +375,42 @@
   - wiki/queries/inference-kv-speculative.md — added full DSpark subsection in §4 (math, comparison table vs EAGLE-3/DFlash/Saguaro, production results); updated date, See Also
   - wiki/queries/inference-improvements-summary.md — extended §4 with DSpark; added §8 Tokenization Efficiency (SuperBPE); added 2 rows to cross-cutting themes table; updated date, See Also
 - index.md updated: total pages 60 → 62; added dspark and superbpe entries; bumped date
+
+## [2026-07-06] ingest | Batch ingest: 3 new papers — FuncAttn, VISReg, Nemotron 3 Ultra
+- Sources ingested:
+  - 2605.31559v1.pdf → Functional Attention (Xiao, Gao, Weber, Yang, Cremers — TUM/Oxford/UT Austin, ICML 2026)
+  - 2606.02572v1.pdf → VISReg: Variance-Invariance-Sketching Regularization for JEPA training (Wu, Balestriero, Levine — Altos Labs/Brown, Jun 2026)
+  - 2606.15007v1.pdf → Nemotron 3 Ultra: Hybrid Mamba-Transformer MoE for Agentic Reasoning (NVIDIA, Jun 2026)
+- New raw source files:
+  - wiki/raw/papers/2605.31559v1.md
+  - wiki/raw/papers/2606.02572v1.md
+  - wiki/raw/papers/2606.15007v1.md
+- New entity pages:
+  - wiki/entities/funcattn.md — attention as functional correspondence between learned spectral bases; SOTA on PDE operator-learning benchmarks; adjacent to core LLM-efficiency domain (scientific ML)
+  - wiki/entities/visreg.md — Sliced-Wasserstein sketching regularizer for JEPA/SSL; fixes SIGReg's vanishing-gradient-under-collapse and scale/shape coupling
+  - wiki/entities/nemotron-3-ultra.md — 550B/55B hybrid Mamba-Attention MoE; LatentMoE + shared-weight MTP + NVFP4 pretraining; ~6× throughput vs. SOTA open LLMs
+- Pages updated:
+  - wiki/entities/lejepa.md — added Limitations Addressed by Later Work section on VISReg; updated sources, date, See Also
+  - wiki/concepts/jepa.md — added VISReg note to SIGReg section; updated sources, date, See Also
+  - wiki/concepts/mixture-of-experts.md — added nemotron-3-ultra to See Also; updated sources, date
+  - wiki/concepts/speculative-decoding.md — added nemotron-3-ultra (MTP heads) to See Also; updated sources, date
+  - wiki/concepts/kv-cache.md — added nemotron-3-ultra (Mamba-heavy KV reduction) to See Also; updated sources, date
+  - wiki/entities/deepseek-v4.md — added See Also section linking nemotron-3-ultra as a comparable frontier release; updated date
+- index.md updated: total pages 62 → 65; added funcattn, nemotron-3-ultra, visreg entries; bumped date
+
+## [2026-07-06] lint | Fixed orphan page + split 2 oversized pages
+- Orphan fix: added [[funcattn]] to wiki/entities/flash-attention.md's See Also (funcattn had zero inbound links)
+- Split wiki/queries/inference-kv-speculative.md (342 lines) into:
+  - wiki/queries/kv-cache-compression-detail.md (177 lines) — H₂O, TriAttention, PolarQuant, TurboQuant, SpectralQuant, SageAttention family
+  - wiki/queries/speculative-decoding-detail.md (197 lines) — SD algorithm, EAGLE family, DFlash, DSpark, self-speculative, Saguaro
+  - wiki/queries/inference-kv-speculative.md reduced to a 36-line overview/pointer stub; all prior inbound links (index.md, memory-inference-techniques.md, memory-inference-research-gaps.md, raw/papers/2604.04921v1.md, entities/dspark.md, concepts/speculative-decoding.md) still resolve; the most detail-specific of these were repointed directly to the new pages
+- Split wiki/queries/inference-improvements-summary.md (236 lines) into:
+  - wiki/comparisons/inference-technique-tradeoffs.md (56 lines) — the Cross-Cutting Themes comparison table
+  - wiki/queries/serving-infrastructure-detail.md (45 lines) — §5 Serving Infrastructure (Flash Attention, PagedAttention, RadixAttention, Continuous Batching, DualPath)
+  - wiki/queries/inference-improvements-summary.md reduced to 194 lines; body and See Also repointed to the new pages
+- index.md updated: total pages 65 → 69; added funcattn/nemotron-3-ultra/visreg (already counted from prior ingest) plus kv-cache-compression-detail, speculative-decoding-detail, serving-infrastructure-detail, inference-technique-tradeoffs
+
+## [2026-07-06] lint | Fixed remaining broken wikilink
+- wiki/entities/qkv-projection-sharing.md — replaced dangling [[attention]] link (no such page ever existed) with [[flash-attention]]
+- wiki/entities/flash-attention.md — added reciprocal backlink to [[qkv-projection-sharing]]
+- Full lint re-run: 0 broken wikilinks, 0 orphans, 0 oversized pages, index complete

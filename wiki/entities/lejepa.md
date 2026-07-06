@@ -1,10 +1,10 @@
 ---
 title: LeJEPA
 created: 2026-05-14
-updated: 2026-05-14
+updated: 2026-07-06
 type: entity
 tags: [ssl, architecture, training]
-sources: [raw/papers/2511.08544v3.pdf]
+sources: [raw/papers/2511.08544v3.pdf, raw/papers/2606.02572v1.pdf]
 confidence: high
 ---
 
@@ -55,8 +55,15 @@ SIGReg is the same regularizer used in [[lewm]] (LeWorldModel). LeJEPA establish
 - SIGReg's isotropic Gaussian enforcement is related to the [[orthogonal-residual-streams]] theme: forcing representations to span the full space (isotropic) rather than collapsing to a subspace (dimensional collapse) is another form of "write new, orthogonal information"
 - The provable anti-collapse guarantee connects to [[hyper-connections]]' doubly-stochastic constraint — both are principled replacements for empirical training heuristics
 
+## Limitations Addressed by Later Work
+
+[[visreg]] (Jun 2026) identifies two limitations of SIGReg: its gradient vanishes as the embedding
+collapses (exactly when correction is needed most), and it doesn't decouple scale from shape. VISReg
+replaces the covariance term of VICReg with a Sliced-Wasserstein sketching objective to fix both.
+
 ## See Also
 
 - [[lewm]] — application to pixel-based world models using the same SIGReg
 - [[jepa]] — background on Joint Embedding Predictive Architectures
 - [[orthogonal-residual-streams]] — related theme of anti-collapse inductive bias
+- [[visreg]] — addresses SIGReg's vanishing-gradient and scale/shape-coupling limitations

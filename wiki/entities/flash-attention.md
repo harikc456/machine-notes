@@ -1,7 +1,7 @@
 ---
 title: Flash Attention
 created: 2026-05-14
-updated: 2026-05-14
+updated: 2026-07-06
 type: entity
 tags: [inference, attention, architecture, training]
 sources: [raw/papers/2205.14135v2.pdf]
@@ -87,3 +87,5 @@ All three are plug-and-play replacements for FlashAttention-2 with near-zero end
 - [[sageattention]] — INT8 quantized attention built on FA2 tiling; 2.1× speedup
 - [[sageattention2]] — INT4/FP8 quantized attention; 3× speedup
 - [[sageattention3]] — FP4 quantized attention for Blackwell; 5× speedup
+- [[funcattn]] — reinterprets attention as least-squares regression over learned spectral bases rather than tiled softmax; different problem domain (operator learning) but a related rethinking of what "attention" computes
+- [[qkv-projection-sharing]] — Q/K/V projection-sharing variants that run through this same tiling kernel

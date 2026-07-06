@@ -1,7 +1,7 @@
 ---
 title: Research Gaps in Memory Reduction and Inference Optimization
 created: 2026-05-19
-updated: 2026-05-31
+updated: 2026-07-06
 type: query
 tags: [survey, inference, kv-cache, quantization, sparsity, attention, comparison]
 sources: []
@@ -177,4 +177,5 @@ Ranked by tractability × impact:
 - [[diffusion-language-models]] — DLM landscape, see §2d
 - [[dflash]] — diffusion drafting for SD; see §3e
 - [[eagle-3]] — EAGLE-3 data scaling law; see §4 interaction rows
-- [[inference-kv-speculative]] — deep-dive on EAGLE family + KV compression; the detail layer behind the gaps above
+- [[speculative-decoding-detail]] — deep-dive on EAGLE family; the detail layer behind the gaps above
+- [[kv-cache-compression-detail]] — deep-dive on KV compression; the detail layer behind the gaps above

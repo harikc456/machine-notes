@@ -1,10 +1,10 @@
 ---
 title: Joint Embedding Predictive Architecture (JEPA)
 created: 2026-05-14
-updated: 2026-05-14
+updated: 2026-07-06
 type: concept
 tags: [ssl, architecture, world-model]
-sources: [raw/papers/2511.08544v3.pdf, raw/papers/2603.19312v2.pdf]
+sources: [raw/papers/2511.08544v3.pdf, raw/papers/2603.19312v2.pdf, raw/papers/2606.02572v1.pdf]
 confidence: high
 ---
 
@@ -44,6 +44,12 @@ This transforms the design goal from "prevent collapse" (a negative constraint) 
 
 Result: no stop-gradient, no EMA, no asymmetric views, no tuning — just prediction loss + SIGReg.
 
+SIGReg has two known weaknesses, addressed by [[visreg]] (Jun 2026): its gradient vanishes as the
+embedding collapses (precisely when a corrective signal is needed most), and it couples scale to
+shape. VISReg replaces VICReg's covariance term with a Sliced-Wasserstein sketching objective,
+decoupling scale (variance term) from shape (sketching term) to keep gradients robust under
+collapse.
+
 ## JEPA for World Models (LeWM)
 
 [[lewm]] (Maes et al., 2026) applies the LeJEPA framework to the world model setting, where observations are video frames and "context" includes actions. The same two-term objective (prediction + SIGReg) trains a pixel-based world model end-to-end on a single GPU.
@@ -65,6 +71,7 @@ JEPAs operate on continuous observations (images, video) while LLMs operate on d
 ## See Also
 
 - [[lejepa]] — provable JEPA with SIGReg
+- [[visreg]] — Sliced-Wasserstein sketching regularizer, fixes SIGReg's vanishing-gradient-under-collapse issue
 - [[lewm]] — JEPA world model for pixel-based control
 - [[orthogonal-residual-streams]] — related anti-collapse inductive bias in LLMs
 - SSL (self-supervised learning) background is covered inline above

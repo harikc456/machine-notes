@@ -10,6 +10,7 @@ dependencies = [
     "accelerate>=1.0.0",
     "datasets>=5.0.0",
     "liger-kernel>=0.8.0",
+    "peft>=0.11.0",
     "pyyaml",
     "spacy>=3.7",
     "tokenizers>=0.21",
@@ -18,10 +19,10 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["rbf_ffn*", "kromhc_transformer*", "grokking*", "flow_matching*", "sigreg*", "mamba_lm*", "idlm*", "mtp_draft*", "medusa*", "kv_quant*"]
+include = ["rbf_ffn*", "kromhc_transformer*", "grokking*", "flow_matching*", "sigreg*", "mamba_lm*", "idlm*", "mtp_draft*", "medusa*", "kv_quant*", "latent_cot*"]
 
 [tool.pytest.ini_options]
-testpaths = ["rbf_ffn/tests", "kromhc_transformer/tests", "grokking/tests", "sigreg/tests", "idlm/tests", "mtp_draft/tests", "medusa/tests", "tests"]
+testpaths = ["rbf_ffn/tests", "kromhc_transformer/tests", "grokking/tests", "sigreg/tests", "idlm/tests", "mtp_draft/tests", "medusa/tests", "latent_cot/tests", "tests"]
 markers = [
     "slow: tests that require GPU + model download (deselect with '--run-slow')",
 ]

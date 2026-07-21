@@ -71,26 +71,37 @@ class GSM8KDataset(Dataset):
         return self.rows[idx]
 
 
-def _pad(seqs: list[list[int]], pad_val: int) -> torch.Tensor:
+def _pad(seqs: list[list[int]], pad_val: int, pad_side: str = "right") -> torch.Tensor:
     maxlen = max(len(s) for s in seqs)
     out = torch.full((len(seqs), maxlen), pad_val, dtype=torch.long)
     for i, s in enumerate(seqs):
-        out[i, : len(s)] = torch.tensor(s, dtype=torch.long)
+        if pad_side == "left":
+            out[i, maxlen - len(s):] = torch.tensor(s, dtype=torch.long)
+        else:
+            out[i, : len(s)] = torch.tensor(s, dtype=torch.long)
     return out
 
 
-def _mask_from(seqs: list[list[int]], maxlen: int) -> torch.Tensor:
+def _mask_from(seqs: list[list[int]], maxlen: int, pad_side: str = "right") -> torch.Tensor:
     m = torch.zeros((len(seqs), maxlen), dtype=torch.long)
     for i, s in enumerate(seqs):
-        m[i, : len(s)] = 1
+        if pad_side == "left":
+            m[i, maxlen - len(s):] = 1
+        else:
+            m[i, : len(s)] = 1
     return m
 
 
 class Collator:
-    """Tokenizes a batch of rows per condition. Left-to-right, right-padded.
+    """Tokenizes a batch of rows per condition.
 
     include_answer=True  -> training batch (answer tokens supervised).
+        Padded right: teacher-forcing over the full sequence with -100
+        masked labels doesn't require any particular padding side.
     include_answer=False -> eval batch (prefix only; generate the answer).
+        Padded left: batched causal-LM generation (see `generate()` in
+        model.py) needs every row's last real token at the same rightmost
+        position so the next-token-to-generate lines up across the batch.
     """
 
     def __init__(self, tokenizer, cfg, condition: str, include_answer: bool):
@@ -137,9 +148,11 @@ class Collator:
                 batch["attention_mask"] = _mask_from(fulls, input_ids.size(1))
                 batch["labels"] = _pad(labels, -100)
             else:
-                input_ids = _pad(prompts, self.pad_id)
+                input_ids = _pad(prompts, self.pad_id, pad_side="left")
                 batch["input_ids"] = input_ids
-                batch["attention_mask"] = _mask_from(prompts, input_ids.size(1))
+                batch["attention_mask"] = _mask_from(
+                    prompts, input_ids.size(1), pad_side="left"
+                )
             return batch
 
         # z / z_shuffled
@@ -155,12 +168,18 @@ class Collator:
             if self.include_answer:
                 a_ids_list.append(self._answer_ids(r["label"]))
 
+        # Trace padding side doesn't matter: `_encode_z` cross-attends into it
+        # with a key_padding_mask, so pad tokens are masked out regardless of
+        # where they sit. The question segment, however, feeds straight into
+        # generation (z_prefix + question -> next token), so in eval mode it
+        # must be left-padded for the same reason as the floor/ceiling path.
+        q_pad_side = "right" if self.include_answer else "left"
         ti = _pad(trace_ids, self.pad_id)
-        qi = _pad(q_ids, self.pad_id)
+        qi = _pad(q_ids, self.pad_id, pad_side=q_pad_side)
         batch["trace_ids"] = ti
         batch["trace_mask"] = _mask_from(trace_ids, ti.size(1))
         batch["question_ids"] = qi
-        batch["question_mask"] = _mask_from(q_ids, qi.size(1))
+        batch["question_mask"] = _mask_from(q_ids, qi.size(1), pad_side=q_pad_side)
         if self.include_answer:
             ai = _pad(a_ids_list, self.pad_id)
             batch["answer_ids"] = ai

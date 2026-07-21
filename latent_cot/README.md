@@ -38,10 +38,12 @@ answer decoder (same backbone).
 ## Run
 ```bash
 # fast unit tests (no model)
-pytest latent_cot/tests -q
+pytest latent_cot/tests -m "not slow" -q
 
-# slow tests (loads Gemma; needs GPU)
-pytest latent_cot/tests -q --run-slow
+# slow tests (loads Gemma; needs GPU) — `tests` must be included as an
+# explicit pytest root alongside latent_cot/tests, since the repo's
+# --run-slow option is registered in tests/conftest.py
+pytest tests latent_cot/tests --run-slow -q
 
 # tiny end-to-end smoke (8 train / 8 eval)
 python -m latent_cot.train --condition z --max-train-samples 8 --epochs 1
@@ -49,6 +51,10 @@ python -m latent_cot.train --condition z --max-train-samples 8 --epochs 1
 # full four-way kill-test (writes latent_cot/runs/)
 python -m latent_cot.run_killtest
 ```
+If GPU memory is tight (<16GB), avoid running the full slow suite in one
+process — each parametrized model-loading test instantiates a fresh ~4GB
+bf16 backbone with no teardown between tests. Run one file or a `-k`
+selector at a time instead, e.g. `pytest tests latent_cot/tests/test_model.py --run-slow -q`.
 
 ## Config
 All knobs live in `latent_cot/config.py` (`ExperimentConfig`). Override via a YAML

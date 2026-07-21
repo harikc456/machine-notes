@@ -1,10 +1,10 @@
 ---
 title: Diffusion Language Models
 created: 2026-05-16
-updated: 2026-06-24
+updated: 2026-07-21
 type: concept
 tags: [architecture, training, inference]
-sources: [raw/papers/2503.09573v3.pdf, raw/papers/2604.11035v1.pdf, raw/papers/2602.06036v2.pdf, raw/papers/llada-mercury-blog.md, raw/papers/optimal-architecture-slm-blog.md]
+sources: [raw/papers/2503.09573v3.pdf, raw/papers/2604.11035v1.pdf, raw/papers/2602.06036v2.pdf, raw/papers/llada-mercury-blog.md, raw/papers/optimal-architecture-slm-blog.md, raw/papers/2502.09992v3.md]
 confidence: high
 ---
 
@@ -35,6 +35,9 @@ Two root causes have been identified:
 **2. Lack of introspective consistency** (I-DLM, 2026): AR training enforces that the model "agrees with its own generations" via causal masking and next-token prediction. DLMs trained with bidirectional attention and random masking learn to predict, but are not trained to endorse what they produce. The introspective acceptance rate α = (1/L) Σ min(1, p_k(x_k)/q_k(x_k)) measures this — standard DLMs score 0.57–0.70, AR models score 1.0.
 
 ## Key Systems
+
+### [[llada]] (NeurIPS 2025)
+The foundational **from-scratch, full-scale** DLM: 8B params, 2.3T tokens, standard pretrain+SFT paradigm, no AR conversion. Bidirectional-attention mask predictor trained on a provable NLL upper bound; low-confidence remasking at inference. Matches/exceeds AR baselines at matched compute on math and Chinese-language tasks, and beats GPT-4o on a poem-reversal task — directly addressing the reversal curse. Incompatible with KV caching (vanilla bidirectional multi-head attention, no GQA). The reference point against which [[i-dlm]] and other conversion-based DLMs benchmark (e.g., LLaDA-2.1-mini throughput/accuracy comparisons).
 
 ### [[block-diffusion]] (ICLR 2025)
 Interpolates between AR and diffusion by defining an autoregressive distribution over *blocks* of tokens, with diffusion operating within each block. Recovers arbitrary-length generation and KV caching. Sets SOTA perplexity among discrete DLMs on LM1B.
@@ -70,6 +73,7 @@ I-DLM specifically addresses this by using causal attention throughout, enabling
 
 ## See Also
 
+- [[llada]] — entity page: from-scratch full-scale DLM, no KV caching, beats GPT-4o on reversal task
 - [[block-diffusion]] — entity page: block-level AR + within-block diffusion
 - [[i-dlm]] — entity page: introspective consistency training + ISD algorithm
 - [[dflash]] — entity page: block diffusion as a speculative decoding draft engine for AR models

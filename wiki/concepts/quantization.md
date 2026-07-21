@@ -1,10 +1,10 @@
 ---
 title: Quantization
 created: 2026-05-14
-updated: 2026-06-24
+updated: 2026-07-21
 type: concept
 tags: [quantization, inference, training, attention]
-sources: [raw/papers/A Visual Guide to Quantization.md, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf, raw/papers/2410.02367v9.md, raw/papers/2411.10958v7.md, raw/papers/2505.11594v3.md]
+sources: [raw/papers/A Visual Guide to Quantization.md, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf, raw/papers/2410.02367v9.md, raw/papers/2411.10958v7.md, raw/papers/2505.11594v3.md, raw/papers/2607.02770v1.md]
 confidence: high
 ---
 
@@ -66,6 +66,9 @@ All three achieve near-zero end-to-end accuracy loss across LLM, image-gen, and 
 ### Activation Quantization
 Quantize activations (inputs/outputs of layers) during inference — most challenging due to outliers.
 
+### Multimodal Encoder Quantization
+QAT extends beyond the LLM backbone to attached encoders. [[gemma-4]] applies QAT to its vision encoder (8-bit weights/activations, 2× memory reduction) and audio encoder (mixed 2/4/8-bit weights + 8-bit activations, 78% on-disk footprint reduction) alongside mobile (mixed int2/int4 + int8 activations) and Q4_0 blockwise formats for the LLM itself — with the quantized audio encoder actually *improving* WER/BLEU over the prior generation's larger unquantized encoder.
+
 ## Key Concepts
 
 ### Calibration
@@ -98,3 +101,4 @@ KV cache key vectors exhibit d_eff ≈ 3–4% of head dimension as effective dim
 - [[sageattention2]] — INT4/FP8 attention compute quantization; 3× FA2
 - [[sageattention3]] — FP4 microscaling; 5× FA2 on Blackwell
 - [[flash-attention]] — base kernel that SageAttention builds on
+- [[gemma-4]] — QAT applied across LLM, vision, and audio encoders in one release

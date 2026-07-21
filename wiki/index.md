@@ -2,7 +2,7 @@
 
 > Content catalog. Every wiki page listed under its type with a one-line summary.
 > Read this first to find relevant pages for any query.
-> Last updated: 2026-07-06 | Total pages: 69
+> Last updated: 2026-07-21 | Total pages: 73
 
 ## Entities
 
@@ -12,12 +12,15 @@
 - [[clip-to-grok]] — Clip to Grok: per-row weight norm clipping accelerates grokking 39–249× without weight decay
 - [[flash-attention]] — Flash Attention (Dao et al.): IO-aware tiled attention; 7.6× speedup on GPT-2; O(N) memory via online softmax
 - [[funcattn]] — Functional Attention (TUM/Oxford/UT Austin, ICML 2026): attention as functional correspondence between learned spectral bases; SOTA on PDE operator-learning benchmarks
+- [[gemma-4]] — Gemma 4 (Google DeepMind, Jul 2026): open-weight multimodal dense/MoE family (2.3B–31B); encoder-free 12B, KV cache sharing, MTP drafter, QAT across LLM/vision/audio; top open dense model on Arena
+- [[kimi-linear]] — Kimi Linear (Kimi Team/Moonshot AI, Nov 2025): Kimi Delta Attention (channel-wise gated delta rule) hybridized 3:1 with MLA; first linear-hybrid to beat full attention; 75% KV cache reduction, 6.3× TPOT at 1M context
 - [[layerskip]] — LayerSkip (Meta): layer dropout training + early exit inference + self-speculative decoding; up to 2.16× speedup
 - [[medusa]] — Medusa (ICML 2024): K extra decoding heads on backbone; tree attention verifies candidates; Medusa-1 2.18×, Medusa-2 2.83×; no draft model needed
 - [[paged-attention]] — PagedAttention (vLLM): OS-style paged KV cache management; eliminates fragmentation; 2–4× throughput over TGI
 - [[radix-attention]] — RadixAttention (SGLang): radix tree cross-request prefix caching with LRU eviction; 2–4× throughput over vLLM
 - [[derf]] — Derf: `erf(αx+s)` point-wise replacement for normalization layers; surpasses LayerNorm across vision, speech, DNA
 - [[lejepa]] — LeJEPA: provable JEPA with SIGReg enforcing isotropic Gaussian embeddings — eliminates training heuristics
+- [[llada]] — LLaDA (Renmin U/Ant Group, NeurIPS 2025): from-scratch 8B masked-diffusion LM; matches AR baselines at scale; beats GPT-4o on reversal reasoning; incompatible with KV caching
 - [[lewm]] — LeWorldModel: stable end-to-end JEPA world model from pixels using prediction loss + SIGReg; 15M params
 - [[deepseek-v4]] — DeepSeek-V4 series (Pro 1.6T, Flash 284B): CSA/HCA hybrid attention, mHC, Muon optimizer, 1M-token context
 - [[dualpath]] — DualPath (Peking U / DeepSeek-AI, Feb 2026): dual-path KV-Cache loading for agentic inference; 1.87× offline, 1.96× online throughput
@@ -50,6 +53,7 @@
 - [[visreg]] — VISReg (Altos Labs/Brown, Jun 2026): Sliced-Wasserstein sketching regularizer for JEPA/SSL training; fixes SIGReg's vanishing-gradient-under-collapse and scale/shape coupling; SOTA OOD on ImageNet-1K, matches DINOv2 with 10× less data
 - [[weight-normalization]] — Weight Normalization (Salimans & Kingma 2016): decouple weight direction from magnitude; ~21 ppl gain in LM
 - [[xsa]] — XSA (Exclusive Self-Attention): subtracts own-value-direction from attention output, addressing attention similarity bias
+- [[z-token-compression]] — LLM as Token Compressor/Decompressor (May 2026): LoRA-adapted LLM autoencodes text into content-adaptive discrete Z-tokens; beats ICAE/AutoCompressor/Gist Token on reconstruction and long-text QA
 
 ## Concepts
 

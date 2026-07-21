@@ -1,10 +1,10 @@
 ---
 title: Speculative Decoding
 created: 2026-05-14
-updated: 2026-07-06
+updated: 2026-07-21
 type: concept
 tags: [inference, speculative]
-sources: [raw/papers/2211.17192v2.pdf, raw/papers/2603.03251v3.pdf, raw/papers/2401.15077v3.pdf, raw/papers/2406.16858v2.pdf, raw/papers/2503.01840v3.pdf, raw/papers/2602.06036v2.pdf, raw/papers/2401.10774v3.md, raw/papers/dspark.md, raw/papers/2606.15007v1.pdf]
+sources: [raw/papers/2211.17192v2.pdf, raw/papers/2603.03251v3.pdf, raw/papers/2401.15077v3.pdf, raw/papers/2406.16858v2.pdf, raw/papers/2503.01840v3.pdf, raw/papers/2602.06036v2.pdf, raw/papers/2401.10774v3.md, raw/papers/dspark.md, raw/papers/2606.15007v1.pdf, raw/papers/2607.02770v1.md]
 confidence: high
 ---
 
@@ -146,5 +146,6 @@ Key challenge: predicting the bonus token (sampled from residual distribution) w
 - [[dspark]] — semi-AR draft (DFlash backbone + Markov head) + confidence scheduler; +51% throughput in DeepSeek-V4-Flash
 - [[block-diffusion]] — DFlash's draft engine architecture
 - [[nemotron-3-ultra]] — shared-weight MTP heads trained jointly with the base model as a built-in draft mechanism
+- [[gemma-4]] — MTP drafter cross-attending to main-model KV; vocabulary-projection reduced to a top-k 4096-token cluster for E2B/E4B to cut decode overhead
 - [[diffusion-language-models]] — DFlash uses diffusion as an AR model accelerator
 - [[speculative-decoding-detail]] — deep-dive companion: full EAGLE family section, SSD algorithm

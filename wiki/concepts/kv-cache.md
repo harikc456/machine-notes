@@ -1,10 +1,10 @@
 ---
 title: KV Cache
 created: 2026-05-14
-updated: 2026-07-06
+updated: 2026-07-21
 type: concept
 tags: [kv-cache, inference, attention, quantization]
-sources: [raw/papers/2306.14048v3.pdf, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf, raw/papers/2604.04921v1.pdf, raw/papers/2602.21548v2.md, raw/papers/2606.20945v2.md, raw/papers/2506.15969v3.md, raw/papers/2511.01815v2.md, raw/papers/2606.15007v1.pdf]
+sources: [raw/papers/2306.14048v3.pdf, raw/papers/2502.02617v1.pdf, raw/papers/2504.19874v1.pdf, raw/papers/2604.04921v1.pdf, raw/papers/2602.21548v2.md, raw/papers/2606.20945v2.md, raw/papers/2506.15969v3.md, raw/papers/2511.01815v2.md, raw/papers/2606.15007v1.pdf, raw/papers/2510.26692v2.md, raw/papers/2607.02770v1.md]
 confidence: high
 ---
 
@@ -49,6 +49,8 @@ Modify the model to produce fewer K/V pairs:
 - **Multi-Head Latent Attention (MLA)**: compress K/V into low-rank latent space (DeepSeek)
 - **CSA/HCA** in [[deepseek-v4]]: 3.7–9.8× reduction in KV cache vs DeepSeek-V3.2
 - **Projection sharing (Q-K=V)**: force K=V at the projection level — only K needs to be cached, V is reused. [[qkv-projection-sharing]] (ICML 2026): 50% cache, +3.1% PPL at 300M. Orthogonal to head sharing — combined Q-MQA achieves 96.9% cache reduction at +4.8% PPL.
+- **Hybrid linear/full attention**: [[kimi-linear]]'s Kimi Delta Attention (channel-wise gated delta rule) interleaved 3:1 with full attention (NoPE) cuts KV cache by up to 75% and gives 6.3× faster TPOT at 1M-token decoding, joining [[nemotron-3-ultra]] and [[deepseek-v4]] as hybrid-attention approaches to the same bottleneck.
+- **KV cache sharing + local:global ratio tuning**: [[gemma-4]] reuses values as keys in global attention layers and tunes a 5:1 local-sliding-window:global-attention ratio, cutting global KV cache footprint by up to 37.5% without a fundamentally new attention mechanism.
 
 ### Offloading
 Move KV cache from GPU HBM to CPU RAM or disk:
@@ -94,3 +96,6 @@ These are **complementary** — quantization + eviction can be combined (e.g., T
 - [[dualpath]] — serving-layer KV loading bottleneck in agentic inference; 1.87× offline throughput
 - [[gqe]] — MoE routing on GQA query heads; 1.7–1.8× prefill speedup at long context
 - [[nemotron-3-ultra]] — architectural KV reduction via a Mamba-heavy hybrid backbone (only 2 KV heads across 108 layers) rather than eviction/quantization
+- [[kimi-linear]] — channel-wise gated linear attention hybridized 3:1 with full attention; up to 75% KV cache reduction
+- [[gemma-4]] — KV cache sharing (values reused as keys) + tuned local:global attention ratio; up to 37.5% global KV cache reduction
+- [[z-token-compression]] — complementary axis: compresses the input sequence itself rather than the KV cache

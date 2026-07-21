@@ -43,7 +43,7 @@ def shuffle_trace(trace: str, rng: random.Random) -> str:
 def load_gsm8k(split: str, strip_annotations: bool = True) -> list[dict]:
     """Load GSM8K `main` split as a list of {question, trace, label} dicts."""
     from datasets import load_dataset
-    ds = load_dataset("gsm8k", "main", split=split)
+    ds = load_dataset("openai/gsm8k", "main", split=split)
     rows: list[dict] = []
     for ex in ds:
         trace, label = split_answer(ex["answer"])

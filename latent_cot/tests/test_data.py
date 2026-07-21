@@ -38,3 +38,48 @@ def test_shuffle_trace_reorders_but_preserves_steps():
     shuffled = shuffle_trace(clean, rng)
     # same set of non-empty lines, (very likely) different order
     assert sorted(shuffled.splitlines()) == sorted(clean.splitlines())
+
+
+import pytest
+import torch
+from latent_cot.config import ExperimentConfig
+from latent_cot.data import GSM8KDataset, Collator
+
+_ROWS = [
+    {"question": "Q1?", "trace": "step one\nstep two", "label": "72"},
+    {"question": "A longer question here?", "trace": "only one line", "label": "5"},
+]
+
+
+@pytest.fixture(scope="module")
+def tok():
+    from transformers import AutoTokenizer
+    return AutoTokenizer.from_pretrained("google/gemma-4-E2B-it")
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("condition", ["floor", "ceiling", "z", "z_shuffled"])
+def test_collator_shapes(tok, condition):
+    cfg = ExperimentConfig(condition=condition)
+    coll = Collator(tok, cfg, condition, include_answer=True)
+    batch = coll(_ROWS)
+    B = len(_ROWS)
+    assert batch["label_text"] == ["72", "5"]
+    if condition in ("floor", "ceiling"):
+        for k in ("input_ids", "attention_mask", "labels"):
+            assert batch[k].shape[0] == B and batch[k].ndim == 2
+        # answer tokens are supervised; some labels != -100
+        assert (batch["labels"] != -100).any()
+    else:
+        for k in ("trace_ids", "trace_mask", "question_ids",
+                  "question_mask", "answer_ids", "answer_mask"):
+            assert batch[k].shape[0] == B and batch[k].ndim == 2
+
+
+@pytest.mark.slow
+def test_collator_eval_mode_has_no_answer(tok):
+    cfg = ExperimentConfig(condition="z")
+    coll = Collator(tok, cfg, "z", include_answer=False)
+    batch = coll(_ROWS)
+    assert "answer_ids" not in batch
+    assert "question_ids" in batch and "trace_ids" in batch

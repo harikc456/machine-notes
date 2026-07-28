@@ -55,6 +55,9 @@ Thumbs.db
 # Git worktrees
 .worktrees/
 
+# SDD scratch workspace (per-plan ledgers, briefs, reports)
+.superpowers/
+
 # Docs
 # docs/
 

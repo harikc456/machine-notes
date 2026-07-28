@@ -145,3 +145,35 @@ def test_collator_training_mode_stays_right_padded(tok):
     last_one = len(row0) - 1 - row0[::-1].index(1)
     assert all(v == 0 for v in row0[last_one + 1:])
     assert row0[0] == 1
+
+
+@pytest.mark.slow
+def test_collator_reconstruct_shapes(tok):
+    cfg = ExperimentConfig(condition="reconstruct")
+    coll = Collator(tok, cfg, "reconstruct", include_answer=True)
+    batch = coll(_ROWS)
+    B = len(_ROWS)
+    for k in ("question_ids", "question_mask", "recon_ids", "recon_mask"):
+        assert batch[k].shape[0] == B and batch[k].ndim == 2
+    assert "trace_ids" not in batch  # encoder never sees the trace
+    assert "answer_ids" not in batch
+
+
+@pytest.mark.slow
+def test_collator_reconstruct_present_even_without_answer(tok):
+    """Unlike z/floor/ceiling, reconstruct has no generation-only eval mode:
+    recon_ids must be present regardless of include_answer."""
+    cfg = ExperimentConfig(condition="reconstruct")
+    coll = Collator(tok, cfg, "reconstruct", include_answer=False)
+    batch = coll(_ROWS)
+    assert "recon_ids" in batch and "recon_mask" in batch
+
+
+@pytest.mark.slow
+def test_collator_reconstruct_targets_end_with_eos(tok):
+    cfg = ExperimentConfig(condition="reconstruct")
+    coll = Collator(tok, cfg, "reconstruct", include_answer=True)
+    batch = coll(_ROWS)
+    for row_ids, row_mask in zip(batch["recon_ids"].tolist(), batch["recon_mask"].tolist()):
+        last_real = max(i for i, m in enumerate(row_mask) if m == 1)
+        assert row_ids[last_real] == tok.eos_token_id

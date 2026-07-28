@@ -123,6 +123,10 @@ class Collator:
         ids = self.tok(" " + label, add_special_tokens=False)["input_ids"]
         return (ids + [self.eos_id])[: self.cfg.max_answer_tokens]
 
+    def _recon_ids(self, trace: str) -> list[int]:
+        ids = self.tok(trace, add_special_tokens=False)["input_ids"]
+        return (ids + [self.eos_id])[: self.cfg.max_trace_tokens]
+
     def __call__(self, rows: list[dict]) -> dict:
         c = self.condition
         batch: dict = {"label_text": [r["label"] for r in rows]}
@@ -153,6 +157,20 @@ class Collator:
                 batch["attention_mask"] = _mask_from(
                     prompts, input_ids.size(1), pad_side="left"
                 )
+            return batch
+
+        if c == "reconstruct":
+            q_ids, recon_ids = [], []
+            for r in rows:
+                q_ids.append(self._enc(f"{r['question']}\nAnswer:",
+                                       self.cfg.max_question_tokens, add_special=True))
+                recon_ids.append(self._recon_ids(r["trace"]))
+            qi = _pad(q_ids, self.pad_id)
+            ri = _pad(recon_ids, self.pad_id)
+            batch["question_ids"] = qi
+            batch["question_mask"] = _mask_from(q_ids, qi.size(1))
+            batch["recon_ids"] = ri
+            batch["recon_mask"] = _mask_from(recon_ids, ri.size(1))
             return batch
 
         # z / z_shuffled

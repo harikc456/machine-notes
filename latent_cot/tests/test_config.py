@@ -31,3 +31,15 @@ def test_yaml_load_and_unknown_key(tmp_path: Path):
     bad.write_text("nonsense_key: 1\n")
     with pytest.raises(ValueError):
         load_config(bad)
+
+
+def test_reconstruct_condition_valid():
+    cfg = ExperimentConfig(condition="reconstruct")
+    assert cfg.condition == "reconstruct"
+
+
+def test_diffusion_steps_default_and_validation():
+    cfg = ExperimentConfig()
+    assert cfg.diffusion_steps == 6
+    with pytest.raises(ValueError):
+        ExperimentConfig(diffusion_steps=0)

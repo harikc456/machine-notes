@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import yaml
 
-VALID_CONDITIONS = {"floor", "z", "ceiling", "z_shuffled"}
+VALID_CONDITIONS = {"floor", "z", "ceiling", "z_shuffled", "reconstruct"}
 
 
 @dataclass
@@ -15,6 +15,7 @@ class ExperimentConfig:
     n_slots: int = 16          # K: number of latent slots
     d_z: int = 32              # per-slot bottleneck dim
     encoder_heads: int = 8     # heads in the encoder's cross-attention
+    diffusion_steps: int = 6   # T: refinement steps for DiffusionReasoningEncoder
 
     # Condition: floor | z | ceiling | z_shuffled
     condition: str = "z"
@@ -61,6 +62,8 @@ class ExperimentConfig:
             raise ValueError(f"d_z must be >= 1, got {self.d_z}")
         if self.encoder_heads < 1:
             raise ValueError(f"encoder_heads must be >= 1, got {self.encoder_heads}")
+        if self.diffusion_steps < 1:
+            raise ValueError(f"diffusion_steps must be >= 1, got {self.diffusion_steps}")
 
 
 def load_config(path: str | Path) -> ExperimentConfig:

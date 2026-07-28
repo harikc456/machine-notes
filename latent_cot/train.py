@@ -78,6 +78,24 @@ def train_and_eval(cfg: ExperimentConfig) -> dict:
 
     # ---- eval ----
     model.eval()
+    if cfg.condition == "reconstruct":
+        correct, total, n_eval = 0, 0, 0
+        with torch.no_grad():
+            for batch in eval_loader:
+                logits, labels = model.logits_and_labels(batch)
+                preds_tok = logits[:, :-1, :].argmax(-1)
+                targets = labels[:, 1:].to(preds_tok.device)
+                mask = targets != -100
+                correct += (preds_tok == targets)[mask].sum().item()
+                total += mask.sum().item()
+                n_eval += targets.size(0)
+        return {
+            "condition": cfg.condition,
+            "token_accuracy": (correct / total) if total else 0.0,
+            "n_eval": n_eval,
+            "final_train_loss": final_loss,
+        }
+
     preds, golds = [], []
     for batch in eval_loader:
         out = model.generate(batch, max_new_tokens=cfg.max_answer_tokens)

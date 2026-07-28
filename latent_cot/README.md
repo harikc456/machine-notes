@@ -35,6 +35,26 @@ answer decoder (same backbone).
 - **Short traces:** GSM8K reasoning is ~40–80 tokens, so token savings here are
   modest by design. This is a feasibility gate, not the payoff demo.
 
+## Reconstruction probe (`reconstruct` condition)
+
+A separate, standalone diagnostic — not part of the four-way kill-test
+above. `DiffusionReasoningEncoder` produces `z` from the **question
+alone** (never sees the trace) via `T=6` fully-unrolled refinement steps
+starting from Gaussian noise, cross-attending the backbone's question
+hidden states at each step. The same shared LoRA backbone then
+autoregressively reconstructs the reasoning trace text from
+`question + z`, teacher-forced. No separate diffusion/denoising loss —
+only the trace-reconstruction cross-entropy, backpropagated through the
+entire unrolled encoder. Eval metric is teacher-forced token-level
+accuracy, not exact-match or generation.
+
+Full design: `docs/superpowers/specs/2026-07-28-latent-cot-diffusion-reconstruction-design.md`.
+
+Run standalone (not part of `run_killtest.py`):
+```bash
+python -m latent_cot.train --condition reconstruct --max-train-samples 8 --epochs 1
+```
+
 ## Run
 ```bash
 # fast unit tests (no model)

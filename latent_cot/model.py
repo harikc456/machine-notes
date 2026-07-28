@@ -129,10 +129,16 @@ class LatentCoTModel(nn.Module):
         z_up = self.up(z)                                # fp32 (B, K, d_model)
         return z_up.to(self._embed(question_ids[:, :1]).dtype)
 
-    def _reconstruct_forward(self, batch: dict):
+    def _reconstruct_forward(self, batch: dict, compute_loss: bool = True):
         """Shared by `forward()` (returns .loss) and `logits_and_labels()`
         (returns .logits + labels for teacher-forced eval). `batch` must
-        already be moved to self.device."""
+        already be moved to self.device.
+
+        `compute_loss=False` passes `labels=None` to the backbone so HF
+        skips its internal cross-entropy computation (which upcasts the
+        full logits tensor to float32) — used by `logits_and_labels()`,
+        which only needs `.logits` and builds its own `labels` tensor for
+        the caller's accuracy computation."""
         z_up = self._encode_z_diffusion(batch["question_ids"], batch["question_mask"])
         q_emb = self._embed(batch["question_ids"])
         r_emb = self._embed(batch["recon_ids"])
@@ -152,15 +158,20 @@ class LatentCoTModel(nn.Module):
         per_layer_inputs = self._per_layer_inputs(full_ids)
 
         out = self.backbone(
-            inputs_embeds=inputs_embeds, attention_mask=attn, labels=labels,
+            inputs_embeds=inputs_embeds, attention_mask=attn,
+            labels=labels if compute_loss else None,
             per_layer_inputs=per_layer_inputs,
         )
         return out, labels
 
     @torch.no_grad()
     def logits_and_labels(self, batch: dict) -> tuple[torch.Tensor, torch.Tensor]:
+        if self.condition != "reconstruct":
+            raise NotImplementedError(
+                "logits_and_labels() is only defined for the reconstruct condition"
+            )
         batch = self._move(batch)
-        out, labels = self._reconstruct_forward(batch)
+        out, labels = self._reconstruct_forward(batch, compute_loss=False)
         return out.logits, labels
 
     def trainable_parameters(self):
@@ -228,6 +239,10 @@ class LatentCoTModel(nn.Module):
     # ---- generation (eval) --------------------------------------------
     @torch.no_grad()
     def generate(self, batch: dict, max_new_tokens: int) -> list[str]:
+        if self.condition == "reconstruct":
+            raise NotImplementedError(
+                "reconstruct is teacher-forced only; use logits_and_labels()"
+            )
         batch = self._move(batch)
         gen_kwargs = dict(
             max_new_tokens=max_new_tokens, do_sample=False,

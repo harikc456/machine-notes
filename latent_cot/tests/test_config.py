@@ -43,3 +43,8 @@ def test_diffusion_steps_default_and_validation():
     assert cfg.diffusion_steps == 6
     with pytest.raises(ValueError):
         ExperimentConfig(diffusion_steps=0)
+
+
+def test_d_z_not_divisible_by_encoder_heads_raises():
+    with pytest.raises(ValueError):
+        ExperimentConfig(d_z=20, encoder_heads=8)

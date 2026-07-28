@@ -17,7 +17,7 @@ class ExperimentConfig:
     encoder_heads: int = 8     # heads in the encoder's cross-attention
     diffusion_steps: int = 6   # T: refinement steps for DiffusionReasoningEncoder
 
-    # Condition: floor | z | ceiling | z_shuffled
+    # Condition: floor | z | ceiling | z_shuffled | reconstruct
     condition: str = "z"
     strip_annotations: bool = True   # drop <<...>> calculator spans from traces
 
@@ -62,6 +62,10 @@ class ExperimentConfig:
             raise ValueError(f"d_z must be >= 1, got {self.d_z}")
         if self.encoder_heads < 1:
             raise ValueError(f"encoder_heads must be >= 1, got {self.encoder_heads}")
+        if self.d_z % self.encoder_heads != 0:
+            raise ValueError(
+                f"d_z ({self.d_z}) must be divisible by encoder_heads ({self.encoder_heads})"
+            )
         if self.diffusion_steps < 1:
             raise ValueError(f"diffusion_steps must be >= 1, got {self.diffusion_steps}")
 

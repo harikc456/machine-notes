@@ -30,6 +30,18 @@ def _subset(rows: list[dict], n: int) -> list[dict]:
     return rows if n <= 0 else rows[:n]
 
 
+def _token_accuracy_counts(logits: torch.Tensor, labels: torch.Tensor) -> tuple[int, int]:
+    """Returns (correct, total) token counts using the standard causal-LM
+    shift: logits[:, t] predicts labels[:, t+1]. Positions where label == -100
+    are excluded from both counts."""
+    preds = logits[:, :-1, :].argmax(-1)
+    targets = labels[:, 1:].to(preds.device)
+    mask = targets != -100
+    correct = (preds == targets)[mask].sum().item()
+    total = mask.sum().item()
+    return correct, total
+
+
 def train_and_eval(cfg: ExperimentConfig) -> dict:
     _seed_all(cfg.seed)
     model = LatentCoTModel(cfg)
@@ -79,16 +91,20 @@ def train_and_eval(cfg: ExperimentConfig) -> dict:
     # ---- eval ----
     model.eval()
     if cfg.condition == "reconstruct":
+        # Re-seed immediately before eval: the diffusion encoder draws
+        # z_T ~ N(0, I) fresh on every forward call (by design), but the RNG
+        # state has drifted through the entire training trajectory by now.
+        # Re-seeding makes token_accuracy reproducible run-to-run for the
+        # same trained checkpoint.
+        _seed_all(cfg.seed)
         correct, total, n_eval = 0, 0, 0
         with torch.no_grad():
             for batch in eval_loader:
                 logits, labels = model.logits_and_labels(batch)
-                preds_tok = logits[:, :-1, :].argmax(-1)
-                targets = labels[:, 1:].to(preds_tok.device)
-                mask = targets != -100
-                correct += (preds_tok == targets)[mask].sum().item()
-                total += mask.sum().item()
-                n_eval += targets.size(0)
+                b_correct, b_total = _token_accuracy_counts(logits, labels)
+                correct += b_correct
+                total += b_total
+                n_eval += labels.size(0)
         return {
             "condition": cfg.condition,
             "token_accuracy": (correct / total) if total else 0.0,

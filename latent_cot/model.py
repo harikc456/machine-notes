@@ -5,6 +5,8 @@ import torch.nn as nn
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import LoraConfig, get_peft_model
 
+from latent_cot.diffusion_encoder import DiffusionReasoningEncoder
+
 
 class ReasoningEncoder(nn.Module):
     """Compress a variable-length sequence of hidden states into K x d_z slots
@@ -71,6 +73,12 @@ class LatentCoTModel(nn.Module):
             ).float()
             self.up = nn.Linear(cfg.d_z, self.d_model).float()
 
+        if self.condition == "reconstruct":
+            self.diff_encoder = DiffusionReasoningEncoder(
+                self.d_model, cfg.n_slots, cfg.d_z, cfg.encoder_heads, cfg.diffusion_steps
+            ).float()
+            self.up = nn.Linear(cfg.d_z, self.d_model).float()
+
         self.to(self.device)
 
     @staticmethod
@@ -111,6 +119,50 @@ class LatentCoTModel(nn.Module):
         z_up = self.up(z)                              # fp32 (B, K, d_model)
         return z_up.to(self._embed(trace_ids[:, :1]).dtype)  # match embed dtype
 
+    def _encode_z_diffusion(self, question_ids, question_mask) -> torch.Tensor:
+        out = self.backbone(
+            input_ids=question_ids, attention_mask=question_mask, output_hidden_states=True
+        )
+        hidden = out.hidden_states[-1]                 # (B, Tq, d_model) bf16
+        kpm = question_mask == 0                        # True = pad
+        z = self.diff_encoder(hidden, kpm)               # fp32 (B, K, d_z)
+        z_up = self.up(z)                                # fp32 (B, K, d_model)
+        return z_up.to(self._embed(question_ids[:, :1]).dtype)
+
+    def _reconstruct_forward(self, batch: dict):
+        """Shared by `forward()` (returns .loss) and `logits_and_labels()`
+        (returns .logits + labels for teacher-forced eval). `batch` must
+        already be moved to self.device."""
+        z_up = self._encode_z_diffusion(batch["question_ids"], batch["question_mask"])
+        q_emb = self._embed(batch["question_ids"])
+        r_emb = self._embed(batch["recon_ids"])
+        inputs_embeds = torch.cat([z_up, q_emb, r_emb], dim=1)
+
+        B, K = z_up.shape[0], z_up.shape[1]
+        z_mask = torch.ones(B, K, dtype=torch.long, device=self.device)
+        attn = torch.cat([z_mask, batch["question_mask"], batch["recon_mask"]], dim=1)
+
+        prefix_len = K + q_emb.size(1)
+        ignore = torch.full((B, prefix_len), -100, dtype=torch.long, device=self.device)
+        recon_labels = batch["recon_ids"].masked_fill(batch["recon_mask"] == 0, -100)
+        labels = torch.cat([ignore, recon_labels], dim=1)
+
+        z_ids = self._placeholder_ids(B, K)
+        full_ids = torch.cat([z_ids, batch["question_ids"], batch["recon_ids"]], dim=1)
+        per_layer_inputs = self._per_layer_inputs(full_ids)
+
+        out = self.backbone(
+            inputs_embeds=inputs_embeds, attention_mask=attn, labels=labels,
+            per_layer_inputs=per_layer_inputs,
+        )
+        return out, labels
+
+    @torch.no_grad()
+    def logits_and_labels(self, batch: dict) -> tuple[torch.Tensor, torch.Tensor]:
+        batch = self._move(batch)
+        out, labels = self._reconstruct_forward(batch)
+        return out.logits, labels
+
     def trainable_parameters(self):
         params = [p for p in self.parameters() if p.requires_grad]
         return params
@@ -145,6 +197,10 @@ class LatentCoTModel(nn.Module):
                 attention_mask=batch["attention_mask"],
                 labels=batch["labels"],
             ).loss
+
+        if self.condition == "reconstruct":
+            out, _ = self._reconstruct_forward(batch)
+            return out.loss
 
         z_up = self._encode_z(batch["trace_ids"], batch["trace_mask"])
         q_emb = self._embed(batch["question_ids"])
